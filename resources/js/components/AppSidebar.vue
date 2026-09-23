@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
-import { BookOpen, FolderGit2, LayoutGrid } from '@lucide/vue';
+import { Link, router } from '@inertiajs/vue3';
+import { onUnmounted } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -13,30 +13,38 @@ import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
+    useSidebar,
 } from '@/components/ui/sidebar';
+import { destinosPrincipales, destinosSecundarios } from '@/lib/navegacion';
 import { dashboard } from '@/routes';
-import type { NavItem } from '@/types';
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Panel',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-];
+const { isMobile, setOpenMobile } = useSidebar();
 
-const footerNavItems: NavItem[] = [
-    {
-        title: 'Repositorio',
-        href: 'https://github.com/laravel/vue-starter-kit',
-        icon: FolderGit2,
-    },
-    {
-        title: 'Documentación',
-        href: 'https://laravel.com/docs/starter-kits#vue',
-        icon: BookOpen,
-    },
-];
+/*
+ * En una SPA la navegación no desmonta el menú: elegís una opción, la pantalla
+ * nueva carga detrás y el sheet queda encima tapándola, con el scroll del body
+ * bloqueado. En escritorio no pasa, así que se escapa a cualquier revisión que
+ * no se haga en un viewport de celular.
+ *
+ * Tres detalles, y ninguno sobra:
+ *
+ * 1. Va en el router y no en cada `<Link>`. Hay tres grupos de enlaces —el
+ *    logo, la navegación y el menú de usuario— y agregando el enlace número
+ *    siete alguien se olvida seguro.
+ * 2. Solo en mobile. En escritorio la barra es fija: cerrarla al navegar
+ *    dejaría al usuario sin menú a cada paso.
+ * 3. `navigate` y no `start`. Con `start` el menú se cierra al tocar, antes de
+ *    que llegue la página: se siente más rápido, pero si la visita falla queda
+ *    sin menú y sin página. Y `start` dispara también en cualquier
+ *    `router.reload()` de fondo.
+ */
+onUnmounted(
+    router.on('navigate', () => {
+        if (isMobile.value) {
+            setOpenMobile(false);
+        }
+    }),
+);
 </script>
 
 <template>
@@ -54,11 +62,11 @@ const footerNavItems: NavItem[] = [
         </SidebarHeader>
 
         <SidebarContent>
-            <NavMain :items="mainNavItems" />
+            <NavMain :items="destinosPrincipales" />
         </SidebarContent>
 
         <SidebarFooter>
-            <NavFooter :items="footerNavItems" />
+            <NavFooter :items="destinosSecundarios" />
             <NavUser />
         </SidebarFooter>
     </Sidebar>

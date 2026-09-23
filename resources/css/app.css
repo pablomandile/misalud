@@ -90,6 +90,22 @@
 }
 
 /*
+ * Márgenes de seguridad LATERALES.
+ *
+ * El que todo el mundo pone es `safe-area-inset-bottom`, para la barra de
+ * gestos. Pero al rotar el teléfono el notch pasa a estar al costado, y ahí
+ * `left` y `right` son los que hacen falta: sin ellos, la primera columna de
+ * texto queda debajo de la muesca y no se lee.
+ *
+ * En vertical estos valores son 0, así que no cambia nada.
+ *
+ * Requiere `viewport-fit=cover` en el meta viewport, que está en app.blade.php.
+ */
+.zona-segura-lateral {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+}
+/*
  * Tamaño de letra de la app. Tres opciones, con la mediana por defecto: la usan
  * personas mayores, así que el tamaño chico se elige, no se hereda.
  *

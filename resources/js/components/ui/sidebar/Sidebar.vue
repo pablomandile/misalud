@@ -45,7 +45,8 @@ const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
         <SheetTitle>Barra lateral</SheetTitle>
         <SheetDescription>Muestra la barra lateral en el celular.</SheetDescription>
       </SheetHeader>
-      <div class="flex h-full w-full flex-col">
+      <!-- MODIFICADO: el sheet es fijo, no hereda el padding del contenido. -->
+      <div class="zona-segura-lateral flex h-full w-full flex-col">
         <slot />
       </div>
     </SheetContent>

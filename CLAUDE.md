@@ -236,6 +236,12 @@ y rojos incrustados arriba del formulario.
   Respetar `env(safe-area-inset-bottom)`.
 - Los éxitos se auto-cierran a los ~4 s; **los errores no**, que son los que hay que leer dos
   veces.
+- Lo implementa `useAvisos()`, llamado **una sola vez** desde `AppSidebarLayout`.
+- La posición se resuelve con `useMediaQuery` y no con clases `md:`: sonner posiciona su
+  lista con estilos en línea, así que una clase de Tailwind tendría que ganarle con
+  `!important` y quedaría atada a la estructura interna de la librería.
+- `closeButtonAriaLabel` va dentro de `toast-options`, **no** como prop del Toaster: como
+  prop suelta se acepta sin error y no hace nada (queda en inglés).
 - Detalle completo en la skill `overlays-al-navegar`.
 
 ## Accesibilidad — requisito, no pulido
@@ -284,9 +290,18 @@ Tres opciones, **con la mediana por defecto**: Normal `100%`, **Grande `112.5%`*
 
 - **Menú hamburguesa** en mobile, sidebar en `>= md`. Sin barra inferior de tabs: los íconos
   chicos son lo contrario de lo que esta app necesita. `lib/navegacion.ts` es la definición
-  única de los dos layouts.
-- En una SPA la navegación **no desmonta el sheet del menú**: hay que cerrarlo al navegar, o
-  queda tapando la pantalla nueva con el `body` bloqueado. Es _el_ bug de este patrón.
+  única de los dos layouts — cada etapa suma ahí sus destinos y aparecen en los dos.
+- **El sheet se cierra al navegar**, con un `router.on('navigate')` en `AppSidebar.vue`. Tres
+  decisiones, ninguna sobra: va en el router y no en cada `<Link>` (hay tres grupos de
+  enlaces y con el séptimo alguien se olvida); **solo en mobile**, porque en escritorio la
+  barra es fija y cerrarla dejaría sin menú a cada paso; y `navigate` y no `start`, porque
+  con `start` una visita fallida deja sin menú y sin página, y además dispara en cualquier
+  `router.reload()` de fondo.
+- `NavFooter` distingue enlaces internos de externos. El starter kit lo usaba solo para
+  enlaces a Laravel y mandaba todo a `target="_blank"`; un destino de la app abierto en
+  pestaña nueva saca a la persona de la SPA.
+- La **zona segura lateral** se aplica en `AppContent` (envuelve encabezado y páginas) y en
+  el sheet del menú, que al ser fijo no hereda ese padding.
 - Áreas táctiles de **44 px mínimo**. Teclado correcto: `inputmode="decimal"` para valores,
   `type="date"`, `type="tel"`.
 - **Nada que dependa solo de `hover`**: en el celular es invisible, y ahí es donde se usa.
@@ -399,6 +414,7 @@ php artisan test          # Pest
 npm run check:fix         # formato + lint del front
 npm run types:check       # vue-tsc
 npm run dev               # Vite
+npm run revisar:mobile    # desborde en 54 combinaciones + menú al navegar (Chrome real)
 
 php artisan misalud:sonda-imap   # ¿sale el 993 desde acá?
 php artisan misalud:recifrar     # rotar APP_KEY (--seco para ensayar)
@@ -414,7 +430,11 @@ MySQL local lo levanta Laragon. Si no está corriendo, `artisan migrate` falla c
 Hecho: andamiaje (Laravel 13 + Inertia 3 + Fortify + Wayfinder, MySQL, Pest 4), todo el texto
 visible en español rioplatense, y la capa de cifrado (`CifraDatos`, `CifraCampos`,
 `ConsultaVigilada`, `misalud:recifrar` y su guardia), las dos sondas de riesgo despejadas y
-el tamaño de letra funcionando de punta a punta (falta su pantalla en Configuración).
+el tamaño de letra completo con su pantalla, el layout con menú hamburguesa que se cierra
+al navegar, y los avisos en toast.
+
+Falta de la Etapa 1: la PWA (`sw.js` propio, manifest con `orientation: any`, íconos) y el
+parche de caché de Inertia.
 
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de
