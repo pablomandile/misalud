@@ -4,6 +4,7 @@ use App\Http\Controllers\AdjuntoController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\CoberturaController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\MedicoController;
 use App\Http\Controllers\PacienteActivoController;
 use App\Http\Controllers\PacienteController;
 use App\Http\Controllers\Settings\TamanioTextoController;
@@ -77,6 +78,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('coberturas.destroy');
     Route::post('coberturas/{cobertura}/adjuntos', [AdjuntoController::class, 'storeParaCobertura'])
         ->name('coberturas.adjuntos.store');
+
+    /*
+     * Catálogos del USUARIO -no de un paciente-: médicos es el primero y la
+     * plantilla de los otros tres. `duplicar` es la única salida frente a una
+     * semilla compartida, que no se puede editar (regla 5 de CLAUDE.md).
+     */
+    Route::get('medicos', [MedicoController::class, 'index'])->name('medicos.index');
+    Route::post('medicos', [MedicoController::class, 'store'])->name('medicos.store');
+    Route::put('medicos/{medico}', [MedicoController::class, 'update'])->name('medicos.update');
+    Route::delete('medicos/{medico}', [MedicoController::class, 'destroy'])->name('medicos.destroy');
+    Route::post('medicos/{medico}/duplicar', [MedicoController::class, 'duplicar'])
+        ->name('medicos.duplicar');
 
     Route::get('pacientes', [PacienteController::class, 'index'])->name('pacientes.index');
     Route::post('pacientes', [PacienteController::class, 'store'])->name('pacientes.store');

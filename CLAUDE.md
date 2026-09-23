@@ -552,6 +552,85 @@ decimosexta sería la que filtre.
   devuelve `null` y la Policy lo niega. Hay que sumar ese caso en la Etapa 5, cuando
   existan los catálogos.
 
+## Catálogos
+
+Médicos, centros, medicamentos, vacunas — y `tipos_medicion` en la Etapa 6. Lo que los
+separa de todo el resto del dominio es una sola cosa, y de ahí sale el diseño entero:
+
+> **Un catálogo cuelga del USUARIO, no del paciente.** El mismo médico atiende a toda la
+> familia que uno administra. Duplicarlo por paciente sería cargar tres veces el mismo
+> teléfono y que al cambiar de número queden dos desactualizados.
+
+| Pieza                                         | Qué hace                                                               |
+| --------------------------------------------- | ---------------------------------------------------------------------- |
+| `App\Contracts\EsCatalogo`                    | El contrato. **Extiende `CifraDatos`**: el nombre siempre va cifrado   |
+| `App\Concerns\DeCatalogo`                     | La implementación: `usuario()`, `esSemilla()`, `nombreVisible()`       |
+| `App\Policies\CatalogoPolicy`                 | **Una sola Policy para los cinco.** Mira `usuario_id`, nunca el pivote |
+| `App\Http\Controllers\CatalogoBaseController` | El `index()` completo, más los helpers de alta/edición/baja/duplicado  |
+
+### Semillas compartidas
+
+`usuario_id` **NULL** significa semilla compartida: la ve todo el mundo, no la edita nadie,
+y quien la quiera distinta **la duplica** a su propio catálogo (regla 5). Es la única salida
+frente a una semilla, y por eso `duplicar` es una acción de primera clase y no un extra.
+
+- Dejar editar una semilla sería dejar que alguien le cambie el catálogo a desconocidos.
+- ⚠️ **El UNIQUE no protege a las semillas.** `unique(usuario_id, nombre_hash)` con
+  `usuario_id` NULL admite todos los NULL que quiera MySQL, así que dos semillas iguales
+  entran sin chistar. El seeder de la Etapa 5.4 tiene que ser idempotente **por su cuenta**,
+  sin apoyarse en la base.
+- Duplicar dos veces la misma semilla **avisa** ("ya la tenés") en vez de estrellarse contra
+  el UNIQUE con un 500.
+
+### Cómo se copia el patrón (pasos 5.2 y 5.3)
+
+Un catálogo nuevo son cinco archivos y ninguna decisión:
+
+1. **Migración**: `usuario_id` nullable + `nombre` text + `nombre_hash` char(64) +
+   `unique(usuario_id, nombre_hash)` + `index(usuario_id)`.
+2. **Modelo**: `implements CifraDatos, EsCatalogo`, `use CifraCampos; use DeCatalogo;`,
+   `$builder = ConsultaVigilada::class`, `indicesCiegos()`, y `usuario_id` **fuera de
+   `$fillable`** —lo pone el controlador desde la sesión, igual que `paciente_id` en el
+   dominio clínico—.
+3. **FormRequest** con `new IndiceCiegoUnico(Modelo::class, 'nombre', ['usuario_id' => auth()->id()], $rutaModelo?->id)`.
+4. **Controlador** que extiende `CatalogoBaseController` y define `modelo()`, `pagina()`,
+   `serializar()` y los cuatro métodos finos.
+5. **Página Vue** en `pages/catalogos/`, copiada de `Medicos.vue`.
+
+**Si el nombre no se llama `nombre`** —`medicamentos` usa `nombre_comercial`— se pisa
+`columnaNombre()` en el modelo. De eso dependen el orden del listado, el índice ciego y el
+mensaje de "ya existe uno así", así que se declara y no se asume.
+
+### Por qué el controlador base no hace más de lo que hace
+
+`store()`, `update()` y `destroy()` **no pueden vivir en la clase base**, y no es por
+prolijidad:
+
+- `store`/`update` reciben un FormRequest distinto por catálogo, y el contenedor de Laravel
+  inyecta **el tipo que dice la firma**, no una subclase.
+- `destroy` necesita un type-hint concreto para que funcione el route-model binding.
+
+Así que cada controlador escribe esos métodos, de tres líneas, llamando a los helpers
+protegidos. Menos magia y más repetición, a cambio de que las firmas digan la verdad.
+
+⚠️ **La clase base es genérica (`@template TCatalogo`)** y cada controlador la cierra con
+`@extends CatalogoBaseController<Medico>`. Sin eso, las firmas nativas solo pueden decir
+`Model&EsCatalogo` y desde ahí no se ven las columnas del catálogo concreto: PHPStan tira
+trece errores de `property.notFound` y la tentación es tapar cada uno con un cast.
+
+- En el `serializar()` de cada controlador, la firma nativa queda en `Model&EsCatalogo`
+  —PHP **no deja angostar un parámetro** al implementar, es fatal— y el angostado se hace
+  con `@param Medico $registro`. Es lo único que hace falta.
+- Desde el genérico, `usuario_id` se escribe con `setAttribute()` y no con la propiedad
+  mágica, que para el analizador no existe. Es el mismo camino que usa `CatalogoPolicy`
+  para leerla.
+- El listado NO usa scopes de Eloquent: un scope definido en un trait no se resuelve
+  contra un `class-string` genérico. La condición vive en `visiblesPara()`, un helper del
+  controlador base que devuelve una clausura para meter en un `where()`.
+- **Ese paréntesis del `where(clausura)` no sobra**: sin agrupar, el `orWhereNull` se mezcla
+  con cualquier otro filtro que se encadene y las semillas de todos se cuelan. Es el modo de
+  falla clásico de un OR sin agrupar, y no da error: devuelve de más.
+
 ## Cobertura médica
 
 `coberturas` es tabla propia y no columnas en `pacientes`: mucha gente tiene obra social y
@@ -830,6 +909,18 @@ worker para verse sin señal —la única excepción a "los datos clínicos no s
 acotada por el servidor y no por el cliente (`GET /credenciales/{adjunto}`, ver PWA más
 arriba)—. Verificado en Chrome real con `page.setOfflineMode(true)`: se cachea al verla
 online, sirve sin red, y se olvida al borrar la credencial o la cobertura entera.
+
+Etapa 5.1 hecha: el patrón de catálogos completo -`EsCatalogo`, `DeCatalogo`,
+`CatalogoPolicy`, `CatalogoBaseController`- con **médicos** como primero, la regla
+de las semillas (se ven, no se editan, se duplican) y la unicidad por índice ciego
+acotada al usuario. Los pasos 5.2 y 5.3 copian esto sin decidir nada: la sección
+**Catálogos** de más arriba tiene la receta de cinco archivos.
+
+⚠️ **`ComboboxCatalogo` quedó pendiente a propósito**, aunque el plan lo ponía en
+el paso 5.1: hoy ninguna pantalla elige un médico -enfermedades es la Etapa 7 y
+estudios la 9-, y un componente que nadie usa no se puede verificar en un
+navegador. Es la misma lección de la Etapa 3. Va cuando exista el primer
+consumidor real, que además es quien va a decir qué necesita de verdad.
 
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de
