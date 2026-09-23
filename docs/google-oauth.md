@@ -25,64 +25,84 @@ y la app funciona exactamente como antes.
 
 3. **APIs y servicios → Credenciales → Crear credenciales → ID de cliente de
    OAuth**, tipo **Aplicación web**. En **URI de redireccionamiento
-   autorizados** van los dos:
+   autorizados** va el de producción:
 
     ```
     https://misalud.pablomandile.com.ar/auth/google/callback
-    http://localhost:8001/auth/google/callback
     ```
 
-    Tienen que coincidir **carácter por carácter** con lo que manda la app:
-    esquema incluido, puerto incluido y sin barra al final.
+    Tiene que coincidir **carácter por carácter** con lo que manda la app:
+    esquema incluido y sin barra al final.
 
-### ⚠️ Por qué el de local es `localhost:8001` y no `misalud.test`
+### El ingreso con Google está apagado en local, a propósito
 
-Google **no acepta dominios `.test`**: exige `https`, y la única excepción es
-`http` contra `localhost` o `127.0.0.1`. Como `APP_URL` acá es
-`http://misalud.test`, el redirect derivado de `APP_URL` no sirve, y por eso el
-`.env` local fija `GOOGLE_REDIRECT_URI` a mano.
+Solo está registrado el redirect de producción, que es donde interesa la
+autenticación. Por eso el `.env` local tiene las credenciales **comentadas**: con
+ellas puestas, el botón «Continuar con Google» aparece y al tocarlo Google
+contesta `redirect_uri_mismatch` — peor que no tenerlo. Comentadas, la opción
+sencillamente no existe: el botón no se dibuja y las rutas dan 404.
 
-Eso obliga a levantar el servidor en ese mismo host y puerto:
+Para encenderlo en local hay que hacer **las dos cosas**:
 
-```bash
-php artisan serve --host=localhost --port=8001
-```
+1. Registrar también `http://localhost:8001/auth/google/callback` en Google Cloud
+   Console. **No sirve `misalud.test`**: Google exige `https`, y la única
+   excepción es `localhost` o `127.0.0.1` — que además no son intercambiables
+   entre sí.
+2. Descomentar las tres variables del `.env` y levantar el servidor en ese mismo
+   host y puerto:
 
-`localhost` y `127.0.0.1` **no son intercambiables** para Google: manda el texto
-exacto que está en `GOOGLE_REDIRECT_URI`.
+    ```bash
+    php artisan serve --host=localhost --port=8001
+    ```
+
+⚠️ Si el servidor ya estaba corriendo con `--no-reload`, **hay que reiniciarlo**:
+`artisan serve` pasa las variables del `.env` al proceso hijo, y phpdotenv no
+pisa una variable que ya está en el entorno. Editar el `.env` no cambia nada
+hasta el reinicio, y el síntoma es que parece que el cambio no se aplicó.
 
 ## Qué poner en el `.env`
+
+En **producción**, y solo ahí:
 
 ```env
 GOOGLE_CLIENT_ID=...apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=...
-# Solo en local. En producción se deriva solo de APP_URL.
-GOOGLE_REDIRECT_URI=http://localhost:8001/auth/google/callback
 ```
+
+`GOOGLE_REDIRECT_URI` no hace falta: se deriva de `APP_URL`.
 
 En producción, lo mismo en el `.env` del server y después **`config:cache`**, o
 la app sigue leyendo la configuración vieja.
 
 ## Cómo verificar que quedó bien
 
-Sin abrir el navegador, y sin necesidad de una cuenta de Google:
+**Se puede comprobar que Google acepta el redirect URI sin tener el sitio
+desplegado y sin una cuenta de Google.** Google valida la URI contra su lista
+antes de contactar nuestro servidor, así que alcanza con armar la URL de
+autorización y mirar qué contesta:
 
 ```bash
-# 1. ¿La app ve las credenciales?
-curl -s http://localhost:8001/login | grep -o 'googleHabilitado":[a-z]*'
-# esperado: googleHabilitado":true
-
-# 2. ¿Google acepta el redirect URI?
-URL=$(curl -s -o /dev/null -w "%{redirect_url}" http://localhost:8001/auth/google/redirect)
-curl -sL "$URL" | grep -o "redirect_uri_mismatch"
-# esperado: SIN salida. Si imprime redirect_uri_mismatch, falta cargar la URI
-# en Google Cloud Console (o no coincide carácter por carácter).
+CID=<el client id>
+RU=https://misalud.pablomandile.com.ar/auth/google/callback
+curl -sL -A "Mozilla/5.0 Chrome/140"   "https://accounts.google.com/o/oauth2/auth?client_id=$CID&redirect_uri=$(python -c    "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$RU")&scope=openid+profile+email&response_type=code&state=chequeo"   | grep -oiE "redirect_uri_mismatch|invalid_client|Sign in"
 ```
 
-El paso 2 es el que ahorra el viaje en falso: distingue «falta cargar la URI» de
-«las credenciales están mal», que en el navegador se ven casi igual. Un
-`invalid_client` en vez de `redirect_uri_mismatch` significa que el problema es
-el `GOOGLE_CLIENT_ID`, no la URI.
+- `Sign in` → **está bien**: llegó a la pantalla de cuenta.
+- `redirect_uri_mismatch` → falta cargar esa URI, o no coincide carácter por
+  carácter.
+- `invalid_client` → el problema es el `GOOGLE_CLIENT_ID`, no la URI.
+
+Esa diferencia es la que ahorra el viaje en falso: en el navegador los tres
+casos se ven casi iguales.
+
+Ya desplegado, además:
+
+```bash
+curl -s https://misalud.pablomandile.com.ar/login | grep -o 'googleHabilitado":[a-z]*'
+# esperado: googleHabilitado":true
+```
+
+Si dice `false` con las variables puestas, falta `config:cache` en el server.
 
 ## Decisiones que ya están tomadas en el código
 

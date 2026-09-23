@@ -247,13 +247,25 @@ Las reglas, y por qué cada una:
 por la que se busca al volver de Google, y sobre una columna cifrada ese `where`
 devolvería cero filas siempre. No es un dato clínico.
 
-### ⚠️ Google no acepta el dominio `.test`
+### El ingreso con Google está apagado en local, a propósito
 
-Exige `https`, salvo contra `localhost` o `127.0.0.1`. Como `APP_URL` en local es
-`http://misalud.test`, el redirect derivado de `APP_URL` **no sirve**: el `.env`
-local fija `GOOGLE_REDIRECT_URI` a `http://localhost:8001/auth/google/callback`,
-y hay que levantar el servidor en ese mismo host y puerto. `localhost` y
-`127.0.0.1` no son intercambiables para Google.
+En Google Cloud Console está registrado **solo el redirect de producción**, que es
+donde interesa la autenticación. Por eso el `.env` local tiene las credenciales
+comentadas: con ellas puestas el botón aparece y al tocarlo Google contesta
+`redirect_uri_mismatch`, que es peor que no tenerlo. Comentadas, la opción no existe
+—prop en `false`, rutas en 404—, que es justo para lo que se diseñó esa degradación.
+
+**Google no acepta el dominio `.test`**: exige `https`, salvo contra `localhost` o
+`127.0.0.1`, que además no son intercambiables entre sí. Como `APP_URL` en local es
+`http://misalud.test`, encenderlo acá obliga a registrar también
+`http://localhost:8001/auth/google/callback` y a levantar el servidor en ese mismo
+host y puerto.
+
+⚠️ **Editar el `.env` no cambia nada en un `artisan serve` ya corriendo.** El
+comando pasa las variables al proceso hijo, y phpdotenv no pisa una variable que ya
+está en el entorno; con `--no-reload` tampoco se reinicia solo. El síntoma es que
+parece que el cambio no se aplicó —y se busca en la caché de configuración, que no
+tiene nada que ver—.
 
 Trámite completo y cómo verificarlo sin abrir el navegador: `docs/google-oauth.md`.
 
