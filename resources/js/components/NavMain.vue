@@ -19,7 +19,15 @@ const { isCurrentUrl } = useCurrentUrl();
 
 <template>
     <SidebarGroup class="px-2 py-0">
-        <SidebarGroupLabel>Plataforma</SidebarGroupLabel>
+        <!--
+            El kit ponía 'Plataforma' acá. Con un solo grupo de destinos, un
+            título es ruido: ocupa lugar y no separa nada de nada. Se deja el
+            rótulo para el lector de pantalla, que sí necesita saber qué es
+            esta lista.
+        -->
+        <SidebarGroupLabel class="sr-only"
+            >Secciones de MiSalud</SidebarGroupLabel
+        >
         <SidebarMenu>
             <SidebarMenuItem v-for="item in items" :key="item.title">
                 <SidebarMenuButton

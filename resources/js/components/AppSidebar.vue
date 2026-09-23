@@ -2,6 +2,7 @@
 import { Link, router } from '@inertiajs/vue3';
 import { onUnmounted } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
+import BotonInstalar from '@/components/BotonInstalar.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -67,6 +68,16 @@ onUnmounted(
 
         <SidebarFooter>
             <NavFooter :items="destinosSecundarios" />
+
+            <!--
+                Se muestra solo si la app todavía no está instalada, así que no
+                estorba a quien ya la tiene. Desaparece en vivo al instalarla,
+                sin recargar.
+            -->
+            <div class="px-2 group-data-[collapsible=icon]:hidden">
+                <BotonInstalar class="w-full" />
+            </div>
+
             <NavUser />
         </SidebarFooter>
     </Sidebar>

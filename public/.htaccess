@@ -23,3 +23,26 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
 </IfModule>
+
+# ---------------------------------------------------------------------------
+# PWA
+# ---------------------------------------------------------------------------
+
+<IfModule mod_mime.c>
+    AddType application/manifest+json .webmanifest
+</IfModule>
+
+# El navegador se entera de que hay una versión nueva pidiendo estos dos
+# archivos. Si el CDN los sirve cacheados, ninguna actualización llega hasta que
+# expire —medido en Hostinger: hasta 7 días—, y como el service worker controla
+# las demás cachés, eso congela también todo lo demás.
+<IfModule mod_headers.c>
+    <FilesMatch "^(sw\.js|manifest\.webmanifest)$">
+        Header set Cache-Control "no-cache, must-revalidate, max-age=0"
+        # mod_expires manda su propio Expires a 7 días por su cuenta y queda
+        # contradiciendo al max-age=0. La spec obliga a ignorarlo, pero el
+        # problema de estos CDN es justamente que hacen lo que quieren con las
+        # cabeceras: mejor no dejarlo escrito.
+        Header unset Expires
+    </FilesMatch>
+</IfModule>

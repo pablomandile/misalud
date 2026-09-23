@@ -57,17 +57,32 @@ const navegador = await puppeteer.launch({
 
 const pagina = await navegador.newPage();
 
-async function iniciarSesion() {
-    await pagina.setViewport({ width: 390, height: 844 });
+async function ingresar(pagina) {
     await pagina.goto(`${BASE}/login`, { waitUntil: 'networkidle0' });
     await pagina.type('input[name="email"]', EMAIL);
     await pagina.type('input[name="password"]', PASSWORD);
-    await Promise.all([
-        pagina.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {}),
-        pagina.click('button[type="submit"]'),
-    ]);
 
-    if (pagina.url().includes('/login')) {
+    /*
+     * `data-test` y no `button[type=submit]`: en esta pantalla hay más de un
+     * botón y el orden puede cambiar. Y se espera por la URL, no con
+     * `waitForNavigation`: el submit de Inertia es un XHR y no dispara el
+     * evento de navegación, así que la espera vence y parece que falló.
+     */
+    await pagina.click('[data-test="login-button"]');
+
+    await pagina
+        .waitForFunction(() => !location.pathname.startsWith('/login'), {
+            timeout: 10000,
+        })
+        .catch(() => {});
+
+    return !pagina.url().includes('/login');
+}
+
+async function iniciarSesion() {
+    await pagina.setViewport({ width: 390, height: 844 });
+
+    if (!(await ingresar(pagina))) {
         console.error(
             `No se pudo iniciar sesión con ${EMAIL}. Pasá EMAIL y PASSWORD, o creá ese usuario.`,
         );

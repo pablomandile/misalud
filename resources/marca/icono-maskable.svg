@@ -1,0 +1,20 @@
+<!--
+  La misma marca, preparada para el recorte de Android (`purpose: maskable`).
+
+  Dos diferencias con `icono.svg`, y las dos importan:
+
+  1. El fondo llena el lienzo entero, sin esquinas redondeadas. Android le
+     aplica su propia máscara —círculo, "squircle", lo que use el launcher—, y
+     un ícono que ya venga redondeado queda con esquinas recortadas dos veces.
+
+  2. La cruz es más chica. La "zona segura" de un ícono maskable es apenas el
+     80% central: todo lo que quede afuera se puede perder según el launcher.
+     Acá la cruz ocupa el 50%, bien adentro de ese margen.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+    <rect width="512" height="512" fill="#0e7490" />
+    <g fill="#ffffff">
+        <rect x="212" y="128" width="88" height="256" rx="26" />
+        <rect x="128" y="212" width="256" height="88" rx="26" />
+    </g>
+</svg>

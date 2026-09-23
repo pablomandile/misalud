@@ -5,6 +5,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
 
+// Respaldo que sirve el service worker cuando no hay conexión. Es una vista
+// suelta, no Inertia: tiene que poder mostrarse sin los assets compilados.
+Route::view('offline', 'offline')->name('offline');
+
 /*
  * El tamaño de letra se cambia CON O SIN sesión: quien no llega a leer la
  * pantalla de ingreso es justamente el que necesita agrandarla, y ahí todavía

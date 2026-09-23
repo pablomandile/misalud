@@ -38,9 +38,56 @@
             }
         </style>
 
-        <link rel="icon" href="/favicon.ico" sizes="any">
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        {{--
+            El `?v=` no es decorativo. Sin él, la caché HTTP y la base de
+            favicons de Chrome mobile —que es aparte y muy pegajosa— siguen
+            sirviendo el ícono viejo para siempre, porque la URL no cambia.
+            Al cambiar un ícono hay que subir este número, el del manifest y el
+            nombre de CACHE en public/sw.js: los tres.
+        --}}
+        <link rel="icon" href="/favicon.svg?v=1" type="image/svg+xml">
+        <link rel="icon" href="/icons/icon-192.png?v=1" type="image/png" sizes="192x192">
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=1">
+
+        <link rel="manifest" href="/manifest.webmanifest">
+        <meta name="theme-color" content="#0e7490">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="MiSalud">
+
+        {{--
+            Chrome dispara `beforeinstallprompt` apenas carga la página, casi
+            siempre ANTES de que monte Vue. Si se escuchara desde un componente
+            (onMounted) el evento ya pasó y el botón de instalar no aparece
+            nunca — de forma intermitente, que es lo peor. Por eso se captura
+            acá, antes de los bundles.
+        --}}
+        <script>
+            (function () {
+                window.__pwaInstall = { prompt: null, instalada: false };
+
+                window.addEventListener('beforeinstallprompt', function (e) {
+                    e.preventDefault(); // el prompt lo lanzamos desde el botón
+                    window.__pwaInstall.prompt = e;
+                    window.dispatchEvent(new CustomEvent('pwa:instalable'));
+                });
+
+                window.addEventListener('appinstalled', function () {
+                    window.__pwaInstall.prompt = null;
+                    window.__pwaInstall.instalada = true;
+                    window.dispatchEvent(new CustomEvent('pwa:instalada'));
+                });
+            })();
+        </script>
+
+        <script>
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function () {
+                    navigator.serviceWorker.register('/sw.js').catch(function () {});
+                });
+            }
+        </script>
 
         @fonts
 

@@ -312,7 +312,21 @@ Service worker propio en `public/sw.js`. **No** usar `vite-plugin-pwa`: no sabe 
 JSON crudo de Inertia ni del `beforeinstallprompt` capturado antes de que monte Vue.
 
 - `beforeinstallprompt` se captura con un **script inline en el `<head>`**. Hacerlo en
-  `onMounted` deja el botón sin aparecer, de forma intermitente.
+  `onMounted` deja el botón sin aparecer, de forma intermitente. `usePwaInstall` solo lee lo
+  que ese script guardó en `window.__pwaInstall`.
+- **El botón no se esconde después de usar el prompt.** El prompt se consume una sola vez,
+  incluso si la persona lo descarta; escondiéndolo, quien lo cerró sin querer no puede
+  reintentar, y en una SPA una recarga completa casi no pasa. A partir del segundo toque
+  muestra el instructivo del menú del navegador.
+- **En iOS el botón se muestra igual**, aunque no haya prompt: Safari nunca dispara
+  `beforeinstallprompt` y la instalación es manual. Condicionarlo a que exista el prompt lo
+  haría desaparecer justo en el dispositivo donde más se usa la app. iPadOS se declara como
+  Mac desde iOS 13: lo delata `navigator.maxTouchPoints > 1`.
+- Los íconos **se generan** desde `resources/marca/*.svg` con `npm run generar:iconos`, nunca
+  se editan a mano. El maskable llena el lienzo sin esquinas redondeadas —Android aplica su
+  propia máscara y un ícono ya redondeado se recorta dos veces— y su cruz ocupa el 50%, bien
+  adentro de la zona segura del 80%. El `apple-touch-icon` sale del maskable porque iOS
+  pinta de negro cualquier transparencia.
 - `cache-first` **solo** para `/build/` (tiene hash de contenido). Todo lo demás network-first.
   **Las respuestas de Inertia no se cachean**: son datos clínicos, y mostrar una dosis vieja es
   peor que mostrar un cartel de "sin conexión".
@@ -337,6 +351,22 @@ Un solo `VisorDocumento.vue` a pantalla completa para imágenes **y PDFs**, con 
 - **`object-contain`, nunca `cover`**: recortar algo que la persona abrió para leer es perder
   justo lo que fue a ver.
 - **Se cierra antes de borrar** lo que está mostrando, o queda con un `src` que ya da 404.
+
+## Marca
+
+**Provisoria.** Una cruz de puntas redondeadas sobre `#0e7490`, genérica a propósito hasta que
+exista la marca real. Vive en dos lugares y no hay que confundirlos:
+
+| Archivo                              | Para qué                                       |
+| ------------------------------------ | ---------------------------------------------- |
+| `resources/marca/icono.svg`          | Fuente de los íconos de la PWA (con fondo)     |
+| `resources/marca/icono-maskable.svg` | Variante para el recorte de Android y para iOS |
+| `components/AppLogoIcon.vue`         | La cruz sola, sin fondo, para la interfaz      |
+
+Cambiar la marca son tres pasos: reemplazar los dos SVG, correr `npm run generar:iconos`, y
+actualizar `AppLogoIcon.vue`. Y después **subir los tres números de versión** —`CACHE` en
+`sw.js`, el `?v=` del blade y el del manifest—, o se sigue viendo el ícono viejo: son tres
+cachés distintas y ninguna se limpia sola.
 
 ## Caché de las respuestas de Inertia
 
@@ -415,6 +445,8 @@ npm run check:fix         # formato + lint del front
 npm run types:check       # vue-tsc
 npm run dev               # Vite
 npm run revisar:mobile    # desborde en 54 combinaciones + menú al navegar (Chrome real)
+npm run revisar:pwa       # el veredicto de instalabilidad de Chrome, no "se ve el botón"
+npm run generar:iconos    # regenera el set de íconos desde resources/marca/
 
 php artisan misalud:sonda-imap   # ¿sale el 993 desde acá?
 php artisan misalud:recifrar     # rotar APP_KEY (--seco para ensayar)
@@ -433,8 +465,11 @@ visible en español rioplatense, y la capa de cifrado (`CifraDatos`, `CifraCampo
 el tamaño de letra completo con su pantalla, el layout con menú hamburguesa que se cierra
 al navegar, y los avisos en toast.
 
-Falta de la Etapa 1: la PWA (`sw.js` propio, manifest con `orientation: any`, íconos) y el
-parche de caché de Inertia.
+La PWA está instalable —Chrome lo confirma— con `sw.js` propio, manifest con
+`orientation: any`, set de íconos generado y botón de instalar.
+
+Falta de la Etapa 1: el parche de caché de Inertia (`no-store` en la respuesta XHR y el
+rescate del JSON crudo en el service worker).
 
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de

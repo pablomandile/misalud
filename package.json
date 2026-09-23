@@ -9,7 +9,9 @@
         "check": "vp check",
         "check:fix": "vp check --fix",
         "types:check": "vue-tsc --noEmit",
-        "revisar:mobile": "node scripts/revisar-mobile.mjs"
+        "revisar:mobile": "node scripts/revisar-mobile.mjs",
+        "generar:iconos": "node scripts/generar-iconos.mjs",
+        "revisar:pwa": "node scripts/revisar-pwa.mjs"
     },
     "dependencies": {
         "@inertiajs/vite": "^3.0.0",
