@@ -56,7 +56,13 @@ const PASSWORD = process.env.PASSWORD ?? 'prueba-1234';
  * que ve cualquiera, y la que más texto apila cuando la letra es muy grande.
  */
 const RUTAS_INVITADO = ['/login', '/register'];
-const RUTAS = ['/dashboard', '/pacientes', '/medicos', '/settings/appearance'];
+const RUTAS = [
+    '/dashboard',
+    '/pacientes',
+    '/medicos',
+    '/centros',
+    '/settings/appearance',
+];
 const ANCHOS = [320, 360, 414];
 const TAMANIOS = ['normal', 'grande', 'muy-grande'];
 const MINIMO = 44;

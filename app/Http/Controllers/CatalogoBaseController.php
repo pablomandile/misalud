@@ -55,6 +55,21 @@ abstract class CatalogoBaseController extends Controller
     abstract protected function serializar(Model&EsCatalogo $registro): array;
 
     /**
+     * Props extra para la pantalla, además de `registros`.
+     *
+     * Vacío por defecto: casi ningún catálogo necesita más que su propio
+     * listado. `centros` la pisa para mandar el catálogo de médicos con el
+     * que arma el checklist de "quién atiende acá" — ninguna otra pieza de
+     * `CatalogoBaseController` sabe de pivotes, y no hace falta que lo sepa.
+     *
+     * @return array<string, mixed>
+     */
+    protected function propsExtra(): array
+    {
+        return [];
+    }
+
+    /**
      * El listado: lo del usuario más las semillas compartidas.
      *
      * El nombre está cifrado, así que **no hay `orderBy` en SQL**: se traen
@@ -73,7 +88,10 @@ abstract class CatalogoBaseController extends Controller
             ->map(fn (Model&EsCatalogo $registro): array => $this->serializar($registro))
             ->all();
 
-        return Inertia::render($this->pagina(), ['registros' => $registros]);
+        return Inertia::render($this->pagina(), [
+            'registros' => $registros,
+            ...$this->propsExtra(),
+        ]);
     }
 
     /**

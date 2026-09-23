@@ -657,6 +657,39 @@ trece errores de `property.notFound` y la tentación es tapar cada uno con un ca
   con cualquier otro filtro que se encadene y las semillas de todos se cuelan. Es el modo de
   falla clásico de un OR sin agrupar, y no da error: devuelve de más.
 
+### Props extra: `centros` es el primer catálogo que necesita más que su listado
+
+`CatalogoBaseController::index()` arma la respuesta con `propsExtra()`, un hook protegido
+que devuelve `[]` por defecto y que `CentroController` pisa para mandar
+`medicosDisponibles` —el catálogo de médicos, para armar el checklist de "quién atiende
+acá"—. Sin este hook, sumar un pivote hubiera obligado a reescribir `index()` entero en
+cada catálogo que lo necesite, en vez de agregar un método de tres líneas.
+
+### El pivote `centro_medico`: la primera vez que un catálogo apunta a otro
+
+- **No tiene `usuario_id` propio.** Las dos puntas ya son catálogos del usuario; la
+  autorización de vincular pasa por poder **ver** los dos lados (`CatalogoPolicy::view()`
+  en el médico, vía la regla de `exists` del FormRequest), no por un dueño del pivote.
+- ⚠️ **La validación de `medicos.*` repite el mismo paréntesis que `visiblesPara()`**, pero
+  esta vez adentro de un `Rule::exists()->where(clausura)`. Sin agruparlo, el `orWhereNull`
+  se mezcla con la condición de `id` que ya agrega `exists` y la regla deja pasar
+  **cualquier** médico que exista, sin importar de quién sea — el mismo error, disfrazado de
+  regla de validación en vez de scope.
+- **Un array ausente en el formulario significa "ninguno marcado", no "no toques nada".**
+  `medicos()->sync($ids)` con `$ids = []` desvincula a todos: es el comportamiento correcto
+  para un checklist —destildar todo y guardar tiene que vaciar la lista—, pero hay que
+  tenerlo presente al leer el código: no es un `sync` defensivo que preserve lo que había.
+- **`replicate()` no copia relaciones.** Duplicar una semilla de centro no arrastra sus
+  médicos vinculados, y es lo correcto: esos médicos son del catálogo de quien publicó la
+  semilla, no del catálogo de quien duplica.
+- ⚠️ **`cascadeOnDelete()` no dispara con un soft delete.** Es una restricción de MySQL, y
+  solo actúa sobre un `DELETE` real. `destroy()` de un catálogo hace un soft delete —pone
+  `deleted_at`—, así que la fila de `centros` sigue existiendo y el vínculo con ella
+  también: es lo correcto, porque un soft delete es recuperable, y perder los médicos
+  vinculados en el camino sería una pérdida de datos que nadie borró a propósito. La
+  cascada real solo se ve con `forceDelete()`. Medido con un test: sin él, hubiera quedado
+  como un "debería andar" sin comprobar.
+
 ## Cobertura médica
 
 `coberturas` es tabla propia y no columnas en `pacientes`: mucha gente tiene obra social y
@@ -953,6 +986,13 @@ el paso 5.1: hoy ninguna pantalla elige un médico -enfermedades es la Etapa 7 y
 estudios la 9-, y un componente que nadie usa no se puede verificar en un
 navegador. Es la misma lección de la Etapa 3. Va cuando exista el primer
 consumidor real, que además es quien va a decir qué necesita de verdad.
+
+Etapa 5.2 hecha: `centros`, copiado del patrón de médicos sin decidir nada nuevo,
+más `centro_medico` -el primer pivote entre dos catálogos-. Resultó que el primer
+consumidor real de "elegir de un catálogo" (anticipado en el párrafo de arriba)
+no necesitaba `ComboboxCatalogo`: un checklist de checkboxes alcanza y sobra,
+porque un catálogo personal son decenas de médicos, no cientos que pidan buscar
+o desplazarse. Ese componente sigue esperando a quien de verdad lo necesite.
 
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de

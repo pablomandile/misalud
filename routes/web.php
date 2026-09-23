@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdjuntoController;
 use App\Http\Controllers\Auth\GoogleController;
+use App\Http\Controllers\CentroController;
 use App\Http\Controllers\CoberturaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MedicoController;
@@ -90,6 +91,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('medicos/{medico}', [MedicoController::class, 'destroy'])->name('medicos.destroy');
     Route::post('medicos/{medico}/duplicar', [MedicoController::class, 'duplicar'])
         ->name('medicos.duplicar');
+
+    Route::get('centros', [CentroController::class, 'index'])->name('centros.index');
+    Route::post('centros', [CentroController::class, 'store'])->name('centros.store');
+    Route::put('centros/{centro}', [CentroController::class, 'update'])->name('centros.update');
+    Route::delete('centros/{centro}', [CentroController::class, 'destroy'])->name('centros.destroy');
+    Route::post('centros/{centro}/duplicar', [CentroController::class, 'duplicar'])
+        ->name('centros.duplicar');
 
     Route::get('pacientes', [PacienteController::class, 'index'])->name('pacientes.index');
     Route::post('pacientes', [PacienteController::class, 'store'])->name('pacientes.store');

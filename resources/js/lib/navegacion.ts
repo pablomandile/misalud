@@ -1,4 +1,11 @@
-import { LayoutGrid, Settings, Stethoscope, Users } from '@lucide/vue';
+import {
+    Building2,
+    LayoutGrid,
+    Settings,
+    Stethoscope,
+    Users,
+} from '@lucide/vue';
+import CentroController from '@/actions/App/Http/Controllers/CentroController';
 import MedicoController from '@/actions/App/Http/Controllers/MedicoController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
 import { dashboard } from '@/routes';
@@ -31,15 +38,20 @@ export const destinosPrincipales: NavItem[] = [
     },
     /*
      * Los catálogos son del USUARIO, no de un paciente: por eso van al mismo
-     * nivel que Pacientes y no adentro. Cuando entren los otros tres (centros,
-     * medicamentos, vacunas) va a convenir agruparlos bajo "Catálogos" -cuatro
-     * entradas sueltas son muchas para un menú que usan personas mayores-,
-     * y ese cambio vive entero en este archivo.
+     * nivel que Pacientes y no adentro. Con los otros dos (medicamentos,
+     * vacunas) va a convenir agruparlos bajo "Catálogos" -cuatro entradas
+     * sueltas son muchas para un menú que usan personas mayores-, y ese
+     * cambio vive entero en este archivo.
      */
     {
         title: 'Médicos',
         href: MedicoController.index(),
         icon: Stethoscope,
+    },
+    {
+        title: 'Centros',
+        href: CentroController.index(),
+        icon: Building2,
     },
 ];
 

@@ -14,6 +14,7 @@ use Database\Factories\MedicoFactory;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -82,5 +83,18 @@ class Medico extends Model implements CifraDatos, EsCatalogo
     public function indicesCiegos(): array
     {
         return ['nombre' => 'nombre_hash'];
+    }
+
+    /**
+     * Los centros donde atiende. El lado que se edita de verdad es
+     * `Centro::medicos()` -se vincula desde la pantalla de Centros-; esta
+     * relación existe para poder mostrarlo también desde acá el día que
+     * haga falta, sin duplicar la definición del pivote.
+     *
+     * @return BelongsToMany<Centro, $this>
+     */
+    public function centros(): BelongsToMany
+    {
+        return $this->belongsToMany(Centro::class, 'centro_medico')->withTimestamps();
     }
 }
