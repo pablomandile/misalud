@@ -27,13 +27,14 @@ class AdjuntoController extends Controller
     /**
      * Sube uno o varios archivos a la ficha de un paciente.
      *
-     * La autorización es sobre el PACIENTE y no sobre el adjunto: el adjunto
-     * todavía no existe, y lo que se está pidiendo es permiso para escribir
-     * dentro de esa ficha.
+     * **Subir un archivo a algo es editar ese algo**: se pide `update` sobre
+     * el paciente, no un permiso propio del adjunto -que todavía no existe-.
+     * Es la misma regla que aplica `AdjuntoPolicy` para ver y para borrar, y
+     * la que hace que esto funcione igual para una cobertura o un catálogo.
      */
     public function store(AdjuntoStoreRequest $peticion, Paciente $paciente): RedirectResponse
     {
-        Gate::authorize('crearEn', [Adjunto::class, $paciente]);
+        Gate::authorize('update', $paciente);
 
         $tipo = $peticion->tipo();
         $descripcion = $peticion->input('descripcion');
@@ -63,13 +64,14 @@ class AdjuntoController extends Controller
      * Sube uno o varios archivos a una cobertura: la credencial, frente y
      * dorso, como dos adjuntos tipo `credencial`.
      *
-     * La autorización se resuelve sobre el PACIENTE dueño de la cobertura y
-     * no sobre la cobertura misma, por el mismo motivo que en `store()`: el
-     * adjunto todavía no existe.
+     * Se pide `update` sobre la COBERTURA, que a su vez lo resuelve por el
+     * rol en el paciente. Preguntarle directo al dueño -y no salteárselo
+     * para ir al paciente- es lo que hace que la regla sea una sola para
+     * todos los dueños posibles, incluidos los que no tienen paciente.
      */
     public function storeParaCobertura(AdjuntoStoreRequest $peticion, Cobertura $cobertura): RedirectResponse
     {
-        Gate::authorize('crearEn', [Adjunto::class, $cobertura->paciente]);
+        Gate::authorize('update', $cobertura);
 
         $tipo = $peticion->tipo();
         $descripcion = $peticion->input('descripcion');

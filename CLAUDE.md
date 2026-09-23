@@ -538,19 +538,45 @@ del archivo **original**, no el del cifrado, que es el número que la persona re
 cada modelo. Una Policy por modelo sería la misma lógica copiada quince veces, y la
 decimosexta sería la que filtre.
 
-- El contrato pide **un método y no una relación** a propósito: casi todos los registros
-  llegan al paciente en un paso por `paciente_id`, pero un `Adjunto` es polimórfico y
-  tiene que subir primero por `adjuntable`. Con una relación `BelongsTo` en el contrato,
-  el adjunto no podría cumplirlo.
+- El contrato pide **un método y no una relación**: hoy todos los que lo implementan
+  llegan al paciente en un paso por `paciente_id`, pero dejarlo como método no cuesta
+  nada y deja lugar para un registro que llegue por un camino más largo.
 - **Un paciente nulo es "no", nunca "no hay nada que proteger".** Es la línea entre un
   registro huérfano inaccesible y uno abierto a cualquiera.
 - `Lector` **puede ver** cualquier registro y no puede tocar ninguno. Borrar un registro
   clínico sí lo puede hacer un cuidador —tiene que poder corregir lo que cargó mal—; lo
   que queda para el propietario es dar de baja la ficha entera y el `forceDelete`.
-- ⚠️ **Falta la rama de los catálogos.** El prospecto de un medicamento cuelga de un
-  registro que es de un **usuario**, no de un paciente, así que hoy `pacienteDelRegistro()`
-  devuelve `null` y la Policy lo niega. Hay que sumar ese caso en la Etapa 5, cuando
-  existan los catálogos.
+
+### Los adjuntos NO usan esta Policy: delegan en su dueño
+
+`AdjuntoPolicy` no decide nada por su cuenta. La regla entera es una línea:
+
+> _Podés hacerle algo a un adjunto si podés hacerle lo mismo a la cosa de la que cuelga._
+
+| El adjunto cuelga de… | Contesta…                              |
+| --------------------- | -------------------------------------- |
+| `Paciente`            | `PacientePolicy` (rol en el pivote)    |
+| `Cobertura`           | `RegistroClinicoPolicy` (vía paciente) |
+| un catálogo           | `CatalogoPolicy` (por `usuario_id`)    |
+
+Antes esto lo resolvía `RegistroClinicoPolicy` subiendo por `adjuntable` hasta encontrar un
+paciente. Andaba mientras **todo** colgara de un paciente, y se rompía con el primero que
+no: el prospecto de un medicamento cuelga de un catálogo, que es del usuario, y esa cadena
+devolvía `null` —o sea, lo negaba siempre—. Delegando, cada dueño contesta con su propia
+Policy y esto no se vuelve a tocar al sumar un dueño nuevo.
+
+- **Subir un archivo a X es editar X**: los controladores piden `update` sobre el dueño, no
+  un permiso propio del adjunto —que todavía no existe cuando se sube—. Una sola regla para
+  paciente, cobertura y catálogo.
+- **Editar o borrar un archivo también pide `update` del dueño, no su `delete`**: sacarle
+  una foto a una cobertura no es dar de baja la cobertura.
+- **Sin dueño es "no".** Un adjunto huérfano queda inaccesible, nunca abierto.
+- ⚠️ **`Gate::forUser($usuario)->allows(...)`, jamás `Gate::allows(...)` a secas.** La
+  fachada sin `forUser` evalúa contra el usuario **autenticado**, que no tiene por qué ser
+  el que recibió la Policy: preguntar por un tercero con una sesión abierta devolvería
+  `true` —y en silencio—. Lo cuida un test.
+- Sale gratis una regla correcta: a una **semilla compartida no se le puede colgar un
+  archivo**, porque `CatalogoPolicy::update()` la niega. Hay que duplicarla primero.
 
 ## Catálogos
 
@@ -915,6 +941,12 @@ Etapa 5.1 hecha: el patrón de catálogos completo -`EsCatalogo`, `DeCatalogo`,
 de las semillas (se ven, no se editan, se duplican) y la unicidad por índice ciego
 acotada al usuario. Los pasos 5.2 y 5.3 copian esto sin decidir nada: la sección
 **Catálogos** de más arriba tiene la receta de cinco archivos.
+
+La autorización de los adjuntos pasó a **delegar en su dueño** (ver la sección de
+adjuntos más arriba). Era la deuda que dejaba la Etapa 3 y había que saldarla antes
+del paso 5.3: el prospecto de un medicamento cuelga de un catálogo, no de un
+paciente, y la cadena vieja lo negaba siempre. Con la delegación, 5.3 no necesita
+tocar nada de autorización.
 
 ⚠️ **`ComboboxCatalogo` quedó pendiente a propósito**, aunque el plan lo ponía en
 el paso 5.1: hoy ninguna pantalla elige un médico -enfermedades es la Etapa 7 y

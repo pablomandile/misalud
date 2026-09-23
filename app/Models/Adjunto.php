@@ -6,10 +6,9 @@ namespace App\Models;
 
 use App\Concerns\CifraCampos;
 use App\Contracts\CifraDatos;
-use App\Contracts\PerteneceAPaciente;
 use App\Database\Eloquent\ConsultaVigilada;
 use App\Enums\TipoAdjunto;
-use App\Policies\RegistroClinicoPolicy;
+use App\Policies\AdjuntoPolicy;
 use Database\Factories\AdjuntoFactory;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -24,6 +23,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * es. El contenido vive cifrado en el disco privado (ver `ArchivoService`) y se
  * sirve siempre por controlador, nunca por URL pública.
  *
+ * **No sabe de quién es, y no tiene por qué saberlo.** La autorización se
+ * delega entera en su `adjuntable` (ver `AdjuntoPolicy`): así sirve igual
+ * colgado de un paciente, de una cobertura o de un catálogo, sin que este
+ * modelo conozca ninguno de los tres.
+ *
  * @property int $id
  * @property string $adjuntable_type
  * @property int $adjuntable_id
@@ -35,8 +39,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property int $tamanio_bytes
  * @property int|null $duracion_segundos
  */
-#[UsePolicy(RegistroClinicoPolicy::class)]
-class Adjunto extends Model implements CifraDatos, PerteneceAPaciente
+#[UsePolicy(AdjuntoPolicy::class)]
+class Adjunto extends Model implements CifraDatos
 {
     use CifraCampos;
 
@@ -92,35 +96,6 @@ class Adjunto extends Model implements CifraDatos, PerteneceAPaciente
     public function adjuntable(): MorphTo
     {
         return $this->morphTo();
-    }
-
-    /**
-     * El paciente dueño de este archivo, subiendo por lo que lo contiene.
-     *
-     * La cadena es más larga que la de cualquier otro registro clínico: el
-     * adjunto no sabe de qué paciente es, lo sabe su `adjuntable`. Por eso la
-     * resuelve el modelo y no la Policy — la Policy trata a todos los registros
-     * igual, y esta es la única rareza.
-     */
-    public function pacienteDelRegistro(): ?Paciente
-    {
-        $duenio = $this->adjuntable;
-
-        if ($duenio instanceof Paciente) {
-            return $duenio;
-        }
-
-        if ($duenio instanceof PerteneceAPaciente) {
-            return $duenio->pacienteDelRegistro();
-        }
-
-        /*
-         * Sin dueño reconocible no hay a quién preguntarle: la Policy lo lee
-         * como "no". Acá caen los adjuntos huérfanos y, cuando entre la Etapa 5,
-         * los que cuelguen de un catálogo -el prospecto de un medicamento es de
-         * un usuario, no de un paciente-. Esa rama hay que sumarla ahí.
-         */
-        return null;
     }
 
     public function esImagen(): bool

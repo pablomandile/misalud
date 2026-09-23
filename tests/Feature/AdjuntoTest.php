@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\ArchivoService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 
 beforeEach(function (): void {
@@ -175,11 +176,11 @@ it('exige sesión para ver un archivo', function (): void {
 
 /*
 |--------------------------------------------------------------------------
-| La cadena hacia el paciente
+| La autorización se delega en el dueño
 |--------------------------------------------------------------------------
 */
 
-it('niega el acceso si el adjunto no llega a ningún paciente', function (): void {
+it('niega el acceso si el adjunto quedó huérfano', function (): void {
     $usuario = User::factory()->create();
     $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
     $adjunto = adjuntoDe($paciente);
@@ -187,11 +188,29 @@ it('niega el acceso si el adjunto no llega a ningún paciente', function (): voi
     // Se rompe la cadena: el dueño apunta a algo que no existe.
     $adjunto->forceFill(['adjuntable_id' => 999999])->save();
 
-    expect($adjunto->fresh()->pacienteDelRegistro())->toBeNull();
+    expect($adjunto->fresh()->adjuntable)->toBeNull();
 
     $this->actingAs($usuario)
         ->get(route('adjuntos.show', $adjunto->id))
         ->assertForbidden();
+});
+
+it('la Policy evalúa contra el usuario que recibe, no contra el de la sesión', function (): void {
+    /*
+     * El modo de falla que cubre este test: `Gate::allows()` sin `forUser()`
+     * respondería por el usuario AUTENTICADO. Con una sesión abierta de
+     * alguien que SÍ puede, preguntar por un tercero devolvería `true` — y en
+     * silencio.
+     */
+    $duenio = User::factory()->create();
+    $paciente = Paciente::factory()->for($duenio, 'usuario')->create();
+    $adjunto = adjuntoDe($paciente);
+    $ajeno = User::factory()->create();
+
+    $this->actingAs($duenio);
+
+    expect(Gate::forUser($duenio)->allows('view', $adjunto))->toBeTrue()
+        ->and(Gate::forUser($ajeno)->allows('view', $adjunto))->toBeFalse();
 });
 
 it('no expone adjuntable_type ni adjuntable_id a la asignación masiva', function (): void {
