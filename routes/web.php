@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\PacienteActivoController;
 use App\Http\Controllers\PacienteController;
 use App\Http\Controllers\Settings\TamanioTextoController;
@@ -18,6 +19,21 @@ Route::view('offline', 'offline')->name('offline');
  */
 Route::put('tamanio-texto', [TamanioTextoController::class, 'update'])
     ->name('tamanio-texto.update');
+
+/*
+ * Ingreso con Google. Van en inglés y bajo /auth como el resto de las rutas de
+ * autenticación, que las publica Fortify; el español es para el dominio.
+ *
+ * `guest`: alguien con la sesión abierta que llega acá ya está adentro, y
+ * rehacer el flujo solo puede terminar cambiándole la cuenta sin querer.
+ */
+Route::middleware('guest')->group(function () {
+    Route::get('auth/google/redirect', [GoogleController::class, 'redirigir'])
+        ->name('google.redirect');
+
+    Route::get('auth/google/callback', [GoogleController::class, 'volver'])
+        ->name('google.callback');
+});
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');

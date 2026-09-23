@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Form, Head } from '@inertiajs/vue3';
+import BotonGoogle from '@/components/BotonGoogle.vue';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import TextLink from '@/components/TextLink.vue';
@@ -35,6 +36,8 @@ defineProps<{
     >
         {{ status }}
     </div>
+
+    <BotonGoogle :con-separador="false" class="mb-2" />
 
     <PasskeyVerify />
 

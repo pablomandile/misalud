@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Form, Head } from '@inertiajs/vue3';
+import BotonGoogle from '@/components/BotonGoogle.vue';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import TextLink from '@/components/TextLink.vue';
@@ -24,6 +25,8 @@ defineOptions({
 
 <template>
     <Head title="Crear cuenta" />
+
+    <BotonGoogle modo="registrarse" class="mb-6" />
 
     <Form
         v-bind="store.form()"

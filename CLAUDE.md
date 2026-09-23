@@ -201,6 +201,62 @@ mail), en el `nombre_hash` de cada catálogo (unique por `usuario_id`) y en
   duplicado: la validación pasa y lo corta la base con un 500. Para esos casos va una regla de
   cierre con `whereDate`.
 
+## Ingreso con Google
+
+Sin `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` en el `.env`, **la opción no
+existe**: el botón no se dibuja y las dos rutas dan 404. Es lo que permite tener
+el código desplegado antes de que existan las credenciales, y lo que hace que
+los tests no dependan de Google. El chequeo está en un solo lugar,
+`IngresoConGoogleService::configurado()`, y lo consultan la ruta y el prop
+compartido `googleHabilitado`.
+
+| Pieza                                         | Qué hace                                                                  |
+| --------------------------------------------- | ------------------------------------------------------------------------- |
+| `App\Support\CuentaDeGoogle`                  | Traduce lo que devuelve Socialite. Aísla la rareza del flag de verificado |
+| `App\Services\IngresoConGoogleService`        | Crea o vincula la cuenta. Toda la decisión vive acá                       |
+| `App\Http\Controllers\Auth\GoogleController`  | Las dos rutas. No decide nada                                             |
+| `App\Http\Middleware\ConfirmarClaveSiLaTiene` | `RequirePassword`, salteado para quien no tiene contraseña                |
+
+Las reglas, y por qué cada una:
+
+- **Una cuenta por email.** Si Google devuelve un email que ya existe, se vincula
+  el `google_id` en vez de crear otra cuenta. Dos cuentas con el mismo email
+  dejarían a alguien con dos juegos de pacientes separados, cada uno invisible
+  desde el otro y sin forma de juntarlos.
+- **El email tiene que venir verificado por Google.** El flag viaja en el payload
+  crudo (`verified_email` o `email_verified` según el endpoint), **no** en la
+  interfaz de Socialite. Si no viene, se asume que **no** está verificado: con
+  uno sin verificar, cualquiera podría reclamar la cuenta de otro declarando su
+  dirección.
+- **Se reconoce por el `sub`, no por el email.** El email de una cuenta de Google
+  se puede cambiar; el identificador no.
+- **`users.password` es nullable y las cuentas de Google quedan sin contraseña.**
+  Una al azar las haría figurar como que pueden entrar con email y clave.
+  `Hash::check` contra un hash vacío devuelve `false`, así que no se abre ninguna
+  puerta — **lo cuida un test**, porque es el punto donde un error se paga caro.
+- **Donde se pide la contraseña actual, se pide solo si existe**: la pantalla de
+  seguridad (`ConfirmarClaveSiLaTiene`), el cambio de contraseña y **también el
+  borrado de la cuenta**. Con la regla fija, una cuenta de Google no podría
+  definirse una contraseña ni eliminarse nunca: `current_password` se evalúa
+  contra un hash vacío y falla siempre.
+- **Cancelar en Google no es un error**: vuelve al login sin cartel rojo.
+- **Los errores de Socialite van al log, no a la pantalla**: traen partes de la
+  respuesta de Google.
+
+`google_id` queda **en claro**, al revés que el contenido clínico: es la columna
+por la que se busca al volver de Google, y sobre una columna cifrada ese `where`
+devolvería cero filas siempre. No es un dato clínico.
+
+### ⚠️ Google no acepta el dominio `.test`
+
+Exige `https`, salvo contra `localhost` o `127.0.0.1`. Como `APP_URL` en local es
+`http://misalud.test`, el redirect derivado de `APP_URL` **no sirve**: el `.env`
+local fija `GOOGLE_REDIRECT_URI` a `http://localhost:8001/auth/google/callback`,
+y hay que levantar el servidor en ese mismo host y puerto. `localhost` y
+`127.0.0.1` no son intercambiables para Google.
+
+Trámite completo y cómo verificarlo sin abrir el navegador: `docs/google-oauth.md`.
+
 ## Frontend
 
 - Páginas Inertia en **`resources/js/pages`, siempre en minúscula**. Linux distingue
@@ -450,9 +506,17 @@ npm run generar:iconos    # regenera el set de íconos desde resources/marca/
 
 php artisan misalud:sonda-imap   # ¿sale el 993 desde acá?
 php artisan misalud:recifrar     # rotar APP_KEY (--seco para ensayar)
+php artisan wayfinder:generate --with-form   # SIEMPRE con --with-form
 ```
 
 **Antes de pushear, correr `composer ci:check`** — es exactamente lo que corre el CI.
+
+⚠️ **`wayfinder:generate` sin `--with-form` rompe toda la app.** El plugin de Vite
+lo corre con `formVariants: true`; a mano, el default es sin ellas, y regenera los
+archivos **sin** los `.form()` que usa cada `<Form>` de Inertia. No falla al
+generar: lo descubre `vue-tsc` con veinte errores de golpe en archivos que nadie
+tocó. Normalmente no hace falta correrlo a mano: `npm run dev` y `npm run build`
+lo hacen bien solos.
 
 MySQL local lo levanta Laragon. Si no está corriendo, `artisan migrate` falla con
 "Can't connect to MySQL server".
@@ -475,10 +539,21 @@ Falta de la Etapa 1: verificar a mano en un navegador real el caso "pestaña des
 restaurada" (chrome://discards) — la emulación offline de Puppeteer no es confiable para
 este caso puntual, así que no quedó cubierto por script.
 
-Etapa 2 en marcha: esquema de pacientes, autorización por rol y CRUD completo con
-pantallas (sheets para crear/editar, dialog para borrar). Falta ingreso con Google
-(2.3), que necesita credenciales en Google Cloud Console y no se puede completar sin
-ese paso manual.
+Etapa 2 completa: esquema de pacientes, autorización por rol y CRUD con pantallas
+(sheets para crear/editar, dialog para borrar), e ingreso con Google, con sus reglas
+de vinculación de cuentas y todo lo que se desprende de una cuenta sin contraseña.
+Las credenciales están en el `.env` local; **falta cargar el redirect URI en Google
+Cloud Console**, que hoy responde `redirect_uri_mismatch` (ver `docs/google-oauth.md`,
+que trae el chequeo por consola).
+
+⚠️ **Las áreas táctiles de 44 px no se cumplen en ninguna pantalla.** Medido en
+Chrome real sobre `/login` a 320 px: con el tamaño de letra por defecto el botón
+principal y los campos quedan en 41 px, y el checkbox en 18 px. Vienen así de las
+primitivas de shadcn, que apuntan a 36 px. Recién en «Muy grande» la mayoría pasa,
+o sea que el requisito hoy depende de que la persona ya haya cambiado el tamaño.
+Arreglarlo toca las primitivas y por lo tanto todas las pantallas: está en el plan
+como paso propio, porque subir el piso vuelve a abrir el riesgo de desborde a
+320 px que ya apareció una vez.
 
 Nota pendiente: `ProfileController::update` usa `Inertia::flash('toast', ...)`, un
 mecanismo de Inertia que no está conectado a nuestro sistema de toasts (que mira

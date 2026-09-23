@@ -20,6 +20,8 @@ declare module '@inertiajs/core' {
             name: string;
             auth: Auth;
             sidebarOpen: boolean;
+            /** Hay credenciales de Google en el .env. Lo mira BotonGoogle. */
+            googleHabilitado: boolean;
             [key: string]: unknown;
         };
     }

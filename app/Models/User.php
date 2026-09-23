@@ -20,9 +20,10 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property int $id
  * @property string $name
  * @property string $email
+ * @property string|null $google_id
  * @property TamanioTexto $tamanio_texto
  * @property Carbon|null $email_verified_at
- * @property string $password
+ * @property string|null $password Null en las cuentas que entran con Google
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at

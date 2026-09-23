@@ -43,7 +43,15 @@ const BASE = process.env.BASE ?? 'http://127.0.0.1:8001';
 const EMAIL = process.env.EMAIL ?? 'prueba@misalud.test';
 const PASSWORD = process.env.PASSWORD ?? 'prueba-1234';
 
-const RUTAS = ['/login', '/dashboard', '/settings/appearance'];
+/*
+ * Las pantallas de invitado se miden ANTES de iniciar sesión, en su propia
+ * pasada. Estaban en la misma lista que el resto y por eso nunca se midieron:
+ * con la sesión ya abierta, /login y /register redirigen al dashboard, así que
+ * la matriz decía "sin desborde" sobre la pantalla equivocada. Es la primera
+ * que ve cualquiera, y la que más texto apila cuando la letra es muy grande.
+ */
+const RUTAS_INVITADO = ['/login', '/register'];
+const RUTAS = ['/dashboard', '/pacientes', '/settings/appearance'];
 const ANCHOS = [320, 360, 414];
 const TAMANIOS = ['normal', 'grande', 'muy-grande'];
 
@@ -91,8 +99,8 @@ async function iniciarSesion() {
     }
 }
 
-async function revisarDesborde() {
-    console.log('== Desborde horizontal');
+async function revisarDesborde(rutas, etiqueta) {
+    console.log(`== Desborde horizontal (${etiqueta})`);
 
     const fallas = [];
 
@@ -113,7 +121,7 @@ async function revisarDesborde() {
                     url: BASE,
                 });
 
-                for (const ruta of RUTAS) {
+                for (const ruta of rutas) {
                     await pagina.goto(BASE + ruta, {
                         waitUntil: 'networkidle0',
                     });
@@ -159,7 +167,7 @@ async function revisarDesborde() {
         }
     }
 
-    const total = RUTAS.length * ANCHOS.length * TAMANIOS.length * 2;
+    const total = rutas.length * ANCHOS.length * TAMANIOS.length * 2;
 
     if (fallas.length === 0) {
         console.log(`   sin desborde en ${total} combinaciones\n`);
@@ -252,8 +260,9 @@ async function revisarMenu() {
     }
 }
 
+await revisarDesborde(RUTAS_INVITADO, 'sin sesión');
 await iniciarSesion();
-await revisarDesborde();
+await revisarDesborde(RUTAS, 'con sesión');
 await revisarMenu();
 await navegador.close();
 

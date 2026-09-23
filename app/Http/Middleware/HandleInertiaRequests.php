@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Enums\TamanioTexto;
+use App\Services\IngresoConGoogleService;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\View;
@@ -81,6 +82,12 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
+            /*
+             * Sin credenciales en el .env el botón de Google no se dibuja.
+             * Es el mismo chequeo que hacen las rutas, que dan 404: mostrarlo
+             * igual sería una puerta pintada en la pared.
+             */
+            'googleHabilitado' => IngresoConGoogleService::configurado(),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
 
             /*
