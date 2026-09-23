@@ -89,3 +89,22 @@ it('avisa por flash, con un identificador distinto en cada mensaje', function ()
 
     expect($primero->getSession()->get('exito'))->toContain('tamaño de la letra');
 });
+
+it('la pantalla de Configuración ofrece los tres tamaños con su muestra', function (): void {
+    $usuario = User::factory()->create();
+
+    $this->actingAs($usuario)
+        ->get(route('appearance.edit'))
+        ->assertOk()
+        ->assertInertia(fn ($pagina) => $pagina
+            ->component('settings/Appearance')
+            ->where('tamanioTexto', 'grande')
+            ->has('tamaniosTexto', 3)
+            // La escala es lo que permite dibujar cada opción a su tamaño real.
+            ->has('tamaniosTexto.0', fn ($opcion) => $opcion
+                ->where('valor', 'normal')
+                ->where('escala', 100)
+                ->etc()
+            )
+        );
+});

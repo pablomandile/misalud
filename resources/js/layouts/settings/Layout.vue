@@ -20,7 +20,7 @@ const sidebarNavItems: NavItem[] = [
         href: editSecurity(),
     },
     {
-        title: 'Apariencia',
+        title: 'Pantalla',
         href: editAppearance(),
     },
 ];

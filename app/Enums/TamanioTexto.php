@@ -86,9 +86,20 @@ enum TamanioTexto: string
     }
 
     /**
+     * El porcentaje como número, para que el cliente pueda calcular escalas.
+     *
+     * La pantalla de Configuración muestra cada opción **a su tamaño real**, y
+     * para eso necesita la proporción entre la opción y la que está vigente.
+     */
+    public function escala(): float
+    {
+        return (float) rtrim($this->porcentaje(), '%');
+    }
+
+    /**
      * Para el selector de Configuración, en orden de menor a mayor.
      *
-     * @return list<array{valor: string, etiqueta: string, descripcion: string}>
+     * @return list<array{valor: string, etiqueta: string, descripcion: string, escala: float}>
      */
     public static function opciones(): array
     {
@@ -96,6 +107,7 @@ enum TamanioTexto: string
             'valor' => $caso->value,
             'etiqueta' => $caso->etiqueta(),
             'descripcion' => $caso->descripcion(),
+            'escala' => $caso->escala(),
         ], self::cases());
     }
 }

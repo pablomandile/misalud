@@ -7,6 +7,8 @@ export type OpcionTamanio = {
     valor: TamanioTexto;
     etiqueta: string;
     descripcion: string;
+    /** El porcentaje como número (100, 112.5, 125), para calcular la muestra. */
+    escala: number;
 };
 
 export type UseTamanioTextoReturn = {

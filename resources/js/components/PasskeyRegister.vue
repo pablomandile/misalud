@@ -95,7 +95,7 @@ const handleCancel = () => {
                 {{ isLoading ? 'Registrando...' : 'Registrar la llave' }}
             </Button>
             <Button type="button" variant="ghost" @click="handleCancel">
-                Cancel
+                Cancelar
             </Button>
         </div>
     </form>
