@@ -411,6 +411,85 @@ JSON crudo de Inertia ni del `beforeinstallprompt` capturado antes de que monte 
 - En producción, `sw.js` y `manifest.webmanifest` necesitan `no-cache` en `.htaccess`, o el CDN
   sirve un service worker viejo durante días y congela todo lo demás.
 
+## Adjuntos
+
+Una sola tabla polimórfica para todos los archivos de la historia clínica. Cuelga de
+todo lo que pueda tener uno —estudios, resultados, órdenes, recetas, prospectos,
+prescripciones oculares, credenciales, el paciente mismo— y el `tipo` (`TipoAdjunto`)
+dice para qué es. Por eso el módulo va temprano: seis etapas dependen de él.
+
+| Pieza                                    | Qué hace                                                        |
+| ---------------------------------------- | --------------------------------------------------------------- |
+| `App\Services\ArchivoService`            | Guarda cifrado, descifra, borra. Lista blanca de tipos y techo  |
+| `App\Models\Adjunto`                     | La fila. Resuelve su paciente subiendo por `adjuntable`         |
+| `App\Concerns\TieneAdjuntos`             | La relación `morphMany`, igual en los nueve modelos que la usan |
+| `App\Policies\RegistroClinicoPolicy`     | **Una sola Policy** para todo el dominio clínico                |
+| `App\Http\Controllers\AdjuntoController` | Sirve y borra. Nunca hay URL pública                            |
+
+### Qué va cifrado y qué no
+
+El **contenido del archivo** se cifra en disco con la misma `APP_KEY`: un backup de
+`storage/` sin la clave no sirve para nada. También se cifran `nombre_original` y
+`descripcion`, que son contenido clínico —un `analisis-juan-perez.pdf` cuenta bastante—.
+
+Quedan **en claro** `ruta`, `mime`, `tamanio_bytes` y `duracion_segundos`: la ruta es un
+ULID aleatorio que no dice nada y es por donde hay que encontrar el archivo, y los otros
+tres permiten listar y decidir cómo servir sin desencriptar nada. `tamanio_bytes` es el
+del archivo **original**, no el del cifrado, que es el número que la persona reconoce.
+
+### Lo que se paga por cifrar en disco
+
+- **No hay _range requests_.** El archivo se sirve entero, siempre. Para un PDF de
+  consultorio es irrelevante. Para **audio o video no**: no se puede adelantar, y iOS
+  Safari exige `Range` para `<audio>` —sin él puede no reproducir y no avisar—. Si algún
+  día entra audio, se resuelve ahí y no acá.
+- **Se desencripta entero en memoria.** Entre leer, descifrar y responder se usan varias
+  veces el tamaño del archivo, así que `ArchivoService::MAXIMO_BYTES` (12 MB) no es una
+  formalidad: es lo que evita que un PDF grande tumbe el proceso en hosting compartido.
+
+### Reglas que no son obvias
+
+- **El mime sale de `getMimeType()`, nunca de `getClientMimeType()`.** El segundo lo
+  manda el navegador y lo elige quien sube; el primero lo deduce del contenido con finfo.
+  Confiar en el del cliente permite subir cualquier cosa diciendo que es un PDF.
+- **Lista blanca de tipos, no lista negra.** Un formato nuevo nace prohibido. No hay
+  `text/html` ni `image/svg+xml`: los dos ejecutan JavaScript, y estos archivos se sirven
+  desde el propio dominio de la app.
+- **El archivo en disco se llama `<ulid>.cif`.** Aleatorio porque el nombre original es
+  contenido clínico y no tiene por qué quedar en claro en el disco; `.cif` porque el
+  archivo **no** es un PDF y ponerle `.pdf` hace perder un rato a quien lo encuentre en
+  un backup y no pueda abrirlo.
+- La respuesta lleva `nosniff`, `Content-Security-Policy: sandbox` y `no-store`. El
+  `Content-Disposition` usa el nombre ya limpio de comillas y saltos de línea: sin sanear,
+  ese header permite inyectar otros.
+- **Se borra primero el disco y después la fila.** Al revés, si la fila se va y el archivo
+  no, queda un archivo cifrado que nada referencia: invisible y para siempre.
+- `adjuntable_type` y `adjuntable_id` **no son fillable**, por lo mismo que `paciente_id`
+  no lo es: de esa referencia cuelga toda la autorización. El adjunto se crea por la
+  relación (`$estudio->adjuntos()->create(...)`).
+
+### Una sola Policy para el dominio clínico
+
+`RegistroClinicoPolicy` decide sobre cualquier modelo que implemente
+`App\Contracts\PerteneceAPaciente`. Las reglas son idénticas en todos —las da el rol en
+`paciente_usuario`— y lo único que cambia es cómo se llega al paciente, que lo resuelve
+cada modelo. Una Policy por modelo sería la misma lógica copiada quince veces, y la
+decimosexta sería la que filtre.
+
+- El contrato pide **un método y no una relación** a propósito: casi todos los registros
+  llegan al paciente en un paso por `paciente_id`, pero un `Adjunto` es polimórfico y
+  tiene que subir primero por `adjuntable`. Con una relación `BelongsTo` en el contrato,
+  el adjunto no podría cumplirlo.
+- **Un paciente nulo es "no", nunca "no hay nada que proteger".** Es la línea entre un
+  registro huérfano inaccesible y uno abierto a cualquiera.
+- `Lector` **puede ver** cualquier registro y no puede tocar ninguno. Borrar un registro
+  clínico sí lo puede hacer un cuidador —tiene que poder corregir lo que cargó mal—; lo
+  que queda para el propietario es dar de baja la ficha entera y el `forceDelete`.
+- ⚠️ **Falta la rama de los catálogos.** El prospecto de un medicamento cuelga de un
+  registro que es de un **usuario**, no de un paciente, así que hoy `pacienteDelRegistro()`
+  devuelve `null` y la Policy lo niega. Hay que sumar ese caso en la Etapa 5, cuando
+  existan los catálogos.
+
 ## Visor de documentos
 
 Un solo `VisorDocumento.vue` a pantalla completa para imágenes **y PDFs**, con X propia.

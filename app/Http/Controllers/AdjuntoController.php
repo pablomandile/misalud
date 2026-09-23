@@ -1,0 +1,80 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controllers;
+
+use App\Models\Adjunto;
+use App\Services\ArchivoService;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Gate;
+use Symfony\Component\HttpFoundation\Response;
+
+/**
+ * Sirve y elimina archivos de la historia clínica.
+ *
+ * **Siempre por acá, nunca por URL pública.** Los archivos viven en el disco
+ * privado y cifrados: no hay forma de linkearlos directamente, y es a propósito.
+ */
+class AdjuntoController extends Controller
+{
+    public function __construct(private readonly ArchivoService $archivos) {}
+
+    /**
+     * Devuelve el archivo descifrado, para mostrarlo dentro de la app.
+     */
+    public function show(Adjunto $adjunto): Response
+    {
+        Gate::authorize('view', $adjunto);
+
+        $contenido = $this->archivos->contenido($adjunto);
+
+        return response($contenido, 200, [
+            'Content-Type' => $adjunto->mime,
+            'Content-Length' => (string) strlen($contenido),
+
+            /*
+             * `inline` para que lo muestre el visor de la app en vez de
+             * disparar una descarga. El nombre va entre comillas y ya viene
+             * limpio de saltos de línea y comillas desde ArchivoService: un
+             * nombre sin sanear en este header permite inyectar headers.
+             */
+            'Content-Disposition' => 'inline; filename="'.$adjunto->nombre_original.'"',
+
+            /*
+             * Tres cerrojos sobre contenido que subió un usuario y se sirve
+             * desde nuestro propio dominio:
+             *
+             * - `nosniff`: sin esto el navegador puede decidir por su cuenta
+             *   que un archivo es HTML aunque digamos que es un PDF, y
+             *   ejecutarlo. La lista blanca de ArchivoService ya lo evita en la
+             *   subida; esto cubre lo que haya entrado antes o por otro camino.
+             * - `Content-Security-Policy: sandbox`: aunque algo llegara a
+             *   interpretarse como documento, queda sin scripts y sin origen.
+             * - `no-store`: es contenido clínico. No queda en la caché del
+             *   navegador de un locutorio ni en la de un CDN.
+             */
+            'X-Content-Type-Options' => 'nosniff',
+            'Content-Security-Policy' => "sandbox; default-src 'none'; img-src 'self'; object-src 'none'",
+            'Cache-Control' => 'no-store, private',
+        ]);
+    }
+
+    /**
+     * Borra el archivo y su registro.
+     */
+    public function destroy(Adjunto $adjunto): RedirectResponse
+    {
+        Gate::authorize('delete', $adjunto);
+
+        /*
+         * Primero el disco y después la fila. Al revés, si el borrado de la
+         * fila anda y el del archivo no, queda un archivo cifrado en el disco
+         * sin nada que lo referencie: invisible y para siempre.
+         */
+        $this->archivos->borrar($adjunto);
+        $adjunto->delete();
+
+        return back()->with('exito', 'Se eliminó el documento.');
+    }
+}

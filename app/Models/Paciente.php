@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Concerns\CifraCampos;
+use App\Concerns\TieneAdjuntos;
 use App\Contracts\CifraDatos;
 use App\Database\Eloquent\ConsultaVigilada;
 use App\Enums\RolPaciente;
@@ -46,6 +47,7 @@ class Paciente extends Model implements CifraDatos
     use HasFactory;
 
     use SoftDeletes;
+    use TieneAdjuntos;
 
     /** @var class-string<\Illuminate\Database\Eloquent\Builder<*>> */
     protected static string $builder = ConsultaVigilada::class;
