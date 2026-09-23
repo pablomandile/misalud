@@ -506,6 +506,50 @@ Un solo `VisorDocumento.vue` a pantalla completa para imágenes **y PDFs**, con 
 - **`object-contain`, nunca `cover`**: recortar algo que la persona abrió para leer es perder
   justo lo que fue a ver.
 - **Se cierra antes de borrar** lo que está mostrando, o queda con un `src` que ya da 404.
+- Se usan las primitivas de **reka-ui directo** y no el `DialogContent` de `ui/dialog`: ese
+  trae `max-w-lg`, bordes redondeados y padding, que es lo contrario de una pantalla
+  completa. De reka-ui interesan el foco atrapado, el Esc y el bloqueo del scroll.
+- **El worker de pdf.js entra por `?worker` y se pasa por `workerPort`**, no por una URL en
+  `workerSrc`. Las dos formas andan —está probado en Chrome con las dos—; esta no depende de
+  que la URL se resuelva bien en tiempo de ejecución, que es una cosa menos que puede quedar
+  mal detrás del CDN o con otro `base`.
+- **El canvas se dibuja a la densidad real del dispositivo y se baja por CSS.** Sin eso, en
+  un celular con pantalla densa el texto del PDF se ve borroso justo en el aparato con el
+  que más se lo mira.
+- **`nextTick` antes de dibujar.** El `<canvas>` vive dentro del portal del diálogo, que Vue
+  monta recién después de que el documento deje de ser `null`: sin esperar, la referencia
+  todavía es `null`, el dibujo se va sin hacer nada y —como la página ya valía 1— su `watch`
+  tampoco dispara. Queda además un `watch` sobre la referencia del canvas, por el otro lado.
+- **Hay un tope de tiempo (45 s) para abrir.** Un visor que gira para siempre es peor que uno
+  que dice que no pudo: sin el tope, cualquier cuelgue se lee como "se colgó la app" y no
+  ofrece ninguna salida.
+
+### Para subir: `SubirArchivo.vue`
+
+- **Sin `capture`.** Tentaba ponerle `capture="environment"` para que abriera la cámara
+  directo, pero `capture` **fuerza** la cámara y de paso **anula el `multiple`**. Sin él, el
+  selector del celular ya ofrece cámara, galería y archivos, que es lo que hace falta para el
+  caso más común: un PDF que llegó por mail.
+- El botón es un `<label>`: el toque abre el selector sin JavaScript de por medio, y el
+  `<input type="file">` real queda oculto pero presente dentro del `<Form>`.
+- **Sacar un archivo de la lista obliga a reconstruir un `DataTransfer`** y reasignarle
+  `files` al input: esa lista es de solo lectura, así que sacarlo del array de Vue no alcanza
+  —el archivo se seguiría enviando igual—.
+- El aviso de "pesa demasiado" va **al lado del campo y no en un toast**: es un error de
+  campo, y un toast obligaría a memorizar cuál de los archivos estaba mal.
+
+### Verificarlo
+
+`npm run revisar:visor` sube un PDF de dos páginas y comprueba en un Chrome real que pdf.js
+lo **dibuje** —mira los píxeles del canvas, no que el canvas exista—, que reconozca las dos
+páginas, que la X llegue a 44 px y que cierre.
+
+⚠️ **No alcanza con que el `<canvas>` tenga ancho: mide 300×150 por defecto.** Esperar por
+`canvas.width > 0` es una espera que no espera nada y da todo por bueno al instante. Hay que
+esperar a que desaparezca el cartel de "Abriendo el documento".
+
+⚠️ **Nada de esto reemplaza probarlo en un iPhone real**, que es el caso que define al visor
+y del que Chrome headless no puede decir nada.
 
 ## Marca
 
@@ -601,6 +645,7 @@ npm run types:check       # vue-tsc
 npm run dev               # Vite
 npm run revisar:mobile    # desborde en 54 combinaciones + menú al navegar (Chrome real)
 npm run revisar:pwa       # el veredicto de instalabilidad de Chrome, no "se ve el botón"
+npm run revisar:visor     # sube un PDF y verifica que pdf.js lo dibuje de verdad
 npm run generar:iconos    # regenera el set de íconos desde resources/marca/
 
 php artisan misalud:sonda-imap   # ¿sale el 993 desde acá?
@@ -656,6 +701,11 @@ Nota pendiente: `ProfileController::update` usa `Inertia::flash('toast', ...)`, 
 mecanismo de Inertia que no está conectado a nuestro sistema de toasts (que mira
 `page.props.flash.exito`/`.error`, poblado por `session()->flash()`). Guardar el
 perfil hoy no muestra ningún aviso. Es código heredado del starter kit, sin tocar.
+
+Etapa 3 hecha: `ArchivoService` con el cifrado en disco, la tabla polimórfica de
+adjuntos, `RegistroClinicoPolicy` sobre `PerteneceAPaciente`, `SubirArchivo.vue`,
+`VisorDocumento.vue` con pdf.js, y todo eso ya conectado a la ficha del paciente
+—que es lo que lo vuelve verificable en un navegador y no código sin usar—.
 
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de

@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\RolPaciente;
 use App\Http\Requests\PacienteGuardarRequest;
+use App\Models\Adjunto;
 use App\Models\Paciente;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
@@ -23,6 +24,8 @@ class PacienteController extends Controller
     public function index(): Response
     {
         $pacientes = auth()->user()->pacientes()
+            // Explicito: sin esto es una consulta de adjuntos por paciente.
+            ->with('adjuntos')
             ->get()
             ->sortBy(fn (Paciente $paciente): string => $paciente->nombre)
             ->values()
@@ -85,6 +88,25 @@ class PacienteController extends Controller
             'notas' => $paciente->notas,
             'puedeEditar' => $rol?->puedeEditar() ?? false,
             'esPropietario' => $rol === RolPaciente::Propietario,
+
+            /*
+             * Los documentos van con la URL del CONTROLADOR, nunca una del
+             * disco: estos archivos están cifrados y no son públicos. La URL
+             * igual no alcanza sola -la Policy se vuelve a consultar al
+             * servirlos-, pero no hay que dar de más.
+             */
+            'adjuntos' => $paciente->adjuntos
+                ->sortByDesc('created_at')
+                ->values()
+                ->map(fn (Adjunto $adjunto): array => [
+                    'id' => $adjunto->id,
+                    'nombre' => $adjunto->nombre_original,
+                    'mime' => $adjunto->mime,
+                    'tamanio' => $adjunto->tamanio_bytes,
+                    'tipo' => $adjunto->tipo->etiqueta(),
+                    'url' => route('adjuntos.show', $adjunto),
+                ])
+                ->all(),
         ];
     }
 }

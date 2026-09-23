@@ -46,6 +46,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
      * Los archivos SIEMPRE por controlador: viven cifrados en el disco
      * privado y no hay ninguna URL que los sirva sin pasar por la Policy.
      */
+    Route::post('pacientes/{paciente}/adjuntos', [AdjuntoController::class, 'store'])
+        ->name('pacientes.adjuntos.store');
     Route::get('adjuntos/{adjunto}', [AdjuntoController::class, 'show'])->name('adjuntos.show');
     Route::delete('adjuntos/{adjunto}', [AdjuntoController::class, 'destroy'])->name('adjuntos.destroy');
 

@@ -214,3 +214,113 @@ it('cifra el nombre original en la base', function (): void {
     expect($crudo)->not->toContain('vih')
         ->and($adjunto->fresh()->nombre_original)->toBe('resultado-vih.pdf');
 });
+
+/*
+|--------------------------------------------------------------------------
+| Subir
+|--------------------------------------------------------------------------
+*/
+
+it('el propietario sube un documento a la ficha', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.adjuntos.store', $paciente), [
+            'archivos' => [pdfDePrueba()],
+            'tipo' => TipoAdjunto::InformeEstudio->value,
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('exito');
+
+    $adjunto = $paciente->adjuntos()->first();
+
+    expect($adjunto)->not->toBeNull()
+        ->and($adjunto->tipo)->toBe(TipoAdjunto::InformeEstudio)
+        ->and($adjunto->nombre_original)->toBe('analisis.pdf')
+        ->and(Storage::disk('local')->exists($adjunto->ruta))->toBeTrue();
+});
+
+it('sube varios de una vez', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.adjuntos.store', $paciente), [
+            'archivos' => [pdfDePrueba('uno.pdf'), pdfDePrueba('dos.pdf')],
+            'tipo' => TipoAdjunto::Otro->value,
+        ])
+        ->assertRedirect();
+
+    expect($paciente->adjuntos()->count())->toBe(2);
+});
+
+it('un lector NO puede subir documentos', function (): void {
+    $paciente = Paciente::factory()->create();
+    $lector = User::factory()->create();
+    $paciente->cuidadores()->attach($lector, ['rol' => RolPaciente::Lector->value]);
+
+    $this->actingAs($lector)
+        ->post(route('pacientes.adjuntos.store', $paciente), [
+            'archivos' => [pdfDePrueba()],
+            'tipo' => TipoAdjunto::Otro->value,
+        ])
+        ->assertForbidden();
+
+    expect($paciente->adjuntos()->count())->toBe(0);
+});
+
+it('un usuario ajeno NO puede subir a una ficha que no es suya', function (): void {
+    $paciente = Paciente::factory()->create();
+
+    $this->actingAs(User::factory()->create())
+        ->post(route('pacientes.adjuntos.store', $paciente), [
+            'archivos' => [pdfDePrueba()],
+            'tipo' => TipoAdjunto::Otro->value,
+        ])
+        ->assertForbidden();
+});
+
+it('rechaza un archivo de un tipo que no se acepta', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+
+    $ruta = tempnam(sys_get_temp_dir(), 'txt');
+    file_put_contents($ruta, 'esto no es un pdf');
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.adjuntos.store', $paciente), [
+            'archivos' => [new UploadedFile($ruta, 'nota.pdf', 'application/pdf', null, true)],
+            'tipo' => TipoAdjunto::Otro->value,
+        ])
+        ->assertSessionHasErrors('archivos.0');
+
+    expect($paciente->adjuntos()->count())->toBe(0);
+});
+
+it('exige un tipo válido', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.adjuntos.store', $paciente), [
+            'archivos' => [pdfDePrueba()],
+            'tipo' => 'inventado',
+        ])
+        ->assertSessionHasErrors('tipo');
+});
+
+it('el listado de pacientes trae sus documentos con la URL del controlador', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+    $adjunto = adjuntoDe($paciente, ['nombre_original' => 'informe.pdf']);
+
+    $this->actingAs($usuario)
+        ->get(route('pacientes.index'))
+        ->assertOk()
+        ->assertInertia(fn ($p) => $p
+            ->has('pacientes.0.adjuntos', 1)
+            ->where('pacientes.0.adjuntos.0.nombre', 'informe.pdf')
+            ->where('pacientes.0.adjuntos.0.url', route('adjuntos.show', $adjunto))
+        );
+});

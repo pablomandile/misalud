@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\AdjuntoStoreRequest;
 use App\Models\Adjunto;
+use App\Models\Paciente;
 use App\Services\ArchivoService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
@@ -19,6 +21,41 @@ use Symfony\Component\HttpFoundation\Response;
 class AdjuntoController extends Controller
 {
     public function __construct(private readonly ArchivoService $archivos) {}
+
+    /**
+     * Sube uno o varios archivos a la ficha de un paciente.
+     *
+     * La autorización es sobre el PACIENTE y no sobre el adjunto: el adjunto
+     * todavía no existe, y lo que se está pidiendo es permiso para escribir
+     * dentro de esa ficha.
+     */
+    public function store(AdjuntoStoreRequest $peticion, Paciente $paciente): RedirectResponse
+    {
+        Gate::authorize('crearEn', [Adjunto::class, $paciente]);
+
+        $tipo = $peticion->tipo();
+        $descripcion = $peticion->input('descripcion');
+        $subidos = 0;
+
+        foreach ($peticion->file('archivos', []) as $archivo) {
+            $datos = $this->archivos->guardar($archivo, 'pacientes/'.$paciente->id);
+
+            /*
+             * Por la relación y no armando `adjuntable_*` a mano: de esa
+             * referencia cuelga toda la autorización, y por eso no es fillable.
+             */
+            $paciente->adjuntos()->create($datos + [
+                'tipo' => $tipo,
+                'descripcion' => $descripcion,
+            ]);
+
+            $subidos++;
+        }
+
+        return back()->with('exito', $subidos === 1
+            ? 'Se guardó el documento.'
+            : "Se guardaron {$subidos} documentos.");
+    }
 
     /**
      * Devuelve el archivo descifrado, para mostrarlo dentro de la app.

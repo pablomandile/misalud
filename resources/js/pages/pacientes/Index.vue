@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { Form, Head } from '@inertiajs/vue3';
-import { Plus, Trash2, UserRound } from '@lucide/vue';
+import { FileText, Plus, Trash2, UserRound } from '@lucide/vue';
 import { ref } from 'vue';
+import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
 import Heading from '@/components/Heading.vue';
+import SubirArchivo from '@/components/SubirArchivo.vue';
+import type { DocumentoVisible } from '@/components/VisorDocumento.vue';
+import VisorDocumento from '@/components/VisorDocumento.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,6 +31,12 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet';
 
+type DocumentoDePaciente = DocumentoVisible & {
+    id: number;
+    tamanio: number;
+    tipo: string;
+};
+
 type Paciente = {
     id: number;
     nombre: string;
@@ -37,6 +47,7 @@ type Paciente = {
     notas: string | null;
     puedeEditar: boolean;
     esPropietario: boolean;
+    adjuntos: DocumentoDePaciente[];
 };
 
 defineProps<{ pacientes: Paciente[] }>();
@@ -67,6 +78,21 @@ const campoTexto = `${campoBase} min-h-24`;
 const sheetCrearAbierto = ref(false);
 const pacienteAEditar = ref<Paciente | null>(null);
 const pacienteABorrar = ref<Paciente | null>(null);
+const pacienteDeDocumentos = ref<Paciente | null>(null);
+
+/*
+ * UN SOLO documento abierto para toda la pantalla, y un solo <VisorDocumento>
+ * al final del template -fuera de cualquier v-for-. Uno por archivo
+ * multiplicaría los overlays y los focus traps de reka-ui por la cantidad de
+ * documentos de la lista.
+ */
+const documentoAbierto = ref<DocumentoVisible | null>(null);
+
+function pesoLegible(bytes: number): string {
+    return bytes < 1024 * 1024
+        ? `${Math.round(bytes / 1024)} KB`
+        : `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
+}
 
 function edadTexto(p: Paciente): string {
     return p.edad === null ? '' : `${p.edad} años`;
@@ -131,7 +157,18 @@ function edadTexto(p: Paciente): string {
                         </p>
                     </div>
 
-                    <div class="flex shrink-0 gap-1">
+                    <div class="flex shrink-0 flex-wrap justify-end gap-1">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            @click="pacienteDeDocumentos = paciente"
+                        >
+                            <FileText />
+                            {{ paciente.adjuntos.length || '' }}
+                            <span class="sr-only">
+                                Documentos de {{ paciente.nombre }}
+                            </span>
+                        </Button>
                         <Button
                             v-if="paciente.puedeEditar"
                             variant="ghost"
@@ -364,6 +401,146 @@ function edadTexto(p: Paciente): string {
             </SheetContent>
         </Sheet>
 
+        <!-- Documentos -->
+        <Sheet
+            :open="!!pacienteDeDocumentos"
+            @update:open="
+                (v) => {
+                    if (!v) pacienteDeDocumentos = null;
+                }
+            "
+        >
+            <SheetContent v-if="pacienteDeDocumentos">
+                <SheetHeader>
+                    <SheetTitle>
+                        Documentos de {{ pacienteDeDocumentos.nombre }}
+                    </SheetTitle>
+                    <SheetDescription>
+                        Estudios, recetas y lo que haga falta guardar. Se
+                        guardan cifrados.
+                    </SheetDescription>
+                </SheetHeader>
+
+                <div class="flex-1 space-y-6 overflow-y-auto px-4">
+                    <ul
+                        v-if="pacienteDeDocumentos.adjuntos.length > 0"
+                        class="grid gap-2"
+                    >
+                        <li
+                            v-for="documento in pacienteDeDocumentos.adjuntos"
+                            :key="documento.id"
+                            class="flex items-center gap-2 rounded-md border p-2"
+                        >
+                            <!--
+                                Abre el visor de la pantalla; no monta uno
+                                propio.
+                            -->
+                            <button
+                                type="button"
+                                class="flex min-h-11 min-w-0 flex-1 items-center gap-3 text-left"
+                                @click="documentoAbierto = documento"
+                            >
+                                <FileText
+                                    class="size-5 shrink-0 text-muted-foreground"
+                                />
+                                <span class="min-w-0">
+                                    <span class="block truncate text-sm">
+                                        {{ documento.nombre }}
+                                    </span>
+                                    <span
+                                        class="block text-sm text-muted-foreground"
+                                    >
+                                        {{ documento.tipo }} ·
+                                        {{ pesoLegible(documento.tamanio) }}
+                                    </span>
+                                </span>
+                            </button>
+
+                            <Form
+                                v-if="pacienteDeDocumentos.puedeEditar"
+                                v-bind="
+                                    AdjuntoController.destroy.form({
+                                        adjunto: documento.id,
+                                    })
+                                "
+                                :options="{ preserveScroll: true }"
+                                v-slot="{ processing }"
+                            >
+                                <!--
+                                    Se cierra el visor ANTES de borrar, o queda
+                                    mostrando un archivo que ya da 404.
+                                -->
+                                <Button
+                                    type="submit"
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    class="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                    :disabled="processing"
+                                    :aria-label="`Eliminar ${documento.nombre}`"
+                                    @click="documentoAbierto = null"
+                                >
+                                    <Trash2 class="size-4" />
+                                </Button>
+                            </Form>
+                        </li>
+                    </ul>
+
+                    <p v-else class="text-sm text-muted-foreground">
+                        Todavía no hay documentos cargados.
+                    </p>
+
+                    <Form
+                        v-if="pacienteDeDocumentos.puedeEditar"
+                        v-bind="
+                            AdjuntoController.store.form({
+                                paciente: pacienteDeDocumentos.id,
+                            })
+                        "
+                        reset-on-success
+                        :options="{ preserveScroll: true }"
+                        v-slot="{ errors, processing }"
+                        class="space-y-4 border-t pt-6"
+                    >
+                        <div class="grid gap-2">
+                            <Label for="tipo-adjunto">Tipo de documento</Label>
+                            <select
+                                id="tipo-adjunto"
+                                name="tipo"
+                                :class="campoUnaLinea"
+                            >
+                                <option value="otro">Documento</option>
+                                <option value="informe_estudio">Informe</option>
+                                <option value="imagen_estudio">
+                                    Imagen del estudio
+                                </option>
+                                <option value="orden_estudio">
+                                    Orden de estudio
+                                </option>
+                                <option value="receta">Receta</option>
+                                <option value="credencial">Credencial</option>
+                            </select>
+                            <InputError :message="errors.tipo" />
+                        </div>
+
+                        <SubirArchivo
+                            name="archivos[]"
+                            multiple
+                            etiqueta="Elegir documentos"
+                            :error="errors['archivos.0'] ?? errors.archivos"
+                        />
+
+                        <Button
+                            type="submit"
+                            class="w-full"
+                            :disabled="processing"
+                        >
+                            Subir
+                        </Button>
+                    </Form>
+                </div>
+            </SheetContent>
+        </Sheet>
+
         <!-- Borrar -->
         <Dialog
             :open="!!pacienteABorrar"
@@ -411,5 +588,14 @@ function edadTexto(p: Paciente): string {
                 </Form>
             </DialogContent>
         </Dialog>
+
+        <!--
+            UNO SOLO para toda la pantalla, fuera de todo v-for. Ver el
+            comentario de `documentoAbierto`.
+        -->
+        <VisorDocumento
+            :documento="documentoAbierto"
+            @cerrar="documentoAbierto = null"
+        />
     </div>
 </template>
