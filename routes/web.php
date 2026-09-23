@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\PacienteActivoController;
 use App\Http\Controllers\Settings\TamanioTextoController;
 use Illuminate\Support\Facades\Route;
 
@@ -19,6 +20,9 @@ Route::put('tamanio-texto', [TamanioTextoController::class, 'update'])
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+
+    Route::put('paciente-activo/{paciente}', [PacienteActivoController::class, 'update'])
+        ->name('paciente-activo.update');
 });
 
 require __DIR__.'/settings.php';

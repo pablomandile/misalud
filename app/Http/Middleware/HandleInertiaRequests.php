@@ -84,6 +84,26 @@ class HandleInertiaRequests extends Middleware
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
 
             /*
+             * Lista liviana para el selector de paciente activo. `nombre` está
+             * cifrado, así que NO hay orderBy en SQL: se trae todo (son
+             * decenas de filas por usuario, como mucho) y se ordena acá.
+             */
+            'pacientes' => fn () => $request->user()
+                ? $request->user()->pacientes()
+                    ->get()
+                    ->sortBy(fn ($paciente) => $paciente->nombre)
+                    ->values()
+                    ->map(fn ($paciente) => [
+                        'id' => $paciente->id,
+                        'nombre' => $paciente->nombre,
+                    ])
+                    ->all()
+                : [],
+            'pacienteActivoId' => fn () => $request->user()
+                ? session('paciente_activo_id')
+                : null,
+
+            /*
              * El valor vigente y las opciones, para la pantalla de Configuración.
              * Lo resuelve HandleTamanioTexto, que corre antes que este middleware.
              */

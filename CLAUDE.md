@@ -475,6 +475,11 @@ Falta de la Etapa 1: verificar a mano en un navegador real el caso "pestaña des
 restaurada" (chrome://discards) — la emulación offline de Puppeteer no es confiable para
 este caso puntual, así que no quedó cubierto por script.
 
+Etapa 2 en marcha: el esquema de pacientes está completo (`pacientes` + `paciente_usuario`
+
+- `PacientePolicy` + paciente activo por sesión). Falta el CRUD con pantallas (2.2) e
+  ingreso con Google (2.3).
+
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de
 variables · enfermedades y alergias · tratamientos · órdenes, estudios y resultados · salud
