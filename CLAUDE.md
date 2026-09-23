@@ -325,6 +325,13 @@ Tres opciones, **con la mediana por defecto**: Normal `100%`, **Grande `112.5%`*
   documento: sin eso, elegir un tamaño no se vería hasta la próxima navegación completa.
 - Se puede cambiar **sin sesión**. Quien no llega a leer la pantalla de ingreso es justamente
   quien más necesita agrandar la letra, y ahí todavía no hay cuenta donde guardarlo.
+- ⚠️ **Con sesión, poner la cookie no cambia nada.** Manda la cuenta, así que para mover
+  el tamaño de un usuario logueado hay que escribir `users.tamanio_texto` —por la pantalla
+  o por `PUT /tamanio-texto`—. Es una trampa para cualquier script de verificación:
+  `revisar-mobile.mjs` seteaba solo la cookie y sus tres vueltas medían **exactamente lo
+  mismo**, así que informaba 54 combinaciones cuando en realidad eran 18 repetidas tres
+  veces, ciega a dos de los tres tamaños en toda pantalla con sesión. No daba ningún
+  síntoma: informaba de más, y en verde.
 - `TamanioTexto::PORDEFECTO` es la fuente única; `porDefecto()` deriva de ella. Un valor
   desconocido en la cookie cae al default en vez de romper la página.
 - En Configuración va **con la muestra a tamaño real**: un selector que dice "Grande" en letra
@@ -358,8 +365,21 @@ Tres opciones, **con la mediana por defecto**: Normal `100%`, **Grande `112.5%`*
   pestaña nueva saca a la persona de la SPA.
 - La **zona segura lateral** se aplica en `AppContent` (envuelve encabezado y páginas) y en
   el sheet del menú, que al ser fijo no hereda ese padding.
-- Áreas táctiles de **44 px mínimo**. Teclado correcto: `inputmode="decimal"` para valores,
-  `type="date"`, `type="tel"`.
+- Áreas táctiles de **44 px mínimo**, y el piso está **en las primitivas**, no en cada
+  pantalla: `button`, `input`, `select`, `checkbox`, el ítem del menú lateral, el del
+  desplegable y las celdas del código de 2FA. Todas con `min-h-11` (2.75rem), en `rem`
+  para que crezcan con el tamaño de letra; con `px` fijos se quedarían chicas justo para
+  quien agrandó la letra.
+- **`sm` significa menos padding, nunca un objetivo más chico.** `sm` e `icon-sm`
+  comparten el piso con los normales: un botón de 32 px en esta app es el problema, no
+  una variante. Lo mismo `lg`, que llega a 48.
+- El **checkbox** mantiene su caja chica y expande el área con un pseudo-elemento
+  (`before:size-12`). Agrandar el cuadrito a 44 px se ve mal; lo que tiene que medir 44
+  es lo que responde al toque, que no es lo mismo.
+- **Un `class` en el sitio de uso le gana a la variante.** El botón del menú hamburguesa
+  pedía `size="icon"` y después se lo pisaba con `h-7 w-7`: quedaba en 28 px, el control
+  más chico de toda la app siendo el único camino a todas las secciones en el celular.
+- Teclado correcto: `inputmode="decimal"` para valores, `type="date"`, `type="tel"`.
 - **Nada que dependa solo de `hover`**: en el celular es invisible, y ahí es donde se usa.
 
 ## PWA
@@ -546,14 +566,12 @@ Las credenciales están en el `.env` local; **falta cargar el redirect URI en Go
 Cloud Console**, que hoy responde `redirect_uri_mismatch` (ver `docs/google-oauth.md`,
 que trae el chequeo por consola).
 
-⚠️ **Las áreas táctiles de 44 px no se cumplen en ninguna pantalla.** Medido en
-Chrome real sobre `/login` a 320 px: con el tamaño de letra por defecto el botón
-principal y los campos quedan en 41 px, y el checkbox en 18 px. Vienen así de las
-primitivas de shadcn, que apuntan a 36 px. Recién en «Muy grande» la mayoría pasa,
-o sea que el requisito hoy depende de que la persona ya haya cambiado el tamaño.
-Arreglarlo toca las primitivas y por lo tanto todas las pantallas: está en el plan
-como paso propio, porque subir el piso vuelve a abrir el riesgo de desborde a
-320 px que ya apareció una vez.
+Las **áreas táctiles de 44 px** ya se cumplen en las nueve pantallas que hay, en los
+tres tamaños de letra, y lo cuida `npm run revisar:mobile`. El chequeo mide el alto
+**efectivo** con `elementFromPoint` y no la caja del elemento: un checkbox de 16 px
+con el área expandida por un pseudo-elemento se toca bien y su caja igual mide 16,
+así que medir cajas daría por malo lo que está bien y —peor— por bueno lo que un
+`class` de más dejó tapado.
 
 Nota pendiente: `ProfileController::update` usa `Inertia::flash('toast', ...)`, un
 mecanismo de Inertia que no está conectado a nuestro sistema de toasts (que mira

@@ -47,8 +47,22 @@ defineOptions({
     },
 });
 
+/*
+ * <select> y <textarea> no tienen primitiva en ui/, así que comparten esta
+ * cadena, calcada del <Input> de ui/input.
+ *
+ * El alto va en una constante aparte y NO adentro de `campoBase`: antes se
+ * derivaba con `campoBase.replace('h-9', 'h-auto')` para el textarea, y ese
+ * replace se vuelve silenciosamente inofensivo en cuanto alguien toca el alto
+ * -no falla, no avisa, simplemente deja de hacer nada-.
+ *
+ * `min-h-11` son los 44 px de área táctil mínima del proyecto (ver
+ * ui/button/index.ts), en rem para que escalen con el tamaño de letra.
+ */
 const campoBase =
-    'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm';
+    'flex w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm';
+const campoUnaLinea = `${campoBase} min-h-11`;
+const campoTexto = `${campoBase} min-h-24`;
 
 const sheetCrearAbierto = ref(false);
 const pacienteAEditar = ref<Paciente | null>(null);
@@ -166,7 +180,7 @@ function edadTexto(p: Paciente): string {
                                 name="nombre"
                                 type="text"
                                 required
-                                :class="campoBase"
+                                :class="campoUnaLinea"
                             />
                             <InputError :message="errors.nombre" />
                         </div>
@@ -179,7 +193,7 @@ function edadTexto(p: Paciente): string {
                                 id="fecha_nacimiento-crear"
                                 name="fecha_nacimiento"
                                 type="date"
-                                :class="campoBase"
+                                :class="campoUnaLinea"
                             />
                             <InputError :message="errors.fecha_nacimiento" />
                         </div>
@@ -189,7 +203,7 @@ function edadTexto(p: Paciente): string {
                             <select
                                 id="sexo-crear"
                                 name="sexo"
-                                :class="campoBase"
+                                :class="campoUnaLinea"
                             >
                                 <option value="">Sin especificar</option>
                                 <option value="femenino">Femenino</option>
@@ -208,7 +222,7 @@ function edadTexto(p: Paciente): string {
                                 name="grupo_sanguineo"
                                 type="text"
                                 placeholder="Por ejemplo: O+"
-                                :class="campoBase"
+                                :class="campoUnaLinea"
                             />
                             <InputError :message="errors.grupo_sanguineo" />
                         </div>
@@ -219,7 +233,7 @@ function edadTexto(p: Paciente): string {
                                 id="notas-crear"
                                 name="notas"
                                 rows="3"
-                                :class="campoBase.replace('h-9', 'h-auto')"
+                                :class="campoTexto"
                             ></textarea>
                             <InputError :message="errors.notas" />
                         </div>
@@ -275,7 +289,7 @@ function edadTexto(p: Paciente): string {
                                 type="text"
                                 required
                                 :value="pacienteAEditar.nombre"
-                                :class="campoBase"
+                                :class="campoUnaLinea"
                             />
                             <InputError :message="errors.nombre" />
                         </div>
@@ -289,7 +303,7 @@ function edadTexto(p: Paciente): string {
                                 name="fecha_nacimiento"
                                 type="date"
                                 :value="pacienteAEditar.fecha_nacimiento"
-                                :class="campoBase"
+                                :class="campoUnaLinea"
                             />
                             <InputError :message="errors.fecha_nacimiento" />
                         </div>
@@ -300,7 +314,7 @@ function edadTexto(p: Paciente): string {
                                 id="sexo-editar"
                                 name="sexo"
                                 :value="pacienteAEditar.sexo ?? ''"
-                                :class="campoBase"
+                                :class="campoUnaLinea"
                             >
                                 <option value="">Sin especificar</option>
                                 <option value="femenino">Femenino</option>
@@ -319,7 +333,7 @@ function edadTexto(p: Paciente): string {
                                 name="grupo_sanguineo"
                                 type="text"
                                 :value="pacienteAEditar.grupo_sanguineo"
-                                :class="campoBase"
+                                :class="campoUnaLinea"
                             />
                             <InputError :message="errors.grupo_sanguineo" />
                         </div>
@@ -330,7 +344,7 @@ function edadTexto(p: Paciente): string {
                                 id="notas-editar"
                                 name="notas"
                                 rows="3"
-                                :class="campoBase.replace('h-9', 'h-auto')"
+                                :class="campoTexto"
                                 >{{ pacienteAEditar.notas }}</textarea>
                             <InputError :message="errors.notas" />
                         </div>
