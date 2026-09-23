@@ -466,10 +466,14 @@ el tamaño de letra completo con su pantalla, el layout con menú hamburguesa qu
 al navegar, y los avisos en toast.
 
 La PWA está instalable —Chrome lo confirma— con `sw.js` propio, manifest con
-`orientation: any`, set de íconos generado y botón de instalar.
+`orientation: any`, set de íconos generado y botón de instalar. El parche de caché de
+Inertia está aplicado y probado contra un servidor real: `no-store` en la respuesta XHR,
+`no-cache` (cacheable) en el HTML, `Vary` en las dos, y la red de seguridad en el service
+worker para las entradas que ya hubieran quedado mal guardadas antes del parche.
 
-Falta de la Etapa 1: el parche de caché de Inertia (`no-store` en la respuesta XHR y el
-rescate del JSON crudo en el service worker).
+Falta de la Etapa 1: verificar a mano en un navegador real el caso "pestaña descartada y
+restaurada" (chrome://discards) — la emulación offline de Puppeteer no es confiable para
+este caso puntual, así que no quedó cubierto por script.
 
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de

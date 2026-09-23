@@ -3,10 +3,13 @@
 namespace App\Http\Middleware;
 
 use App\Enums\TamanioTexto;
+use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Str;
 use Inertia\Middleware;
+use Inertia\Support\Header;
+use Symfony\Component\HttpFoundation\Response;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -18,6 +21,40 @@ class HandleInertiaRequests extends Middleware
      * @var string
      */
     protected $rootView = 'app';
+
+    /**
+     * Una misma URL de Inertia contesta dos cuerpos distintos según lleve o no
+     * el header X-Inertia: el HTML de arranque, o el JSON de la página.
+     *
+     * Lo único que separa esas dos respuestas para una caché HTTP es
+     * `Vary: X-Inertia`. En Hostinger el CDN lo BORRA al comprimir con brotli
+     * -que es lo que pide cualquier navegador real-, y el `Cache-Control:
+     * no-cache` que Symfony pone por defecto permite guardar (solo obliga a
+     * revalidar). Cuando Chrome descarta una pestaña inactiva y la restaura,
+     * esa navegación es de historial y reusa lo guardado SIN revalidar: el
+     * navegador abre el JSON con su propio visor y la app nunca arranca.
+     *
+     * `no-store` en vez de `no-cache` es lo que corta esto de raíz: prohíbe
+     * guardar, así que no hay nada que una navegación de historial pueda
+     * reusar sin red.
+     *
+     * @param  Closure(Request): Response  $next
+     */
+    public function handle(Request $request, Closure $next): Response
+    {
+        $response = parent::handle($request, $next);
+
+        $response->headers->set('Vary', Header::INERTIA.', Accept-Encoding');
+
+        // Solo la respuesta XHR: `no-store` en el documento HTML desactivaría
+        // el back/forward cache de Chrome y cada "atrás" sería una ida
+        // completa a la red, sin ningún síntoma que lo delate.
+        if ($request->header(Header::INERTIA)) {
+            $response->headers->set('Cache-Control', 'no-store, private');
+        }
+
+        return $response;
+    }
 
     /**
      * Determines the current asset version.

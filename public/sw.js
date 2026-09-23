@@ -75,6 +75,43 @@ function tieneHashDeContenido(url) {
     return url.pathname.startsWith('/build/');
 }
 
+/*
+ * Red de seguridad para el JSON crudo de Inertia.
+ *
+ * El parche de HandleInertiaRequests evita que se generen entradas MALAS
+ * nuevas en la caché HTTP del navegador, pero no borra las que ya están
+ * guardadas de antes del parche. Y cuando el bug ocurre la app nunca arranca,
+ * así que ningún script de la página puede repararlo: el único que intercepta
+ * la navegación antes de que llegue al navegador es este service worker.
+ *
+ * Dos condiciones, y ninguna sobra:
+ *
+ *   1. `request.mode !== 'navigate'` ya lo filtra `esNavegacion()` antes de
+ *      llamar a esto, así que acá solo hace falta mirar el header de la
+ *      RESPUESTA (`x-inertia`), no el content-type: una navegación real
+ *      puede contestar JSON legítimamente (una exportación que se descarga),
+ *      y ahí no hay que reintentar nada.
+ *
+ *   2. Si la reobtención viene redirigida (`recuperada.redirected`), no se le
+ *      puede entregar así a una navegación -el Service Worker API lo
+ *      prohíbe-, así que se sigue el redirect a mano. Es el caso más
+ *      probable de todos: una pestaña con horas abiertas y la sesión vencida.
+ */
+function rescatarJsonCrudo(request, respuesta) {
+    if (!respuesta.headers.get('x-inertia')) {
+        return respuesta;
+    }
+
+    return fetch(request.url, {
+        cache: 'reload',
+        headers: { Accept: 'text/html' },
+    }).then((recuperada) =>
+        recuperada.redirected
+            ? Response.redirect(recuperada.url, 302)
+            : recuperada,
+    );
+}
+
 self.addEventListener('fetch', (evento) => {
     const { request } = evento;
 
@@ -113,9 +150,11 @@ self.addEventListener('fetch', (evento) => {
     // Una navegación sin red muestra la pantalla de "sin conexión".
     if (esNavegacion(request)) {
         evento.respondWith(
-            fetch(request).catch(() =>
-                caches.match('/offline').then((r) => r ?? Response.error()),
-            ),
+            fetch(request)
+                .then((respuesta) => rescatarJsonCrudo(request, respuesta))
+                .catch(() =>
+                    caches.match('/offline').then((r) => r ?? Response.error()),
+                ),
         );
 
         return;
