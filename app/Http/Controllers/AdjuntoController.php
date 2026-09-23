@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\AdjuntoStoreRequest;
 use App\Models\Adjunto;
+use App\Models\Cobertura;
 use App\Models\Paciente;
 use App\Services\ArchivoService;
 use Illuminate\Http\RedirectResponse;
@@ -45,6 +46,38 @@ class AdjuntoController extends Controller
              * referencia cuelga toda la autorización, y por eso no es fillable.
              */
             $paciente->adjuntos()->create($datos + [
+                'tipo' => $tipo,
+                'descripcion' => $descripcion,
+            ]);
+
+            $subidos++;
+        }
+
+        return back()->with('exito', $subidos === 1
+            ? 'Se guardó el documento.'
+            : "Se guardaron {$subidos} documentos.");
+    }
+
+    /**
+     * Sube uno o varios archivos a una cobertura: la credencial, frente y
+     * dorso, como dos adjuntos tipo `credencial`.
+     *
+     * La autorización se resuelve sobre el PACIENTE dueño de la cobertura y
+     * no sobre la cobertura misma, por el mismo motivo que en `store()`: el
+     * adjunto todavía no existe.
+     */
+    public function storeParaCobertura(AdjuntoStoreRequest $peticion, Cobertura $cobertura): RedirectResponse
+    {
+        Gate::authorize('crearEn', [Adjunto::class, $cobertura->paciente]);
+
+        $tipo = $peticion->tipo();
+        $descripcion = $peticion->input('descripcion');
+        $subidos = 0;
+
+        foreach ($peticion->file('archivos', []) as $archivo) {
+            $datos = $this->archivos->guardar($archivo, 'coberturas/'.$cobertura->id);
+
+            $cobertura->adjuntos()->create($datos + [
                 'tipo' => $tipo,
                 'descripcion' => $descripcion,
             ]);

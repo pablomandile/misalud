@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\AdjuntoController;
 use App\Http\Controllers\Auth\GoogleController;
+use App\Http\Controllers\CoberturaController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PacienteActivoController;
 use App\Http\Controllers\PacienteController;
 use App\Http\Controllers\Settings\TamanioTextoController;
@@ -37,7 +39,7 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+    Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::put('paciente-activo/{paciente}', [PacienteActivoController::class, 'update'])
         ->name('paciente-activo.update');
@@ -50,6 +52,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('pacientes.adjuntos.store');
     Route::get('adjuntos/{adjunto}', [AdjuntoController::class, 'show'])->name('adjuntos.show');
     Route::delete('adjuntos/{adjunto}', [AdjuntoController::class, 'destroy'])->name('adjuntos.destroy');
+
+    /*
+     * Coberturas: no tienen index propio, viajan en el prop de la ficha del
+     * paciente. store va bajo /pacientes/{paciente} porque hace falta saber
+     * a quién pertenece; update y destroy van sobre su propio id, como los
+     * adjuntos -el registro ya sabe de qué paciente es-.
+     */
+    Route::post('pacientes/{paciente}/coberturas', [CoberturaController::class, 'store'])
+        ->name('pacientes.coberturas.store');
+    Route::put('coberturas/{cobertura}', [CoberturaController::class, 'update'])
+        ->name('coberturas.update');
+    Route::delete('coberturas/{cobertura}', [CoberturaController::class, 'destroy'])
+        ->name('coberturas.destroy');
+    Route::post('coberturas/{cobertura}/adjuntos', [AdjuntoController::class, 'storeParaCobertura'])
+        ->name('coberturas.adjuntos.store');
 
     Route::get('pacientes', [PacienteController::class, 'index'])->name('pacientes.index');
     Route::post('pacientes', [PacienteController::class, 'store'])->name('pacientes.store');

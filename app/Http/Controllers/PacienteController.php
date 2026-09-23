@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Enums\RolPaciente;
 use App\Http\Requests\PacienteGuardarRequest;
 use App\Models\Adjunto;
+use App\Models\Cobertura;
 use App\Models\Paciente;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
@@ -24,8 +25,8 @@ class PacienteController extends Controller
     public function index(): Response
     {
         $pacientes = auth()->user()->pacientes()
-            // Explicito: sin esto es una consulta de adjuntos por paciente.
-            ->with('adjuntos')
+            // Explicito: sin esto es una consulta por cada paciente y cada cobertura.
+            ->with(['adjuntos', 'coberturas.adjuntos'])
             ->get()
             ->sortBy(fn (Paciente $paciente): string => $paciente->nombre)
             ->values()
@@ -105,6 +106,42 @@ class PacienteController extends Controller
                     'tamanio' => $adjunto->tamanio_bytes,
                     'tipo' => $adjunto->tipo->etiqueta(),
                     'url' => route('adjuntos.show', $adjunto),
+                ])
+                ->all(),
+
+            'coberturas' => $paciente->coberturas
+                // activas primero, y entre iguales la más nueva: es la que
+                // se ofrece por defecto al cargar un estudio o un turno.
+                ->sortByDesc(fn (Cobertura $c): string => ($c->activa ? '1' : '0').$c->created_at->timestamp)
+                ->values()
+                ->map(fn (Cobertura $cobertura): array => [
+                    'id' => $cobertura->id,
+                    'tipo' => $cobertura->tipo->value,
+                    'tipoEtiqueta' => $cobertura->tipo->etiqueta(),
+                    'entidad' => $cobertura->entidad,
+                    'plan' => $cobertura->plan,
+                    'nro_afiliado' => $cobertura->nro_afiliado,
+                    'telefono' => $cobertura->telefono,
+                    'telefono_urgencias' => $cobertura->telefono_urgencias,
+                    'sitio_web' => $cobertura->sitio_web,
+                    'vigencia_desde' => $cobertura->vigencia_desde?->format('Y-m-d'),
+                    'vigencia_hasta' => $cobertura->vigencia_hasta?->format('Y-m-d'),
+                    'activa' => $cobertura->activa,
+                    'notas' => $cobertura->notas,
+                    // La credencial, frente y dorso: adjuntos tipo `credencial`
+                    // colgados de la COBERTURA, no del paciente.
+                    'adjuntos' => $cobertura->adjuntos
+                        ->sortByDesc('created_at')
+                        ->values()
+                        ->map(fn (Adjunto $adjunto): array => [
+                            'id' => $adjunto->id,
+                            'nombre' => $adjunto->nombre_original,
+                            'mime' => $adjunto->mime,
+                            'tamanio' => $adjunto->tamanio_bytes,
+                            'tipo' => $adjunto->tipo->etiqueta(),
+                            'url' => route('adjuntos.show', $adjunto),
+                        ])
+                        ->all(),
                 ])
                 ->all(),
         ];

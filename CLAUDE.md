@@ -200,6 +200,24 @@ mail), en el `nombre_hash` de cada catálogo (unique por `usuario_id`) y en
   SQLite —el de los tests— guarda `00:00:00` y la comparación por igualdad nunca encuentra el
   duplicado: la validación pasa y lo corta la base con un 500. Para esos casos va una regla de
   cierre con `whereDate`.
+- ⚠️ **Un checkbox tildado manda el string `"on"`, y la regla `boolean` lo rechaza.** Laravel
+  solo acepta `true/false/1/0/"1"/"0"`; `"on"` —lo que manda de verdad un
+  `<input type="checkbox">` nativo cuando está tildado— la hace fallar. Encontrado a mano en
+  el navegador con la cobertura activa (Etapa 4): la creación volvía con un 302 y ninguna fila
+  nueva, **sin ningún cartel**, porque el campo no tenía su `<InputError>` en pantalla. Ni un
+  solo test lo agarró: los de Pest mandaban `true` (bool de PHP) o nada, nunca el string real.
+  Se normaliza en `prepareForValidation()` del FormRequest, con `$this->boolean('activa')`
+  **antes** de que la regla `boolean` lo vea —no en el controlador, que ya es tarde—. Y **todo
+  campo booleano lleva su `<InputError>`**, así el día que falle por otra razón, se vea.
+- **Unicidad sobre una columna cifrada: `App\Rules\IndiceCiegoUnico`.** `Rule::unique` no
+  detecta nada sobre un campo `encrypted` —compara contra el ciphertext, que cambia en cada
+  guardado—; sin esta regla, dos registros iguales pasan la validación y el UNIQUE de la base
+  los frena con un 500 en vez de un error de campo. Toma el modelo, el campo, un **ámbito** en
+  claro por el que además acotar (`['paciente_id' => ...]`: la unicidad casi siempre es "para
+  esta persona", no global) y el id a ignorar al editar. Arma la comparación con
+  `indicesCiegos()` y `hashCiego()` de la interfaz `CifraDatos` **a mano**, sin pasar por el
+  scope `dondeIndiceCiego()`: con un `class-string<Model&CifraDatos>` genérico, PHPStan no
+  logra resolver un scope definido en un trait.
 
 ## Ingreso con Google
 
@@ -502,6 +520,46 @@ decimosexta sería la que filtre.
   devuelve `null` y la Policy lo niega. Hay que sumar ese caso en la Etapa 5, cuando
   existan los catálogos.
 
+## Cobertura médica
+
+`coberturas` es tabla propia y no columnas en `pacientes`: mucha gente tiene obra social y
+prepaga **a la vez**, los planes cambian y la credencial vieja sigue sirviendo para un
+reintegro, y cada cobertura tiene su propio número de afiliado. Primer modelo del dominio
+que combina `CifraDatos` y `PerteneceAPaciente` a la vez —las dos piezas conviven sin
+fricción porque resuelven cosas distintas—.
+
+- **La credencial cuelga de la COBERTURA, no del paciente**: son adjuntos tipo `credencial`
+  (frente y dorso), por la misma relación `TieneAdjuntos` que usa `Paciente`. `Cobertura`
+  también sube por `pacienteDelRegistro()` vía `belongsTo(Paciente::class)`, así que
+  `RegistroClinicoPolicy` la cubre sin ningún caso especial.
+- `entidad_hash` lleva **UNIQUE por `paciente_id`**: no puede haber dos coberturas de "OSDE"
+  para el mismo paciente. Es el primer UNIQUE sobre un índice ciego que hizo falta validar
+  en el FormRequest — ver `IndiceCiegoUnico` más arriba.
+- **`activa` puede convivir varias a la vez** (obra social + prepaga): no es una bandera
+  exclusiva. Es la que se ofrece por defecto al cargar un estudio o un turno, y la única que
+  el dashboard ofrece como acceso rápido — una cobertura dada de baja no se muestra ahí:
+  mostrarla invitaría a presentar en un mostrador una credencial que ya no sirve.
+- El panel de UI vive en `pacientes/PanelCobertura.vue`, **componente propio y no adentro de
+  `pacientes/Index.vue`**: ahí conviven tres formularios (alta, edición de una cobertura
+  puntual, subida de credencial) y cada paciente puede tener varias coberturas. Es este
+  componente el que abre y cierra su propio `Sheet` —mismo patrón que `VisorDocumento.vue`
+  con su `Dialog`—, y le avisa al padre qué documento abrir por un evento (`verDocumento`) en
+  vez de montar su propio visor: sigue habiendo **uno solo** para toda la pantalla.
+
+## Panel principal (dashboard)
+
+`DashboardController` resuelve el **paciente activo**: `session('paciente_activo_id')` si
+hay uno válido y accesible, si no el primero por nombre —mismo orden que
+`PacienteController::index`—. Por ahora el único contenido es el acceso rápido a la
+credencial (paso 4.2); el resto (recetas, tratamientos, turnos, órdenes, mediciones) llega
+en la Etapa 15, cuando esos módulos existan.
+
+⚠️ **No hay todavía un selector de paciente activo en pantalla.** La ruta
+`paciente-activo.update` y el prop `pacienteActivoId` están armados desde la Etapa 2.1, pero
+ningún componente los usa: quien tiene más de un paciente no tiene cómo elegir cuál ver en
+el dashboard más que por el fallback (el primero por nombre). Falta construir ese selector
+—candidato natural: la Etapa 15, junto con el resto del dashboard—.
+
 ## Visor de documentos
 
 Un solo `VisorDocumento.vue` a pantalla completa para imágenes **y PDFs**, con X propia.
@@ -698,9 +756,10 @@ este caso puntual, así que no quedó cubierto por script.
 Etapa 2 completa: esquema de pacientes, autorización por rol y CRUD con pantallas
 (sheets para crear/editar, dialog para borrar), e ingreso con Google, con sus reglas
 de vinculación de cuentas y todo lo que se desprende de una cuenta sin contraseña.
-Las credenciales están en el `.env` local; **falta cargar el redirect URI en Google
-Cloud Console**, que hoy responde `redirect_uri_mismatch` (ver `docs/google-oauth.md`,
-que trae el chequeo por consola).
+El redirect URI de producción ya está cargado en Google Cloud Console y verificado
+—Google lo acepta, sin necesidad de tener el sitio desplegado (ver `docs/google-oauth.md`
+para el chequeo por consola)—. El ingreso con Google queda **apagado en local a propósito**:
+solo está registrado el redirect de producción.
 
 Las **áreas táctiles de 44 px** ya se cumplen en las nueve pantallas que hay, en los
 tres tamaños de letra, y lo cuida `npm run revisar:mobile`. El chequeo mide el alto
@@ -718,6 +777,21 @@ Etapa 3 hecha: `ArchivoService` con el cifrado en disco, la tabla polimórfica d
 adjuntos, `RegistroClinicoPolicy` sobre `PerteneceAPaciente`, `SubirArchivo.vue`,
 `VisorDocumento.vue` con pdf.js, y todo eso ya conectado a la ficha del paciente
 —que es lo que lo vuelve verificable en un navegador y no código sin usar—.
+
+Etapa 4 hecha: `coberturas` con su CRUD en `PanelCobertura.vue`, credencial (frente y
+dorso) como adjuntos colgados de la cobertura, y el acceso rápido a un toque desde el
+panel principal. Encontrado a mano y no por ningún test —ver la regla del checkbox más
+arriba, en Backend—: la creación fallaba en silencio por un `boolean` que rechazaba el
+`"on"` de un checkbox real, sin ningún cartel en pantalla porque le faltaba su
+`InputError`. Los 20 tests de Pest pasaban igual, porque ninguno mandaba el string `"on"`
+—mandaban `true` de PHP o directamente omitían el campo—.
+
+⚠️ **`artisan serve` puede dejar procesos zombis si se lo interrumpe a mano.** Durante la
+verificación de esta etapa hubo hasta ocho procesos distintos escuchando en el mismo
+puerto a la vez, sobrevivientes de arranques anteriores: las requests se repartían entre
+ellos al azar, y el síntoma se leía como "a veces guarda, a veces no" —parecía el bug del
+checkbox multiplicado—. `netstat -ano | grep ":8001"` lo delata; hay que matar todos los
+PID antes de levantar uno limpio.
 
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { Form, Head } from '@inertiajs/vue3';
-import { FileText, Plus, Trash2, UserRound } from '@lucide/vue';
+import { CreditCard, FileText, Plus, Trash2, UserRound } from '@lucide/vue';
 import { ref } from 'vue';
 import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
 import Heading from '@/components/Heading.vue';
+import PanelCobertura from '@/pages/pacientes/PanelCobertura.vue';
 import SubirArchivo from '@/components/SubirArchivo.vue';
 import type { DocumentoVisible } from '@/components/VisorDocumento.vue';
 import VisorDocumento from '@/components/VisorDocumento.vue';
@@ -37,7 +38,24 @@ type DocumentoDePaciente = DocumentoVisible & {
     tipo: string;
 };
 
-type Paciente = {
+export type CoberturaMedica = {
+    id: number;
+    tipo: string;
+    tipoEtiqueta: string;
+    entidad: string;
+    plan: string | null;
+    nro_afiliado: string | null;
+    telefono: string | null;
+    telefono_urgencias: string | null;
+    sitio_web: string | null;
+    vigencia_desde: string | null;
+    vigencia_hasta: string | null;
+    activa: boolean;
+    notas: string | null;
+    adjuntos: DocumentoDePaciente[];
+};
+
+export type Paciente = {
     id: number;
     nombre: string;
     fecha_nacimiento: string | null;
@@ -48,6 +66,7 @@ type Paciente = {
     puedeEditar: boolean;
     esPropietario: boolean;
     adjuntos: DocumentoDePaciente[];
+    coberturas: CoberturaMedica[];
 };
 
 defineProps<{ pacientes: Paciente[] }>();
@@ -79,6 +98,7 @@ const sheetCrearAbierto = ref(false);
 const pacienteAEditar = ref<Paciente | null>(null);
 const pacienteABorrar = ref<Paciente | null>(null);
 const pacienteDeDocumentos = ref<Paciente | null>(null);
+const pacienteDeCoberturas = ref<Paciente | null>(null);
 
 /*
  * UN SOLO documento abierto para toda la pantalla, y un solo <VisorDocumento>
@@ -158,6 +178,17 @@ function edadTexto(p: Paciente): string {
                     </div>
 
                     <div class="flex shrink-0 flex-wrap justify-end gap-1">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            @click="pacienteDeCoberturas = paciente"
+                        >
+                            <CreditCard />
+                            {{ paciente.coberturas.length || '' }}
+                            <span class="sr-only">
+                                Cobertura médica de {{ paciente.nombre }}
+                            </span>
+                        </Button>
                         <Button
                             variant="ghost"
                             size="sm"
@@ -588,6 +619,13 @@ function edadTexto(p: Paciente): string {
                 </Form>
             </DialogContent>
         </Dialog>
+
+        <!-- Cobertura médica: panel propio, se abre y cierra igual que Documentos. -->
+        <PanelCobertura
+            :paciente="pacienteDeCoberturas"
+            @cerrar="pacienteDeCoberturas = null"
+            @ver-documento="documentoAbierto = $event"
+        />
 
         <!--
             UNO SOLO para toda la pantalla, fuera de todo v-for. Ver el
