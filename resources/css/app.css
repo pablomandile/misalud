@@ -89,6 +89,33 @@
     }
 }
 
+/*
+ * Tamaño de letra de la app. Tres opciones, con la mediana por defecto: la usan
+ * personas mayores, así que el tamaño chico se elige, no se hereda.
+ *
+ * Va en PORCENTAJE y no en px. Un `font-size: 20px` en la raíz pisa el tamaño
+ * que la persona ya configuró en su navegador —justo lo que alguien con poca
+ * vista probablemente ya tocó—; con un porcentaje las dos preferencias se
+ * multiplican en vez de pelearse.
+ *
+ * El default está en `:root` y no solo en el selector de atributo, para que la
+ * página se vea bien aunque `data-texto` falte (una vista suelta, un error).
+ */
+:root {
+    font-size: 112.5%;
+}
+
+html[data-texto='normal'] {
+    font-size: 100%;
+}
+
+html[data-texto='grande'] {
+    font-size: 112.5%;
+}
+
+html[data-texto='muy-grande'] {
+    font-size: 125%;
+}
 :root {
     --background: hsl(0 0% 100%);
     --foreground: hsl(0 0% 3.9%);

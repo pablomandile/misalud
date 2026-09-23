@@ -251,11 +251,20 @@ Tres opciones, **con la mediana por defecto**: Normal `100%`, **Grande `112.5%`*
 - Tailwind mide en `rem`, así que mover la raíz escala tipografía **y** espaciado. Pero **los
   breakpoints `md:` no escalan** (las media queries van en px contra el viewport). Por eso el
   chequeo de desborde es una matriz de anchos × tamaños × orientación, no un chequeo suelto.
-- Se aplica con el **mismo patrón que el modo oscuro**: cookie → script inline en el `<head>`
-  de `app.blade.php` → atributo en `<html>`, **antes del primer pintado**. Desde Vue en
-  `onMounted` se ve el texto saltar de tamaño en cada carga.
-- Se guarda **en `users.tamanio_texto` además de la cookie**: la cookie evita el salto, la
-  columna hace que la preferencia siga a la cuenta en un dispositivo nuevo.
+- **El servidor escribe `data-texto` en el `<html>`; no hace falta script inline.** Esto es
+  mejor que el modo oscuro y por un motivo concreto: el modo oscuro tiene la opción "según
+  el sistema", que solo el navegador sabe resolver, así que necesita JavaScript. Acá el
+  servidor ya sabe la respuesta. Cero parpadeo y cero JavaScript en el arranque.
+- Lo resuelve `HandleTamanioTexto`: **manda la cuenta, después la cookie**. La cookie cubre
+  a quien no inició sesión y evita una consulta por request de un invitado; la columna
+  `users.tamanio_texto` es la que hace que la preferencia siga a la persona a un dispositivo
+  nuevo, que es el caso que la motiva.
+- El cambio **sí** lo aplica el cliente (`useTamanioTexto`), porque Inertia no recarga el
+  documento: sin eso, elegir un tamaño no se vería hasta la próxima navegación completa.
+- Se puede cambiar **sin sesión**. Quien no llega a leer la pantalla de ingreso es justamente
+  quien más necesita agrandar la letra, y ahí todavía no hay cuenta donde guardarlo.
+- `TamanioTexto::PORDEFECTO` es la fuente única; `porDefecto()` deriva de ella. Un valor
+  desconocido en la cookie cae al default en vez de romper la página.
 - En Configuración va **con la muestra a tamaño real**: un selector que dice "Grande" en letra
   chica no le sirve a quien lo necesita.
 
@@ -404,8 +413,8 @@ MySQL local lo levanta Laragon. Si no está corriendo, `artisan migrate` falla c
 
 Hecho: andamiaje (Laravel 13 + Inertia 3 + Fortify + Wayfinder, MySQL, Pest 4), todo el texto
 visible en español rioplatense, y la capa de cifrado (`CifraDatos`, `CifraCampos`,
-`ConsultaVigilada`, `misalud:recifrar` y su guardia), con las dos sondas de riesgo
-despejadas.
+`ConsultaVigilada`, `misalud:recifrar` y su guardia), las dos sondas de riesgo despejadas y
+el tamaño de letra funcionando de punta a punta (falta su pantalla en Configuración).
 
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\TamanioTexto;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -18,6 +19,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property int $id
  * @property string $name
  * @property string $email
+ * @property TamanioTexto $tamanio_texto
  * @property Carbon|null $email_verified_at
  * @property string $password
  * @property string|null $two_factor_secret
@@ -31,6 +33,19 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
 {
+    /**
+     * Un usuario recién construido ya trae el tamaño por defecto.
+     *
+     * Sin esto, el default vive solo en la base y un modelo nuevo tiene la
+     * propiedad en null hasta recargarlo, que es un null que después aparece
+     * lejos de acá.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'tamanio_texto' => TamanioTexto::PORDEFECTO,
+    ];
+
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
 
@@ -43,6 +58,7 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     {
         return [
             'email_verified_at' => 'datetime',
+            'tamanio_texto' => TamanioTexto::class,
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
         ];

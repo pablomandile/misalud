@@ -1,8 +1,16 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}"  @class(['dark' => ($appearance ?? 'system') == 'dark'])>
+{{--
+    `data-texto` lo escribe el servidor, no un script: a diferencia del modo
+    oscuro no hay opción "según el sistema", así que acá ya se sabe la
+    respuesta. Sin script no hay parpadeo de tamaño al cargar.
+--}}
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}"
+    data-texto="{{ ($tamanioTexto ?? \App\Enums\TamanioTexto::porDefecto())->value }}"
+    @class(['dark' => ($appearance ?? 'system') == 'dark'])>
     <head>
         <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- viewport-fit=cover habilita env(safe-area-inset-*), que en apaisado hacen falta a los costados --}}
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
         {{-- Inline script to detect system dark mode preference and apply it immediately --}}
         <script>
