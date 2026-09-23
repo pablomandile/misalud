@@ -87,9 +87,68 @@ Donde hace falta unicidad o búsqueda exacta va una columna paralela determinís
 hash_hmac('sha256', mb_strtolower(trim($valor)), config('app.key'))   // char(64), indexada
 ```
 
-El trait `CifraCampos` declara `protected array $indicesCiegos = ['nombre' => 'nombre_hash']`
-y las llena en el evento `saving`. **Un solo lugar**: no calcular hashes a mano en un
-controlador.
+El trait `CifraCampos` los declara y los llena en el evento `saving`. **Un solo lugar**: no
+calcular hashes a mano en un controlador, o el índice se desincroniza del dato y el UNIQUE
+deja de proteger.
+
+La clave del HMAC **no es `APP_KEY` directo**: se deriva con HKDF y una etiqueta propia.
+Cifrar e indexar son dos propósitos y no comparten clave.
+
+### Cómo se arma un modelo que cifra
+
+```php
+class Medico extends Model implements CifraDatos
+{
+    use CifraCampos;
+
+    // Obligatorio. No puede vivir en el trait: PHP no deja que un trait pise una
+    // propiedad heredada con otro valor. Lo exige GuardiaDeCifradoTest.
+    protected static string $builder = ConsultaVigilada::class;
+
+    public function indicesCiegos(): array
+    {
+        return ['nombre' => 'nombre_hash'];
+    }
+
+    protected function casts(): array
+    {
+        return ['nombre' => 'encrypted'];
+    }
+}
+```
+
+Las tres piezas y para qué está cada una:
+
+| Pieza                                    | Qué hace                                                       |
+| ---------------------------------------- | -------------------------------------------------------------- |
+| `App\Contracts\CifraDatos`               | El contrato. Lo consultan el comando de recifrado y la guardia |
+| `App\Concerns\CifraCampos`               | Calcula los hashes en `saving` y aporta `dondeIndiceCiego()`   |
+| `App\Database\Eloquent\ConsultaVigilada` | **Rechaza** un `where` o un `orderBy` sobre columna cifrada    |
+
+`ConsultaVigilada` es la pieza que más vale. Sin ella, `Medico::where('nombre', 'Pérez')`
+compila, corre y devuelve **cero filas, siempre**, sin ningún error: el ciphertext guardado
+nunca es igual al texto buscado. El síntoma se lee como "no hay datos" y no como "esta
+consulta es imposible". La salida válida es `dondeIndiceCiego('nombre', 'Pérez')`.
+
+### Rotar la APP_KEY
+
+```bash
+# 1. copiar la APP_KEY actual a APP_PREVIOUS_KEYS en el .env
+# 2.
+php artisan key:generate
+# 3.
+php artisan misalud:recifrar        # --seco para ver qué haría
+# 4. recién ahora, sacar la clave vieja de APP_PREVIOUS_KEYS
+```
+
+Entre 2 y 3 la app sigue funcionando —el encrypter prueba las claves previas al descifrar—
+pero **los índices ciegos no**: se calculan con la clave nueva y ya no coinciden con los
+guardados. Por eso el comando recalcula las dos cosas, y por eso conviene correrlo enseguida.
+
+El comando escribe por el query builder y no con `save()`: un `save()` dispararía los
+observers por un cambio que no es del dominio, y además el dirty-check de Eloquent compara
+los valores **descifrados**, así que un texto que no cambió no se marcaría sucio y no se
+reescribiría nunca.
 
 Hacen falta en `recetas.message_id_hash` (unique — es lo único que evita reimportar el mismo
 mail), en el `nombre_hash` de cada catálogo (unique por `usuario_id`) y en
@@ -107,8 +166,10 @@ mail), en el `nombre_hash` de cada catálogo (unique por `usuario_id`) y en
 - **`APP_KEY` es la llave de todo.** Si se pierde, los datos no se recuperan — y además
   desencripta el `two_factor_secret` de Fortify. Va al backup, guardada aparte de la base, y
   el `.env` con permisos restringidos. `misalud:recifrar` es lo que permite rotarla.
-- Un test de guardia falla si aparece un índice, un `unique` o un `where` sobre una columna
-  declarada `encrypted`. Es exactamente el tipo de cosa que alguien "simplifica" en seis meses.
+- `GuardiaDeCifradoTest` revisa el esquema real de cada modelo que implementa `CifraDatos`:
+  que no haya índices sobre columnas cifradas, que esas columnas sean `text`, que la columna
+  de hash exista y esté indexada, y que el modelo declare `$builder`. Es exactamente el tipo
+  de cosa que alguien "simplifica" en seis meses.
 - **Los archivos también se cifran en disco** (`ArchivoService`). Se paga con la pérdida de
   _range requests_ y con desencriptar el archivo entero en memoria al servirlo: para PDFs y
   fotos de consultorio es irrelevante, pero fija un límite de subida razonable.
@@ -300,8 +361,9 @@ MySQL local lo levanta Laragon. Si no está corriendo, `artisan migrate` falla c
 
 ## Estado
 
-Hecho: andamiaje (Laravel 13 + Inertia 3 + Fortify + Wayfinder, MySQL, Pest 4) y todo el texto
-visible en español rioplatense.
+Hecho: andamiaje (Laravel 13 + Inertia 3 + Fortify + Wayfinder, MySQL, Pest 4), todo el texto
+visible en español rioplatense, y la capa de cifrado (`CifraDatos`, `CifraCampos`,
+`ConsultaVigilada`, `misalud:recifrar` y su guardia).
 
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de
