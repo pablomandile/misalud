@@ -52,7 +52,14 @@ class Paciente extends Model implements CifraDatos
 
     protected $table = 'pacientes';
 
+    /*
+     * A diferencia de un registro clínico colgado de un paciente (donde
+     * paciente_id NUNCA es fillable, ver CLAUDE.md), acá `usuario_id` sí lo es:
+     * este es el registro raíz, y quien lo crea es siempre el usuario
+     * autenticado -no hay una relación intermedia de la que colgarlo-.
+     */
     protected $fillable = [
+        'usuario_id',
         'nombre',
         'fecha_nacimiento',
         'sexo',

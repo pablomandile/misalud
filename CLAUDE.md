@@ -475,10 +475,15 @@ Falta de la Etapa 1: verificar a mano en un navegador real el caso "pestaña des
 restaurada" (chrome://discards) — la emulación offline de Puppeteer no es confiable para
 este caso puntual, así que no quedó cubierto por script.
 
-Etapa 2 en marcha: el esquema de pacientes está completo (`pacientes` + `paciente_usuario`
+Etapa 2 en marcha: esquema de pacientes, autorización por rol y CRUD completo con
+pantallas (sheets para crear/editar, dialog para borrar). Falta ingreso con Google
+(2.3), que necesita credenciales en Google Cloud Console y no se puede completar sin
+ese paso manual.
 
-- `PacientePolicy` + paciente activo por sesión). Falta el CRUD con pantallas (2.2) e
-  ingreso con Google (2.3).
+Nota pendiente: `ProfileController::update` usa `Inertia::flash('toast', ...)`, un
+mecanismo de Inertia que no está conectado a nuestro sistema de toasts (que mira
+`page.props.flash.exito`/`.error`, poblado por `session()->flash()`). Guardar el
+perfil hoy no muestra ningún aviso. Es código heredado del starter kit, sin tocar.
 
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de

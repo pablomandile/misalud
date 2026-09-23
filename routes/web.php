@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\PacienteActivoController;
+use App\Http\Controllers\PacienteController;
 use App\Http\Controllers\Settings\TamanioTextoController;
 use Illuminate\Support\Facades\Route;
 
@@ -23,6 +24,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::put('paciente-activo/{paciente}', [PacienteActivoController::class, 'update'])
         ->name('paciente-activo.update');
+
+    Route::get('pacientes', [PacienteController::class, 'index'])->name('pacientes.index');
+    Route::post('pacientes', [PacienteController::class, 'store'])->name('pacientes.store');
+    Route::put('pacientes/{paciente}', [PacienteController::class, 'update'])->name('pacientes.update');
+    Route::delete('pacientes/{paciente}', [PacienteController::class, 'destroy'])->name('pacientes.destroy');
 });
 
 require __DIR__.'/settings.php';

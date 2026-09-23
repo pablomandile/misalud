@@ -1,4 +1,5 @@
-import { LayoutGrid, Settings } from '@lucide/vue';
+import { LayoutGrid, Settings, Users } from '@lucide/vue';
+import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
 import { dashboard } from '@/routes';
 import { edit as editarPerfil } from '@/routes/profile';
 import type { NavItem } from '@/types';
@@ -21,6 +22,11 @@ export const destinosPrincipales: NavItem[] = [
         title: 'Inicio',
         href: dashboard(),
         icon: LayoutGrid,
+    },
+    {
+        title: 'Pacientes',
+        href: PacienteController.index(),
+        icon: Users,
     },
 ];
 
