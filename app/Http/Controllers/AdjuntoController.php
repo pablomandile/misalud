@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Enums\TipoAdjunto;
 use App\Http\Requests\AdjuntoStoreRequest;
 use App\Models\Adjunto;
 use App\Models\Cobertura;
@@ -97,6 +98,35 @@ class AdjuntoController extends Controller
     {
         Gate::authorize('view', $adjunto);
 
+        return $this->respuestaDelArchivo($adjunto);
+    }
+
+    /**
+     * La credencial, por una ruta APARTE de `show()`.
+     *
+     * Es la única excepción a "las respuestas clínicas no se cachean": el
+     * service worker la guarda para poder mostrarla en un mostrador sin
+     * señal, que es justo donde más hace falta. La excepción está acotada acá
+     * y no en el cliente: `abort_unless` rechaza cualquier adjunto que no sea
+     * `credencial`, así que ni un bug del frontend ni una URL armada a mano
+     * pueden colar un documento clínico de verdad por el único camino que el
+     * service worker trata como cacheable. `Cache-Control` sigue en
+     * `no-store` igual -eso es la caché HTTP del navegador, compartida por
+     * cualquier pestaña del mismo origen-; lo que cachea la credencial es el
+     * service worker, por la Cache Storage API, que es un almacén aparte y
+     * solo esta app lo controla.
+     */
+    public function showCredencial(Adjunto $adjunto): Response
+    {
+        Gate::authorize('view', $adjunto);
+
+        abort_unless($adjunto->tipo === TipoAdjunto::Credencial, 404);
+
+        return $this->respuestaDelArchivo($adjunto);
+    }
+
+    private function respuestaDelArchivo(Adjunto $adjunto): Response
+    {
         $contenido = $this->archivos->contenido($adjunto);
 
         return response($contenido, 200, [
@@ -121,8 +151,10 @@ class AdjuntoController extends Controller
              *   subida; esto cubre lo que haya entrado antes o por otro camino.
              * - `Content-Security-Policy: sandbox`: aunque algo llegara a
              *   interpretarse como documento, queda sin scripts y sin origen.
-             * - `no-store`: es contenido clínico. No queda en la caché del
-             *   navegador de un locutorio ni en la de un CDN.
+             * - `no-store`: es contenido clínico. No queda en la caché HTTP
+             *   del navegador de un locutorio ni en la de un CDN. La única
+             *   excepción es la credencial, y esa la guarda el SERVICE
+             *   WORKER -Cache Storage, no la caché HTTP-, que es otro almacén.
              */
             'X-Content-Type-Options' => 'nosniff',
             'Content-Security-Policy' => "sandbox; default-src 'none'; img-src 'self'; object-src 'none'",

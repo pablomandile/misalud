@@ -324,3 +324,46 @@ it('el listado de pacientes trae sus documentos con la URL del controlador', fun
             ->where('pacientes.0.adjuntos.0.url', route('adjuntos.show', $adjunto))
         );
 });
+
+/*
+|--------------------------------------------------------------------------
+| La ruta de la credencial: la única que cachea el service worker
+|--------------------------------------------------------------------------
+*/
+
+it('sirve una credencial por su ruta aparte', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+    $datos = app(ArchivoService::class)->guardar(pdfDePrueba(), 'adjuntos');
+    $adjunto = adjuntoDe($paciente, $datos + ['tipo' => TipoAdjunto::Credencial]);
+
+    $this->actingAs($usuario)
+        ->get(route('credenciales.show', $adjunto))
+        ->assertOk()
+        ->assertHeader('Content-Type', 'application/pdf')
+        // La caché HTTP normal sigue vedada: la excepción la hace el service
+        // worker por su cuenta, con la Cache Storage API, no este header.
+        ->assertHeader('Cache-Control', 'no-store, private');
+});
+
+it('la ruta de la credencial RECHAZA cualquier adjunto que no sea credencial', function (): void {
+    // Es la pieza que hace que la excepción de caché quede acotada de
+    // verdad: ni un bug del frontend ni una URL armada a mano cuelan un
+    // documento clínico común por el único camino cacheable.
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+    $adjunto = adjuntoDe($paciente, ['tipo' => TipoAdjunto::InformeEstudio]);
+
+    $this->actingAs($usuario)
+        ->get(route('credenciales.show', $adjunto))
+        ->assertNotFound();
+});
+
+it('un usuario ajeno NO puede ver una credencial por esta ruta tampoco', function (): void {
+    $paciente = Paciente::factory()->create();
+    $adjunto = adjuntoDe($paciente, ['tipo' => TipoAdjunto::Credencial]);
+
+    $this->actingAs(User::factory()->create())
+        ->get(route('credenciales.show', $adjunto))
+        ->assertForbidden();
+});

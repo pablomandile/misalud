@@ -441,6 +441,38 @@ JSON crudo de Inertia ni del `beforeinstallprompt` capturado antes de que monte 
 - En producción, `sw.js` y `manifest.webmanifest` necesitan `no-cache` en `.htaccess`, o el CDN
   sirve un service worker viejo durante días y congela todo lo demás.
 
+### La única excepción: la credencial, para verla sin señal
+
+Pedido explícito del usuario, con la salvedad que el plan ya anticipaba: es una excepción
+**acotada y explícita**, no una grieta en "los datos clínicos no se cachean".
+
+- **La acota el servidor, no el service worker.** `GET /credenciales/{adjunto}`
+  (`AdjuntoController::showCredencial`) es una ruta aparte de `/adjuntos/{adjunto}`, y
+  **rechaza con 404 cualquier adjunto que no sea `TipoAdjunto::Credencial`** aunque la
+  persona tenga permiso de verlo. El service worker reconoce la excepción por el
+  `pathname` (`esCredencial()`), sin preguntarle nada a nadie — porque el servidor ya
+  garantizó que ese camino nunca sirve otra cosa. Así, ni un bug del frontend ni una URL
+  armada a mano pueden colar un documento clínico de verdad por el único camino cacheable.
+- **Va en una caché aparte** (`misalud-credenciales-v1`, no `CACHE`): el `activate` que
+  purga cachés viejas al subir de versión **no la toca**. Si viviera en `CACHE`, cada
+  actualización de ícono borraría la foto de la credencial de alguien.
+- **Network-first, no cache-first.** Un cambio de plan o una credencial nueva tiene que
+  verse apenas haya señal; la copia guardada es solo el respaldo para cuando la red falla.
+- **`Cache-Control: no-store` sigue en la respuesta HTTP**, igual que cualquier otro
+  adjunto. Eso es la caché del NAVEGADOR (compartida por cualquier pestaña del origen, y
+  la que le importa a un locutorio); lo que la guarda para verla sin señal es la Cache
+  Storage API del service worker, un almacén aparte que solo esta app controla — las dos
+  cosas conviven sin contradecirse.
+- **Se olvida al borrarla.** Borrar una credencial no avisa sola al service worker —el
+  servidor no sabe qué tiene cacheado cada navegador—, así que el cliente le manda
+  `postMessage({ tipo: 'olvidar-credencial', url })` en el `@success` de cada borrado
+  (`resources/js/lib/cacheCredencial.ts`), incluido el borrado en cascada de borrar la
+  cobertura entera. Sin esto, una credencial vieja queda "disponible sin conexión" para
+  siempre: la fila desaparece del servidor, pero una app instalada casi nunca hace la
+  recarga completa que renovaría la caché sola.
+- Verificado en Chrome real: se cachea al verla online, sirve desde el cache con
+  `page.setOfflineMode(true)`, y desaparece del cache al borrar la cobertura.
+
 ## Adjuntos
 
 Una sola tabla polimórfica para todos los archivos de la historia clínica. Cuelga de
@@ -792,6 +824,12 @@ puerto a la vez, sobrevivientes de arranques anteriores: las requests se repart�
 ellos al azar, y el síntoma se leía como "a veces guarda, a veces no" —parecía el bug del
 checkbox multiplicado—. `netstat -ano | grep ":8001"` lo delata; hay que matar todos los
 PID antes de levantar uno limpio.
+
+A pedido del usuario, después de cerrada la Etapa 4: la credencial se cachea en el service
+worker para verse sin señal —la única excepción a "los datos clínicos no se cachean",
+acotada por el servidor y no por el cliente (`GET /credenciales/{adjunto}`, ver PWA más
+arriba)—. Verificado en Chrome real con `page.setOfflineMode(true)`: se cachea al verla
+online, sirve sin red, y se olvida al borrar la credencial o la cobertura entera.
 
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de

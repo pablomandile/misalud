@@ -9,6 +9,14 @@
  *      tratamiento dado de baja es peor que mostrar un cartel de "sin
  *      conexión". Solo se guarda lo que es andamiaje: el bundle y los íconos.
  *
+ *      **Excepción única y acotada: la credencial de la cobertura**, para
+ *      verla en un mostrador sin señal, que es justo donde más hace falta.
+ *      No es una excepción de este archivo: el propio servidor la separa en
+ *      una ruta aparte (`/credenciales/{adjunto}`) que RECHAZA cualquier
+ *      adjunto que no sea de tipo `credencial` (ver
+ *      `AdjuntoController::showCredencial`), así que ni un bug acá ni una URL
+ *      armada a mano pueden colar otro documento clínico por este camino.
+ *
  *   2. **`cache-first` únicamente para URLs con hash de contenido** (las de
  *      `/build/`). Cualquier URL fija —íconos, manifest, la portada— tiene que
  *      ir por red primero, o queda congelada para siempre: el `activate` solo
@@ -20,6 +28,18 @@
  */
 
 const CACHE = 'misalud-v1';
+
+/*
+ * Caché APARTE para la credencial, y no una entrada más en `CACHE`.
+ *
+ * Dos motivos, ninguno de sobra: primero, `activate` borra toda caché que no
+ * se llame `CACHE` en cada actualización de versión -si la credencial
+ * viviera ahí, cada vez que se suba un ícono nuevo se perdería la foto de la
+ * obra social de alguien-. Segundo, es la que se vacía puntualmente cuando
+ * se borra una credencial (ver el listener de `message` más abajo): tiene
+ * que poder limpiarse sola, sin arrastrar el resto.
+ */
+const CACHE_CREDENCIALES = 'misalud-credenciales-v1';
 
 // Lo mínimo para que la pantalla de "sin conexión" pueda dibujarse sin red.
 const BASICOS = [
@@ -49,12 +69,38 @@ self.addEventListener('activate', (evento) => {
             .then((nombres) =>
                 Promise.all(
                     nombres
-                        .filter((nombre) => nombre !== CACHE)
+                        // CACHE_CREDENCIALES queda afuera a propósito: no es
+                        // andamiaje de la app, es la foto de la credencial de
+                        // una persona, y no tiene que perderse en cada deploy.
+                        .filter(
+                            (nombre) =>
+                                nombre !== CACHE &&
+                                nombre !== CACHE_CREDENCIALES,
+                        )
                         .map((nombre) => caches.delete(nombre)),
                 ),
             )
             .then(() => self.clients.claim()),
     );
+});
+
+/**
+ * Le pide al service worker que olvide una credencial, cuando se borra desde
+ * la app. Sin esto, borrar una credencial vieja la deja "disponible sin
+ * señal" para siempre: la fila del servidor desaparece, pero la copia local
+ * queda, y una app instalada casi nunca hace una recarga completa que la
+ * renueve.
+ */
+self.addEventListener('message', (evento) => {
+    const datos = evento.data;
+
+    if (datos?.tipo === 'olvidar-credencial' && typeof datos.url === 'string') {
+        evento.waitUntil(
+            caches
+                .open(CACHE_CREDENCIALES)
+                .then((cache) => cache.delete(datos.url)),
+        );
+    }
 });
 
 /**
@@ -73,6 +119,18 @@ function esNavegacion(request) {
 /** Solo estas URLs llevan hash de contenido en el nombre. */
 function tieneHashDeContenido(url) {
     return url.pathname.startsWith('/build/');
+}
+
+/**
+ * ¿Es la credencial? Se reconoce por el PATHNAME y nada más -no hace falta
+ * preguntarle nada al servidor-, porque el servidor ya separó esta ruta de
+ * `/adjuntos/{id}` puntualmente para que esto sea posible (ver
+ * AdjuntoController::showCredencial). El servidor es quien de verdad decide
+ * qué es cacheable, rechazando cualquier adjunto que no sea `credencial`;
+ * acá solo hace falta reconocer el camino.
+ */
+function esCredencial(url) {
+    return url.pathname.startsWith('/credenciales/');
 }
 
 /*
@@ -142,6 +200,37 @@ self.addEventListener('fetch', (evento) => {
                         return respuesta;
                     }),
             ),
+        );
+
+        return;
+    }
+
+    /*
+     * La credencial: red primero -para que un cambio de plan o una
+     * credencial nueva se vea apenas haya señal-, y la copia guardada como
+     * respaldo únicamente si la red falla. Es el mismo patrón que ya usa
+     * "todo lo demás" más abajo para lo estático, aplicado a esta única
+     * excepción de contenido clínico.
+     */
+    if (esCredencial(url)) {
+        evento.respondWith(
+            fetch(request)
+                .then((respuesta) => {
+                    if (respuesta.ok) {
+                        const copia = respuesta.clone();
+                        caches
+                            .open(CACHE_CREDENCIALES)
+                            .then((cache) => cache.put(request, copia));
+                    }
+
+                    return respuesta;
+                })
+                .catch(() =>
+                    caches
+                        .open(CACHE_CREDENCIALES)
+                        .then((cache) => cache.match(request))
+                        .then((r) => r ?? Response.error()),
+                ),
         );
 
         return;

@@ -84,7 +84,9 @@ class DashboardController extends Controller
                     'nombre' => $adjunto->nombre_original,
                     'mime' => $adjunto->mime,
                     'entidad' => $cobertura->entidad,
-                    'url' => route('adjuntos.show', $adjunto),
+                    // Ruta aparte y no `adjuntos.show`: es la única que el
+                    // service worker cachea para verse sin señal.
+                    'url' => route('credenciales.show', $adjunto),
                 ]))
             ->all();
 

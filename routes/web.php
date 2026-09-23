@@ -54,6 +54,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('adjuntos/{adjunto}', [AdjuntoController::class, 'destroy'])->name('adjuntos.destroy');
 
     /*
+     * Ruta APARTE para la credencial: es la única que el service worker
+     * cachea para verse sin señal (ver AdjuntoController::showCredencial).
+     * Separarla de /adjuntos/{adjunto} es lo que le permite al service
+     * worker reconocerla por el pathname, sin tener que consultarle nada al
+     * servidor para saber si algo es cacheable.
+     */
+    Route::get('credenciales/{adjunto}', [AdjuntoController::class, 'showCredencial'])
+        ->name('credenciales.show');
+
+    /*
      * Coberturas: no tienen index propio, viajan en el prop de la ficha del
      * paciente. store va bajo /pacientes/{paciente} porque hace falta saber
      * a quién pertenece; update y destroy van sobre su propio id, como los

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Enums\RolPaciente;
+use App\Enums\TipoAdjunto;
 use App\Http\Requests\PacienteGuardarRequest;
 use App\Models\Adjunto;
 use App\Models\Cobertura;
@@ -139,7 +140,18 @@ class PacienteController extends Controller
                             'mime' => $adjunto->mime,
                             'tamanio' => $adjunto->tamanio_bytes,
                             'tipo' => $adjunto->tipo->etiqueta(),
-                            'url' => route('adjuntos.show', $adjunto),
+                            /*
+                             * Por tipo y no siempre `credenciales.show`: hoy
+                             * todo lo que cuelga de una cobertura es
+                             * credencial, pero la ruta cacheable por el
+                             * service worker RECHAZA cualquier otra cosa (ver
+                             * AdjuntoController::showCredencial). Si el día de
+                             * mañana algo no-credencial termina colgado acá,
+                             * que siga sirviéndose, solo que sin cachear.
+                             */
+                            'url' => $adjunto->tipo === TipoAdjunto::Credencial
+                                ? route('credenciales.show', $adjunto)
+                                : route('adjuntos.show', $adjunto),
                         ])
                         ->all(),
                 ])

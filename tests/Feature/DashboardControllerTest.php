@@ -85,7 +85,7 @@ it('ofrece la credencial de una cobertura activa', function (): void {
             ->has('credenciales', 1)
             ->where('credenciales.0.entidad', 'OSDE')
             ->where('credenciales.0.nombre', 'frente.jpg')
-            ->where('credenciales.0.url', route('adjuntos.show', $adjunto))
+            ->where('credenciales.0.url', route('credenciales.show', $adjunto))
         );
 });
 

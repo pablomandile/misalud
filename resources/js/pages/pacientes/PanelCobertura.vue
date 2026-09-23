@@ -9,6 +9,7 @@ import SubirArchivo from '@/components/SubirArchivo.vue';
 import type { DocumentoVisible } from '@/components/VisorDocumento.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { olvidarCredencial } from '@/lib/cacheCredencial';
 import {
     Dialog,
     DialogClose,
@@ -77,6 +78,18 @@ function alCerrarSheet(abierto: boolean): void {
         coberturaEditando.value = null;
         emit('cerrar');
     }
+}
+
+/**
+ * Borrar la cobertura entera se lleva su credencial en cascada del lado del
+ * servidor, pero eso no libera lo que el service worker haya guardado: hay
+ * que avisarle por cada adjunto, uno por uno.
+ */
+function alBorrarCobertura(): void {
+    coberturaABorrar.value?.adjuntos.forEach((documento) =>
+        olvidarCredencial(documento.url),
+    );
+    coberturaABorrar.value = null;
 }
 </script>
 
@@ -216,6 +229,9 @@ function alCerrarSheet(abierto: boolean): void {
                                             })
                                         "
                                         :options="{ preserveScroll: true }"
+                                        @success="
+                                            olvidarCredencial(documento.url)
+                                        "
                                         v-slot="{ processing }"
                                     >
                                         <Button
@@ -619,7 +635,7 @@ function alCerrarSheet(abierto: boolean): void {
                     })
                 "
                 :options="{ preserveScroll: true }"
-                @success="coberturaABorrar = null"
+                @success="alBorrarCobertura"
                 v-slot="{ processing }"
             >
                 <DialogHeader class="space-y-3">

@@ -337,7 +337,7 @@ it('la ficha del paciente trae la credencial anidada en su cobertura', function 
     $usuario = User::factory()->create();
     $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
     $cobertura = Cobertura::factory()->for($paciente)->create(['entidad' => 'OSDE']);
-    $cobertura->adjuntos()->create([
+    $adjunto = $cobertura->adjuntos()->create([
         'tipo' => TipoAdjunto::Credencial,
         'ruta' => 'coberturas/1/frente.cif',
         'nombre_original' => 'frente.jpg',
@@ -353,7 +353,37 @@ it('la ficha del paciente trae la credencial anidada en su cobertura', function 
             ->where('pacientes.0.coberturas.0.entidad', 'OSDE')
             ->has('pacientes.0.coberturas.0.adjuntos', 1)
             ->where('pacientes.0.coberturas.0.adjuntos.0.tipo', 'Credencial')
+            /*
+             * Por la ruta APARTE, cacheable por el service worker -no
+             * `adjuntos.show`-, que es la que sirve solo credenciales.
+             */
+            ->where(
+                'pacientes.0.coberturas.0.adjuntos.0.url',
+                route('credenciales.show', $adjunto),
+            )
         );
+});
+
+it('un adjunto no-credencial colgado de una cobertura usa la ruta general, no la cacheable', function (): void {
+    // Caso defensivo: hoy nada sube algo así, pero si algún día pasa, tiene
+    // que seguir sirviéndose -solo que sin la excepción de caché-.
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+    $cobertura = Cobertura::factory()->for($paciente)->create();
+    $adjunto = $cobertura->adjuntos()->create([
+        'tipo' => TipoAdjunto::Otro,
+        'ruta' => 'coberturas/1/algo.cif',
+        'nombre_original' => 'algo.pdf',
+        'mime' => 'application/pdf',
+        'tamanio_bytes' => 1024,
+    ]);
+
+    $this->actingAs($usuario)
+        ->get(route('pacientes.index'))
+        ->assertInertia(fn ($p) => $p->where(
+            'pacientes.0.coberturas.0.adjuntos.0.url',
+            route('adjuntos.show', $adjunto),
+        ));
 });
 
 it('un lector NO puede subir la credencial', function (): void {
