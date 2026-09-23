@@ -156,8 +156,10 @@ mail), en el `nombre_hash` de cada catálogo (unique por `usuario_id`) y en
 
 ### Reglas que se siguen de esto
 
-- **Las columnas cifradas son `text`**, nunca `varchar` con índice: el payload es JSON+base64
-  y pesa ~3× el original más unos 200 bytes.
+- **Las columnas cifradas son `text`**, nunca `varchar`. Medido sobre este proyecto: el
+  payload es JSON+base64 y cuesta **~190 bytes fijos más ~1.8× el original**. Un campo de
+  10 caracteres ocupa 200 bytes; uno de 200 ocupa 544. Un `TEXT` (64 KB) aguanta unos
+  **36 KB de texto en claro**, que es el techo real de una nota larga.
 - **Buscar y ordenar se hace en PHP**, no en SQL. Los catálogos de una persona son decenas de
   filas: se traen todas las del usuario y se filtran en memoria. No hay búsqueda por texto
   dentro de las notas.
@@ -343,6 +345,42 @@ pestaña inactiva y después la restaura, esa navegación es de historial y reus
    medición la deja vieja al día siguiente. Lo mismo el IMC, que sale de peso y altura.
 5. Los catálogos con `usuario_id` NULL son semilla compartida: no se editan, se duplican.
 
+## Sondas: lo que se verificó contra el server real
+
+Dos riesgos se midieron antes de construir encima, no después.
+
+### IMAP saliente — despejado
+
+`php artisan misalud:sonda-imap` abre la conexión y lee el saludo, **sin usar credenciales**.
+Corrido en el hosting compartido (23/09/2026):
+
+|                                   |                                                      |
+| --------------------------------- | ---------------------------------------------------- |
+| `imap.gmail.com:993`              | **abierto**, 120 ms, `* OK Gimap ready for requests` |
+| `imap.gmail.com:143`              | bloqueado (timeout) — no importa, se usa TLS         |
+| `smtp.gmail.com:587`              | abierto, 131 ms                                      |
+| PHP del server                    | 8.4.19 en `/opt/alt/php84/usr/bin/php`               |
+| Extensiones de `webklex/php-imap` | las siete, presentes                                 |
+
+Era el riesgo que podía tumbar el módulo de recetas entero: muchos hostings compartidos
+bloquean todo lo saliente menos 80/443/587. **No hace falta `ext-imap`** — PHP 8.4 la sacó del
+core y el paquete habla el protocolo por sockets.
+
+El comando queda como diagnóstico: cuando la sincronización deje de andar, separa "es la red"
+de "son las credenciales o el código" sin tocar una casilla.
+
+### Cifrado sobre MySQL — despejado
+
+El grueso de la suite corre en sqlite en memoria, que es permisivo con cosas que MySQL
+rechaza. `CifradoEnMysqlTest` va contra el motor real y verifica el round-trip con acentos y
+eñes, que lo guardado sea ilegible, que el `UNIQUE` sobre `char(64)` frene el duplicado, que
+una nota de 8 KB no se trunque y que el payload **no entre en un `varchar(255)`**.
+
+Se saltea solo si no hay MySQL a mano. **Ojo con `phpunit.xml`**: fija `DB_DATABASE=:memory:`
+y eso pisa también el nombre de base de la conexión MySQL, que queda apuntando a una base
+llamada `:memory:`. El test lo corrige antes de conectar; sin eso se saltea siempre y parece
+que no hay MySQL.
+
 ## Comandos
 
 ```bash
@@ -352,6 +390,9 @@ php artisan test          # Pest
 npm run check:fix         # formato + lint del front
 npm run types:check       # vue-tsc
 npm run dev               # Vite
+
+php artisan misalud:sonda-imap   # ¿sale el 993 desde acá?
+php artisan misalud:recifrar     # rotar APP_KEY (--seco para ensayar)
 ```
 
 **Antes de pushear, correr `composer ci:check`** — es exactamente lo que corre el CI.
@@ -363,7 +404,8 @@ MySQL local lo levanta Laragon. Si no está corriendo, `artisan migrate` falla c
 
 Hecho: andamiaje (Laravel 13 + Inertia 3 + Fortify + Wayfinder, MySQL, Pest 4), todo el texto
 visible en español rioplatense, y la capa de cifrado (`CifraDatos`, `CifraCampos`,
-`ConsultaVigilada`, `misalud:recifrar` y su guardia).
+`ConsultaVigilada`, `misalud:recifrar` y su guardia), con las dos sondas de riesgo
+despejadas.
 
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de

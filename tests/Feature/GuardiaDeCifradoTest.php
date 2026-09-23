@@ -52,8 +52,8 @@ function problemasDeCifrado(Model&CifraDatos $modelo): array
 
         if (! Str::contains($tipo, ['text', 'blob'])) {
             $problemas[] = sprintf(
-                'la columna cifrada [%s.%s] es %s: el payload cifrado es JSON+base64 y pesa unas tres '
-                .'veces el original más ~200 bytes, así que va en `text`.',
+                'la columna cifrada [%s.%s] es %s: el payload cifrado ocupa ~190 bytes fijos más '
+                    .'~1.8× el original, así que va en `text`.',
                 $tabla,
                 $columna,
                 $tipo,
