@@ -105,6 +105,26 @@ class MedicionGuardarRequest extends FormRequest
                 ),
             ],
 
+            /*
+             * Opcional: la enfermedad que se sigue con esta medición.
+             *
+             * Tiene que ser **del mismo paciente**. Sin esa condición, un
+             * id de otra ficha vincularía una presión ajena a una
+             * enfermedad de acá: la curva de esa enfermedad mostraría
+             * valores de otra persona, y nada lo delataría en pantalla.
+             * Acá no hace falta agrupar ningún OR —una enfermedad pertenece
+             * a un solo paciente—, así que es una condición sola.
+             */
+            'enfermedad_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('enfermedades', 'id')->where(
+                    fn (Builder $consulta) => $consulta
+                        ->whereNull('deleted_at')
+                        ->where('paciente_id', $this->pacienteId()),
+                ),
+            ],
+
             'fecha' => ['required', 'date', $this->noPuedeSerFutura()],
 
             'valor' => ['required', 'numeric'],
@@ -232,6 +252,7 @@ class MedicionGuardarRequest extends FormRequest
     {
         return [
             'tipo_medicion_id' => 'tipo de medición',
+            'enfermedad_id' => 'enfermedad',
             'fecha' => 'fecha',
             'valor' => 'valor',
             'valor_secundario' => 'segundo valor',

@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Requests\MedicionGuardarRequest;
+use App\Models\Enfermedad;
 use App\Models\Medicion;
 use App\Models\Paciente;
 use App\Models\TipoMedicion;
-use App\Models\User;
+use App\Services\SeriesDeMediciones;
 use App\Support\CatalogoVisible;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Collection;
@@ -26,6 +27,8 @@ use Inertia\Response;
  */
 class MedicionController extends Controller
 {
+    public function __construct(private readonly SeriesDeMediciones $series) {}
+
     /**
      * Las mediciones de un paciente, de la más nueva a la más vieja.
      *
@@ -52,7 +55,8 @@ class MedicionController extends Controller
                 'puedeEditar' => $paciente->rolDe($usuario)?->puedeEditar() ?? false,
             ],
             'tipos' => $this->tiposDisponibles($paciente),
-            'series' => $this->series($mediciones, $usuario),
+            'enfermedades' => $this->enfermedadesDeLaFicha($paciente),
+            'series' => $this->series->armar($mediciones, $usuario),
             'imc' => $this->imc($mediciones),
 
             /*
@@ -110,7 +114,13 @@ class MedicionController extends Controller
     private function datos(MedicionGuardarRequest $peticion): array
     {
         return [
-            ...$peticion->safe(['tipo_medicion_id', 'valor', 'valor_secundario', 'notas']),
+            ...$peticion->safe([
+                'tipo_medicion_id',
+                'enfermedad_id',
+                'valor',
+                'valor_secundario',
+                'notas',
+            ]),
             'fecha' => $peticion->fechaEnUtc(),
         ];
     }
@@ -165,79 +175,25 @@ class MedicionController extends Controller
     }
 
     /**
-     * Las mediciones agrupadas POR VARIABLE, cada una con sus puntos para el
-     * gráfico y su resumen.
+     * Las enfermedades de esta ficha, para poder vincular una medición.
      *
-     * Agrupadas y no en una lista cronológica única porque lo que se mira
-     * acá es la evolución de cada cosa: un peso entre dos presiones no dice
-     * nada. Y porque es lo que el gráfico necesita.
+     * Solo del mismo paciente: es lo mismo que valida el FormRequest.
+     * Vincular una medición a la enfermedad de otra persona haría que la
+     * curva de esa enfermedad mostrara valores ajenos.
      *
-     * ⚠️ **Las cuentas van en PHP, nunca en SQL.** `valor` está cifrado: no
-     * existe `AVG()`, ni `MIN()`, ni `ORDER BY valor` sobre esa columna —
-     * devolverían basura sin dar error—. Se traen las filas (son decenas) y
-     * se cuenta acá sobre los valores ya descifrados.
-     *
-     * @param  Collection<int, Medicion>  $mediciones
      * @return list<array<string, mixed>>
      */
-    private function series(Collection $mediciones, ?User $usuario): array
+    private function enfermedadesDeLaFicha(Paciente $paciente): array
     {
-        return array_values($mediciones
-            ->groupBy('tipo_medicion_id')
-            ->map(function (Collection $delTipo) use ($usuario): array {
-                /** @var Medicion $primera */
-                $primera = $delTipo->first();
-                $tipo = $primera->tipo;
-
-                $valores = $delTipo->map(fn (Medicion $m): float => $m->valorNumerico());
-                $secundarios = $delTipo
-                    ->map(fn (Medicion $m): ?float => $m->valorSecundarioNumerico())
-                    ->filter(fn (?float $v): bool => $v !== null);
-
-                return [
-                    'tipoId' => $tipo->id,
-                    'nombre' => $tipo->nombre,
-                    'unidad' => $tipo->unidad,
-                    'unidadSecundaria' => $tipo->unidadSecundariaVisible(),
-                    'etiquetaPrincipal' => $tipo->etiquetaPrincipalVisible(),
-                    'etiquetaSecundaria' => $tipo->etiqueta_secundaria,
-                    'tieneValorSecundario' => $tipo->tieneValorSecundario(),
-                    'decimales' => $tipo->decimales,
-                    'minNormal' => $tipo->min_normal,
-                    'maxNormal' => $tipo->max_normal,
-                    'minNormalSecundario' => $tipo->min_normal_secundario,
-                    'maxNormalSecundario' => $tipo->max_normal_secundario,
-
-                    /*
-                     * El resumen: mínimo, máximo y promedio, calculados en la
-                     * colección. Redondeados a los decimales del tipo para que
-                     * no aparezca un promedio de peso con catorce cifras.
-                     */
-                    'resumen' => [
-                        'cantidad' => $delTipo->count(),
-                        'minimo' => $tipo->formatear($valores->min()),
-                        'maximo' => $tipo->formatear($valores->max()),
-                        'promedio' => $tipo->formatear(
-                            $valores->count() > 0 ? $valores->avg() : null,
-                        ),
-                        'minimoSecundario' => $tipo->formatear($secundarios->min()),
-                        'maximoSecundario' => $tipo->formatear($secundarios->max()),
-                        'promedioSecundario' => $tipo->formatear(
-                            $secundarios->count() > 0 ? $secundarios->avg() : null,
-                        ),
-                    ],
-
-                    // De la más nueva a la más vieja, igual que llegan.
-                    'mediciones' => $delTipo
-                        ->map(fn (Medicion $m): array => $this->serializar($m, $usuario))
-                        ->values()
-                        ->all(),
-                ];
-            })
-            // Arriba la variable con la medición más reciente: es la que la
-            // persona viene siguiendo.
-            ->sortByDesc(fn (array $serie): string => $serie['mediciones'][0]['fechaIso'])
+        return array_values($paciente->enfermedades()
+            ->get()
+            // En PHP: `nombre` está cifrado.
+            ->sortBy(fn (Enfermedad $enfermedad): string => mb_strtolower($enfermedad->nombre))
             ->values()
+            ->map(fn (Enfermedad $enfermedad): array => [
+                'id' => $enfermedad->id,
+                'nombre' => $enfermedad->nombre,
+            ])
             ->all());
     }
 
@@ -282,50 +238,6 @@ class MedicionController extends Controller
             'valor' => number_format($peso->valorNumerico() / ($metros ** 2), 1, ',', '.'),
             'pesoUsado' => $peso->tipo->formatear($peso->valorNumerico()).' '.$peso->tipo->unidad,
             'alturaUsada' => $altura->tipo->formatear($altura->valorNumerico()).' '.$altura->tipo->unidad,
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function serializar(Medicion $medicion, ?User $usuario): array
-    {
-        $tipo = $medicion->tipo;
-        $enSuZona = $usuario?->enSuZona($medicion->fecha) ?? $medicion->fecha;
-
-        return [
-            'id' => $medicion->id,
-            'tipo_medicion_id' => $medicion->tipo_medicion_id,
-            'tipoNombre' => $tipo->nombre,
-            'unidad' => $tipo->unidad,
-            'unidadSecundaria' => $tipo->unidadSecundariaVisible(),
-            'etiquetaPrincipal' => $tipo->etiquetaPrincipalVisible(),
-            'etiquetaSecundaria' => $tipo->etiqueta_secundaria,
-
-            /*
-             * Tres formas de la misma fecha, cada una para algo distinto:
-             * la legible para mostrar, la del `datetime-local` para editar,
-             * y el ISO para ordenar o agrupar en el cliente. Las tres salen
-             * de la zona de quien mira, no de UTC.
-             */
-            'fechaVisible' => $enSuZona->format('d/m/Y H:i'),
-            'fechaLocal' => $enSuZona->format('Y-m-d\TH:i'),
-            'fechaIso' => $enSuZona->toIso8601String(),
-
-            /*
-             * El número va en las dos formas a propósito: `valor` como float
-             * para el gráfico del paso 6.3, y `valorVisible` ya formateado
-             * con los decimales que declara el tipo y con coma decimal. La
-             * columna está cifrada, así que lo que sale del modelo es un
-             * STRING —ver el comentario de `Medicion`—: mandarlo crudo
-             * invitaría a ordenar o comparar texto del lado del cliente.
-             */
-            'valor' => $medicion->valorNumerico(),
-            'valorVisible' => $tipo->formatear($medicion->valorNumerico()),
-            'valorSecundario' => $medicion->valorSecundarioNumerico(),
-            'valorSecundarioVisible' => $tipo->formatear($medicion->valorSecundarioNumerico()),
-
-            'notas' => $medicion->notas,
         ];
     }
 }

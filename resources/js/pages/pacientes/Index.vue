@@ -4,12 +4,14 @@ import {
     Activity,
     CreditCard,
     FileText,
+    HeartPulse,
     Plus,
     Trash2,
     UserRound,
 } from '@lucide/vue';
 import { ref } from 'vue';
 import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
+import EnfermedadController from '@/actions/App/Http/Controllers/EnfermedadController';
 import MedicionController from '@/actions/App/Http/Controllers/MedicionController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
 import Heading from '@/components/Heading.vue';
@@ -224,6 +226,21 @@ function edadTexto(p: Paciente): string {
                                 <Activity />
                                 <span class="sr-only">
                                     Mediciones de {{ paciente.nombre }}
+                                </span>
+                            </Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" as-child>
+                            <Link
+                                :href="
+                                    EnfermedadController.index({
+                                        paciente: paciente.id,
+                                    })
+                                "
+                            >
+                                <HeartPulse />
+                                <span class="sr-only">
+                                    Enfermedades y alergias de
+                                    {{ paciente.nombre }}
                                 </span>
                             </Link>
                         </Button>

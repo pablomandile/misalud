@@ -940,6 +940,82 @@ Sirve igual para un builder de Eloquent y para el crudo de `Rule::exists()`.
 ⚠️ En `Rule::exists()` hay que agregar **`whereNull('deleted_at')` a mano**: esa regla va
 contra la tabla cruda y no filtra soft deletes como Eloquent.
 
+## Enfermedades, bitácora y alergias
+
+Tres tablas y **una sola pantalla** por paciente
+(`/pacientes/{paciente}/enfermedades`): son pocas filas cada una, se consultan juntas, y a la
+ficha del paciente ya se le colgaban cuatro botones. Ni la bitácora ni las alergias tienen
+`index` propio —viajan como prop—, el mismo patrón que las coberturas.
+
+**Las alergias van arriba**, aunque sean menos: es lo que alguien busca apurado.
+
+### ⚠️ En la bitácora NO van números medibles
+
+Tentaba darle `valor` y `unidad` a `registros_enfermedad` para poder anotar "hoy 140/90" sin
+salir de la ficha, y sería un error: el mismo dato viviría en dos tablas y **la curva de
+presión saldría partida según dónde se lo cargó ese día**.
+
+Los números van a `mediciones`, que apunta a la enfermedad por `enfermedad_id`. Así la ficha
+de la enfermedad muestra su propia curva sin duplicar nada, y el promedio es el mismo se lo
+mire desde donde se lo mire —lo arma el mismo `SeriesDeMediciones` que la pantalla de
+mediciones—.
+
+- **`mediciones.enfermedad_id` tiene que ser del MISMO paciente**, y lo valida el FormRequest.
+  Sin esa condición, un id de otra ficha vincularía una presión ajena a una enfermedad de acá:
+  la curva mostraría valores de otra persona y nada lo delataría en pantalla.
+- **Borrar la enfermedad no borra las mediciones** (`nullOnDelete`): el peso de ese día sigue
+  siendo el peso de ese día. Lo que se pierde es el vínculo.
+- **Borrar la enfermedad SÍ se lleva su bitácora** (`cascadeOnDelete`): una anotación no
+  existe sin su enfermedad.
+- La bitácora **no se edita**, solo se agrega y se borra. Corregir el pasado en silencio es
+  justo lo que no quiere una historia clínica.
+
+### Cuándo bloquear el borrado de un catálogo y cuándo dejarlo ir
+
+Es la segunda FK del proyecto que apunta a un catálogo, y va distinto que la primera. La regla
+que queda, para las que vengan:
+
+> **Bloquear el borrado cuando la referencia es imprescindible para leer el registro; dejarla
+> ir cuando es metadato.**
+
+| FK                            | Qué pasa si falta                        | Decisión                                     |
+| ----------------------------- | ---------------------------------------- | -------------------------------------------- |
+| `mediciones.tipo_medicion_id` | Un número sin unidad ni nombre: ilegible | `restrictOnDelete` + el controlador lo frena |
+| `enfermedades.medico_id`      | Una enfermedad sin médico: se lee igual  | `nullOnDelete`, sobrevive sin él             |
+
+Para el caso normal —un **soft delete** del catálogo— ninguna de las dos alcanza: la fila
+sigue existiendo y la FK no se entera. Eso lo cubre el `withTrashed()` de la relación, igual
+que en `Medicion::tipo()`.
+
+### El resto de las decisiones
+
+- **`estado` tiene tres casos y no dos.** "Crónica" es algo que la gente dice y que no es ni
+  activa-que-va-a-terminar ni resuelta: una diabetes no se cura ni se está esperando que se
+  cure. Separarla deja que la pantalla muestre primero lo vigente sin que una hipertensión de
+  hace diez años aparezca como un cuadro reciente. `estaVigente()` es lo que agrupa.
+- **`alergias.sustancia` lleva índice ciego y UNIQUE por paciente**; `enfermedades.nombre`
+  **no**. Dos neumonías en años distintos son dos enfermedades, no una cargada dos veces; dos
+  "Penicilina" con severidades distintas no dejarían saber cuál vale.
+- **`RegistroEnfermedad` es el primer registro clínico que llega a su paciente en DOS pasos**
+  —sube por `enfermedad` y recién ahí lo encuentra—. Es exactamente para lo que
+  `PerteneceAPaciente` pide un método y no una relación: con un `BelongsTo` obligatorio, esto
+  no podría cumplirlo.
+- **Anotar en la bitácora pide `update` sobre la enfermedad**, no un permiso propio: misma
+  regla que los adjuntos con su dueño.
+- La severidad de una alergia **se muestra como texto, nunca como un semáforo de colores**: es
+  lo que cargó la persona, no un juicio del sistema (regla 1).
+
+### `FechaNoFutura`: la trampa de `hoyCalendario()`, envuelta
+
+Las dos fechas de esta etapa son de **calendario** (`date`), no instantes. Validar "no
+futura" comparando contra `hoy()` —que es la medianoche local expresada en UTC— corre la
+comparación tres horas y, **entre las 21:00 y la medianoche argentina, rechaza el día de hoy
+por futuro**. No da ningún síntoma hasta que alguien carga algo de noche.
+
+Por eso la comparación vive en una regla y no repetida en cada FormRequest. Para un
+`datetime` la regla es otra —hace falta la zona y un margen para el reloj del dispositivo—: eso
+sigue en `MedicionGuardarRequest`.
+
 ## Cobertura médica
 
 `coberturas` es tabla propia y no columnas en `pacientes`: mucha gente tiene obra social y
@@ -1304,9 +1380,32 @@ componente dibuja un enlace de verdad -con un solo nivel, el último tramo es
 texto-. Arreglado en la primitiva, con el mismo criterio que el checkbox:
 área de 44 px sin cambiar el tamaño del texto.
 
-⚠️ **La pantalla de mediciones no entra en `npm run revisar:mobile`**: la ruta
-necesita el id de un paciente y el script recorre rutas fijas. Se verificó con
-un script aparte; si se toca esa pantalla, hay que repetirlo a mano.
+⚠️ **Las pantallas por paciente no entran en `npm run revisar:mobile`**:
+mediciones y enfermedades necesitan el id de un paciente en la ruta y el
+script recorre rutas fijas. Las dos se verificaron con un script aparte —18
+combinaciones de ancho × tamaño de letra × orientación cada una, sin
+desborde—; si se las toca, hay que repetirlo a mano.
+
+**Etapa 7 hecha**: enfermedades con su bitácora, la curva de las mediciones
+que las siguen, y alergias. Todo en una pantalla por paciente, con las
+alergias arriba.
+
+Lo que se decidió acá y vale para lo que viene: los números NO van en la
+bitácora —van a `mediciones` y apuntan a la enfermedad, o la curva de presión
+sale partida según dónde se cargó—, y la regla de cuándo bloquear el borrado
+de un catálogo (imprescindible) y cuándo dejarlo ir (metadato). También quedó
+`SeriesDeMediciones` como servicio, porque el armado de series pasó a tener
+dos consumidores y dos copias serían dos promedios distintos.
+
+`mediciones.enfermedad_id` llegó recién ahora, y es a propósito: en el paso
+6.1 la tabla `enfermedades` no existía, así que la columna habría quedado sin
+FK, sin validación y sin un test que la protegiera. Sumarla después no costó
+ningún backfill.
+
+Verificado en Chrome: la curva **dibuja** en la ficha de la enfermedad (60717
+píxeles), el promedio coincide con el de la pantalla de mediciones, la
+bitácora anota con la fecha de hoy y el selector de enfermedad aparece al
+cargar una medición.
 
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de

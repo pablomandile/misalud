@@ -63,6 +63,13 @@ class Medicion extends Model implements CifraDatos, PerteneceAPaciente
      */
     protected $fillable = [
         'tipo_medicion_id',
+        /*
+         * Opcional: la enfermedad que se está siguiendo con esta medición.
+         * SÍ es fillable -a diferencia de `paciente_id`- porque no decide
+         * ninguna autorización: es un vínculo entre dos registros del MISMO
+         * paciente, y que sean del mismo lo valida el FormRequest.
+         */
+        'enfermedad_id',
         'fecha',
         'valor',
         'valor_secundario',
@@ -113,6 +120,16 @@ class Medicion extends Model implements CifraDatos, PerteneceAPaciente
     public function tipo(): BelongsTo
     {
         return $this->belongsTo(TipoMedicion::class, 'tipo_medicion_id')->withTrashed();
+    }
+
+    /**
+     * La enfermedad que se sigue con esta medición, si hay alguna.
+     *
+     * @return BelongsTo<Enfermedad, $this>
+     */
+    public function enfermedad(): BelongsTo
+    {
+        return $this->belongsTo(Enfermedad::class);
     }
 
     public function pacienteDelRegistro(): ?Paciente

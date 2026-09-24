@@ -60,6 +60,7 @@ type Punto = {
 type Medicion = Punto & {
     id: number;
     tipo_medicion_id: number;
+    enfermedad_id: number | null;
     tipoNombre: string;
     unidad: string;
     unidadSecundaria: string;
@@ -122,6 +123,7 @@ type Imc = {
 const props = defineProps<{
     paciente: { id: number; nombre: string; puedeEditar: boolean };
     tipos: Tipo[];
+    enfermedades: Array<{ id: number; nombre: string }>;
     series: Serie[];
     imc: Imc | null;
     ahoraLocal: string | null;
@@ -541,6 +543,33 @@ watch(sheetAbierto, async (abierto) => {
                             <InputError :message="errors.fecha" />
                         </div>
 
+                        <!--
+                            Opcional: vincular la medición a una enfermedad
+                            que se esté siguiendo. Así la ficha de esa
+                            enfermedad muestra su curva sin que el número
+                            viva en dos tablas.
+                        -->
+                        <div v-if="enfermedades.length > 0" class="grid gap-2">
+                            <Label for="enfermedad-crear">
+                                ¿Es por alguna enfermedad?
+                            </Label>
+                            <select
+                                id="enfermedad-crear"
+                                name="enfermedad_id"
+                                :class="campoUnaLinea"
+                            >
+                                <option value="">No, es de rutina</option>
+                                <option
+                                    v-for="enfermedad in enfermedades"
+                                    :key="enfermedad.id"
+                                    :value="enfermedad.id"
+                                >
+                                    {{ enfermedad.nombre }}
+                                </option>
+                            </select>
+                            <InputError :message="errors.enfermedad_id" />
+                        </div>
+
                         <div class="grid gap-2">
                             <Label for="notas-crear">Notas</Label>
                             <textarea
@@ -662,6 +691,28 @@ watch(sheetAbierto, async (abierto) => {
                                 :class="campoUnaLinea"
                             />
                             <InputError :message="errors.fecha" />
+                        </div>
+
+                        <div v-if="enfermedades.length > 0" class="grid gap-2">
+                            <Label for="enfermedad-editar">
+                                ¿Es por alguna enfermedad?
+                            </Label>
+                            <select
+                                id="enfermedad-editar"
+                                name="enfermedad_id"
+                                :value="medicionAEditar.enfermedad_id ?? ''"
+                                :class="campoUnaLinea"
+                            >
+                                <option value="">No, es de rutina</option>
+                                <option
+                                    v-for="enfermedad in enfermedades"
+                                    :key="enfermedad.id"
+                                    :value="enfermedad.id"
+                                >
+                                    {{ enfermedad.nombre }}
+                                </option>
+                            </select>
+                            <InputError :message="errors.enfermedad_id" />
                         </div>
 
                         <div class="grid gap-2">

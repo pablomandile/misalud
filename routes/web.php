@@ -1,15 +1,18 @@
 <?php
 
 use App\Http\Controllers\AdjuntoController;
+use App\Http\Controllers\AlergiaController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\CentroController;
 use App\Http\Controllers\CoberturaController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EnfermedadController;
 use App\Http\Controllers\MedicamentoController;
 use App\Http\Controllers\MedicionController;
 use App\Http\Controllers\MedicoController;
 use App\Http\Controllers\PacienteActivoController;
 use App\Http\Controllers\PacienteController;
+use App\Http\Controllers\RegistroEnfermedadController;
 use App\Http\Controllers\Settings\TamanioTextoController;
 use App\Http\Controllers\TipoMedicionController;
 use App\Http\Controllers\VacunaController;
@@ -142,6 +145,30 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('pacientes.mediciones.store');
     Route::put('mediciones/{medicion}', [MedicionController::class, 'update'])->name('mediciones.update');
     Route::delete('mediciones/{medicion}', [MedicionController::class, 'destroy'])->name('mediciones.destroy');
+
+    /*
+     * Enfermedades, su bitácora y las alergias: una sola pantalla por
+     * paciente. Ni la bitácora ni las alergias tienen `index` propio —viajan
+     * como prop—, el mismo patrón que las coberturas.
+     */
+    Route::get('pacientes/{paciente}/enfermedades', [EnfermedadController::class, 'index'])
+        ->name('pacientes.enfermedades.index');
+    Route::post('pacientes/{paciente}/enfermedades', [EnfermedadController::class, 'store'])
+        ->name('pacientes.enfermedades.store');
+    Route::put('enfermedades/{enfermedad}', [EnfermedadController::class, 'update'])
+        ->name('enfermedades.update');
+    Route::delete('enfermedades/{enfermedad}', [EnfermedadController::class, 'destroy'])
+        ->name('enfermedades.destroy');
+
+    Route::post('enfermedades/{enfermedad}/registros', [RegistroEnfermedadController::class, 'store'])
+        ->name('enfermedades.registros.store');
+    Route::delete('registros-enfermedad/{registro}', [RegistroEnfermedadController::class, 'destroy'])
+        ->name('registros-enfermedad.destroy');
+
+    Route::post('pacientes/{paciente}/alergias', [AlergiaController::class, 'store'])
+        ->name('pacientes.alergias.store');
+    Route::put('alergias/{alergia}', [AlergiaController::class, 'update'])->name('alergias.update');
+    Route::delete('alergias/{alergia}', [AlergiaController::class, 'destroy'])->name('alergias.destroy');
 
     Route::get('pacientes', [PacienteController::class, 'index'])->name('pacientes.index');
     Route::post('pacientes', [PacienteController::class, 'store'])->name('pacientes.store');
