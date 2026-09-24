@@ -7,6 +7,7 @@ use App\Http\Controllers\CentroController;
 use App\Http\Controllers\CoberturaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EnfermedadController;
+use App\Http\Controllers\EstudioController;
 use App\Http\Controllers\MedicamentoController;
 use App\Http\Controllers\MedicionController;
 use App\Http\Controllers\MedicoController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\OrdenEstudioController;
 use App\Http\Controllers\PacienteActivoController;
 use App\Http\Controllers\PacienteController;
 use App\Http\Controllers\RegistroEnfermedadController;
+use App\Http\Controllers\ResultadoEstudioController;
 use App\Http\Controllers\Settings\TamanioTextoController;
 use App\Http\Controllers\TipoMedicionController;
 use App\Http\Controllers\TratamientoController;
@@ -185,6 +187,27 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('ordenes/{orden}', [OrdenEstudioController::class, 'destroy'])->name('ordenes.destroy');
     Route::post('ordenes/{orden}/adjuntos', [AdjuntoController::class, 'storeParaOrden'])
         ->name('ordenes.adjuntos.store');
+
+    /*
+     * Estudios: lo que se hizo, después de la orden. Los resultados no
+     * tienen index propio -viajan anidados en la ficha del estudio-, mismo
+     * patrón que la bitácora de una enfermedad.
+     */
+    Route::get('pacientes/{paciente}/estudios', [EstudioController::class, 'index'])
+        ->name('pacientes.estudios.index');
+    Route::post('pacientes/{paciente}/estudios', [EstudioController::class, 'store'])
+        ->name('pacientes.estudios.store');
+    Route::put('estudios/{estudio}', [EstudioController::class, 'update'])->name('estudios.update');
+    Route::delete('estudios/{estudio}', [EstudioController::class, 'destroy'])->name('estudios.destroy');
+    Route::post('estudios/{estudio}/adjuntos', [AdjuntoController::class, 'storeParaEstudio'])
+        ->name('estudios.adjuntos.store');
+
+    Route::post('estudios/{estudio}/resultados', [ResultadoEstudioController::class, 'store'])
+        ->name('estudios.resultados.store');
+    Route::put('resultados/{resultado}', [ResultadoEstudioController::class, 'update'])
+        ->name('resultados.update');
+    Route::delete('resultados/{resultado}', [ResultadoEstudioController::class, 'destroy'])
+        ->name('resultados.destroy');
 
     Route::get('pacientes/{paciente}/tratamientos', [TratamientoController::class, 'index'])
         ->name('pacientes.tratamientos.index');

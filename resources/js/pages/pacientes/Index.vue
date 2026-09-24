@@ -4,6 +4,7 @@ import {
     Activity,
     ClipboardList,
     CreditCard,
+    FlaskConical,
     FileText,
     HeartPulse,
     Pill,
@@ -14,6 +15,7 @@ import {
 import { ref } from 'vue';
 import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
 import EnfermedadController from '@/actions/App/Http/Controllers/EnfermedadController';
+import EstudioController from '@/actions/App/Http/Controllers/EstudioController';
 import MedicionController from '@/actions/App/Http/Controllers/MedicionController';
 import OrdenEstudioController from '@/actions/App/Http/Controllers/OrdenEstudioController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
@@ -273,6 +275,20 @@ function edadTexto(p: Paciente): string {
                                 <ClipboardList />
                                 <span class="sr-only">
                                     Órdenes de estudio de {{ paciente.nombre }}
+                                </span>
+                            </Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" as-child>
+                            <Link
+                                :href="
+                                    EstudioController.index({
+                                        paciente: paciente.id,
+                                    })
+                                "
+                            >
+                                <FlaskConical />
+                                <span class="sr-only">
+                                    Estudios de {{ paciente.nombre }}
                                 </span>
                             </Link>
                         </Button>

@@ -165,6 +165,14 @@ class Paciente extends Model implements CifraDatos, TieneArchivos
     }
 
     /**
+     * @return HasMany<Estudio, $this>
+     */
+    public function estudios(): HasMany
+    {
+        return $this->hasMany(Estudio::class);
+    }
+
+    /**
      * La edad NO se guarda: se deriva de `fecha_nacimiento` en cada request.
      * Guardarla como dato dejaría desactualizada a toda ficha al día
      * siguiente de cargada.

@@ -32,6 +32,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property int $id
  * @property int $paciente_id
  * @property int|null $medico_id
+ * @property int|null $estudio_id
  * @property string $estudio_solicitado
  * @property CarbonImmutable $fecha
  * @property EstadoOrdenEstudio $estado
@@ -56,6 +57,10 @@ class OrdenEstudio extends Model implements CifraDatos, PerteneceAPaciente, Tien
     /*
      * `paciente_id` NO es fillable: es la FK de la que depende toda la
      * autorización. Se crea por la relación del paciente.
+     *
+     * `estudio_id` TAMPOCO es fillable: no lo escribe un formulario de la
+     * orden, lo escribe `EstudioController::store()` al vincular -es una
+     * relación de una sola dirección, ver el comentario de la migración-.
      */
     protected $fillable = [
         'medico_id',
@@ -106,6 +111,16 @@ class OrdenEstudio extends Model implements CifraDatos, PerteneceAPaciente, Tien
     public function medico(): BelongsTo
     {
         return $this->belongsTo(Medico::class)->withTrashed();
+    }
+
+    /**
+     * El estudio que la resuelve, si ya se hizo y se vinculó.
+     *
+     * @return BelongsTo<Estudio, $this>
+     */
+    public function estudio(): BelongsTo
+    {
+        return $this->belongsTo(Estudio::class);
     }
 
     public function pacienteDelRegistro(): ?Paciente

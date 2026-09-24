@@ -9,6 +9,7 @@ use App\Enums\TipoAdjunto;
 use App\Http\Requests\AdjuntoStoreRequest;
 use App\Models\Adjunto;
 use App\Models\Cobertura;
+use App\Models\Estudio;
 use App\Models\Medicamento;
 use App\Models\OrdenEstudio;
 use App\Models\Paciente;
@@ -76,11 +77,20 @@ class AdjuntoController extends Controller
     }
 
     /**
-     * El cuerpo que comparten los cuatro.
+     * El informe de un estudio ya hecho, o la imagen cruda (una
+     * radiografía, por ejemplo).
+     */
+    public function storeParaEstudio(AdjuntoStoreRequest $peticion, Estudio $estudio): RedirectResponse
+    {
+        return $this->guardarEn($peticion, $estudio);
+    }
+
+    /**
+     * El cuerpo que comparten los cinco.
      *
      * Cada dueño tiene su método con su type-hint concreto -hace falta para
      * el route-model binding, igual que en los catálogos-, pero el cuerpo
-     * vive una sola vez: con cuatro copias, cada una era un lugar donde
+     * vive una sola vez: con cinco copias, cada una era un lugar donde
      * olvidarse el `Gate::authorize` o escribir mal el prefijo del disco.
      *
      * El prefijo lo declara el modelo (`carpetaDeArchivos()`) y no se arma

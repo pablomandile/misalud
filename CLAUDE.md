@@ -1124,6 +1124,92 @@ prueban la respuesta del servidor, no la reactividad del cliente-. Se arregla co
 `props` filtrando o agrupando, y que pueda recibir un `redirect` a su propia URL, tiene que
 usar `computed()`. Un `const` es seguro solo si la pantalla nunca se revisita a sí misma.
 
+## Estudios y resultados
+
+Lo que se hizo, después de la orden (Etapa 9.2), con sus parámetros (9.3) anidados en la
+misma pantalla —mismo patrón que la bitácora de una enfermedad, sin `index` propio— y la
+evolución de cada parámetro a través de varios estudios (9.4), reusando `GraficoEvolucion.vue`.
+
+### El circuito orden → estudio, cerrado
+
+`ordenes_estudio.estudio_id` **no se creó en el paso 9.1 a propósito**: `estudios` todavía no
+existía. Llega recién acá, con la regla de una sola dirección ya documentada en la Etapa 9.1
+puesta en práctica:
+
+- **Vincular una orden al crear un estudio la marca `Hecha`.** Es lo único que hace
+  `EstudioController::store()` además de crear el registro: si viene `orden_estudio_id`,
+  busca esa orden y la actualiza.
+- **Solo al crear**, no al editar: re-vincular una orden después es un caso raro que no valía
+  la complejidad de manejar (regla del proyecto: no diseñar para lo hipotético).
+- ⚠️ **`estudio_id` en `OrdenEstudio` NO es fillable** —no lo escribe ningún formulario de la
+  orden—, así que vincularla usa `setAttribute()` + `save()`, igual que `usuario_id` en
+  `CatalogoBaseController`. La primera versión de este código usaba `update(['estudio_id' =>
+...])`, que en silencio **ignora** los campos no fillable: la orden se hubiera quedado sin
+  vincular sin que nada avisara. Lo encontró la lectura del propio código, no un test —pero
+  hay un test que lo fija igual.
+- **Borrar el estudio no revierte el estado de la orden.** Es la relación de una sola
+  dirección funcionando en los dos sentidos: `nullOnDelete` en la FK deja la orden sin
+  vínculo, pero sigue `Hecha` -esa persona **se hizo** el estudio, borrar el registro después
+  no deshace el hecho-.
+
+### El quinto dueño de archivos: nada que decidir de nuevo
+
+`Estudio` implementa `TieneArchivos` igual que los otros cuatro (paciente, cobertura,
+medicamento, orden). `AdjuntoController::guardarEn()` ya estaba armado para esto desde la
+Etapa 9.1 — sumar `storeParaEstudio()` fue una función de tres líneas, sin tocar el cuerpo
+compartido. Es la prueba de que la refactorización valió la pena: el sexto dueño, cuando
+llegue, va a costar lo mismo.
+
+### `resultados_estudio.valor` es texto, como `mediciones.valor`
+
+Un resultado de laboratorio no siempre es un número: "Positivo", "No reactivo", "3+" son
+resultados reales. `valor` es texto cifrado, y `ResultadoEstudio::valorNumerico()` devuelve
+`null` en vez de forzar un `(float)` que convertiría cualquier texto en `0.0` sin avisar —es
+lo que decide qué entra al gráfico de evolución, y ningún resultado no numérico entra.
+
+**A diferencia de la bitácora de una enfermedad, un resultado SÍ se edita.** La bitácora es
+una narrativa histórica -corregirla en silencio sería reescribir lo que pasó-; un resultado
+es un dato estructurado que alguien puede haber tipeado mal ("900" en vez de "90"), y
+corregirlo es exactamente lo que hace falta poder hacer. Por eso `ResultadoEstudioController`
+tiene `update()` y `RegistroEnfermedadController` no.
+
+### `parametro_hash` no protege un UNIQUE: agrupa sin descifrar
+
+Es el primer índice ciego del proyecto que no existe por unicidad. Dos estudios pueden repetir
+"Glucemia" sin problema -es lo esperable, un control se repite-, así que no hay ningún
+`unique()` sobre él. Sirve para otra cosa: **agrupar resultados del mismo parámetro entre
+distintos estudios sin descifrar cada fila solo para decidir a qué grupo pertenece**. Con
+años de estudios acumulados, comparar un `char(64)` es gratis; descifrar cientos de filas no.
+`SeriesDeResultados` agrupa por `parametro_hash` y descifra una sola fila representativa por
+grupo, para el nombre visible.
+
+No hay una columna de rango mín/máx estructurada como en `tipos_medicion` -acá solo existe
+`rango_referencia`, texto libre ("70 a 110", "< 5", "Negativo")-, así que la banda de
+referencia de `GraficoEvolucion` no se dibuja para esta pantalla: `minNormal`/`maxNormal`
+viajan en `null`. Partir ese texto en dos números sería adivinar un formato que no está
+garantizado.
+
+### ⚠️ El bug que apareció ANTES de mandarlo: fecha de calendario en un gráfico
+
+`estudio.fecha` es una fecha de calendario (`date`, medianoche UTC), no un instante como
+`medicion.fecha`. El primer borrador de la evolución pasaba `zona-horaria="null"` al
+`GraficoEvolucion` -mismo valor que usa la evolución de mediciones-, y eso es lo que **no**
+correspondía acá: sin zona, el navegador formatea la fecha en **su propia zona horaria**, y
+medianoche UTC vista desde Argentina (UTC-3) es las 21:00 del día anterior.
+
+Medido en Chrome con la zona del navegador forzada a `America/Argentina/Buenos_Aires`:
+
+```
+Intl.DateTimeFormat('es-AR', {day:'2-digit', month:'2-digit'}).format(...)               → "14/1"
+Intl.DateTimeFormat('es-AR', {day:'2-digit', month:'2-digit', timeZone:'UTC'}).format(...) → "15/1"
+```
+
+Un día completo de diferencia, para prácticamente cualquier usuario de esta app —está pensada
+para Argentina—. Se corrigió pasando `zona-horaria="UTC"` **como string literal, no como
+binding**: no hay ningún camino en tiempo de ejecución por el que ese valor pueda terminar
+siendo otra cosa. Es la misma trampa de `hoy()` contra `hoyCalendario()` de la sección de
+Fechas, esta vez del lado del cliente y con un gráfico en vez de una validación.
+
 ## Cobertura médica
 
 `coberturas` es tabla propia y no columnas en `pacientes`: mucha gente tiene obra social y
@@ -1548,8 +1634,28 @@ Verificado en Chrome: la orden recién creada aparece sin refrescar -con
 el papel se sube y el visor lo **dibuja** (90000 píxeles), y marcarla como
 hecha la saca de pendientes. Más la matriz de desborde de la pantalla nueva.
 
+**Etapa 9 completa** con 9.2, 9.3 y 9.4: `estudios` con su informe, `resultados_estudio` con
+sus parámetros anidados en la misma pantalla, y la evolución de cada parámetro entre estudios
+reusando `GraficoEvolucion.vue`. El circuito orden → estudio quedó cerrado: vincular una
+orden al crear el estudio la marca `Hecha`, y borrar el estudio después no revierte eso -la
+persona se hizo el estudio igual, aunque el registro se borre-.
+
+`Estudio` es el quinto dueño de archivos, y sumarlo costó tres líneas -`storeParaEstudio()`
+llamando a `guardarEn()`-, que es exactamente lo que la refactorización de 9.1 prometía.
+
+Dos hallazgos antes de mandarlo, ninguno atrapado por los 454 tests de Pest:
+
+- Un `update(['estudio_id' => ...])` sobre la orden hubiera sido un no-op silencioso:
+  `estudio_id` no es fillable. Se cambió a `setAttribute()` + `save()` -lo encontró leer el
+  propio código, no un test, pero quedó uno que lo fija-.
+- La evolución de un parámetro mostraba la fecha **un día antes** en cualquier navegador con
+  zona horaria negativa -Argentina incluida, o sea prácticamente cualquier usuario real de
+  esta app-: `estudio.fecha` es una fecha de calendario a medianoche UTC, y sin
+  `zona-horaria="UTC"` explícito el navegador la formatea en su propia zona. Medido en
+  Chrome: "14/1" sin la corrección, "15/1" con ella. Misma trampa de `hoy()` vs
+  `hoyCalendario()`, esta vez del lado del cliente.
+
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de
-variables · enfermedades y alergias · tratamientos · estudios y resultados (9.2 a 9.4) ·
-salud ocular · turnos y recordatorios · casilla y recetas · contactos y envío · compartir la
-ficha · dashboard y deploy.
+variables · enfermedades y alergias · tratamientos · salud ocular · turnos y recordatorios ·
+casilla y recetas · contactos y envío · compartir la ficha · dashboard y deploy.
