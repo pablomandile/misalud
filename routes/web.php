@@ -10,6 +10,7 @@ use App\Http\Controllers\EnfermedadController;
 use App\Http\Controllers\MedicamentoController;
 use App\Http\Controllers\MedicionController;
 use App\Http\Controllers\MedicoController;
+use App\Http\Controllers\OrdenEstudioController;
 use App\Http\Controllers\PacienteActivoController;
 use App\Http\Controllers\PacienteController;
 use App\Http\Controllers\RegistroEnfermedadController;
@@ -170,6 +171,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('pacientes.alergias.store');
     Route::put('alergias/{alergia}', [AlergiaController::class, 'update'])->name('alergias.update');
     Route::delete('alergias/{alergia}', [AlergiaController::class, 'destroy'])->name('alergias.destroy');
+
+    /*
+     * Órdenes de estudio: el papel que da el médico ANTES. La pantalla
+     * existe para una sola pregunta -qué falta hacerse-, y el archivo de la
+     * orden cuelga de ella como cualquier otro adjunto.
+     */
+    Route::get('pacientes/{paciente}/ordenes', [OrdenEstudioController::class, 'index'])
+        ->name('pacientes.ordenes.index');
+    Route::post('pacientes/{paciente}/ordenes', [OrdenEstudioController::class, 'store'])
+        ->name('pacientes.ordenes.store');
+    Route::put('ordenes/{orden}', [OrdenEstudioController::class, 'update'])->name('ordenes.update');
+    Route::delete('ordenes/{orden}', [OrdenEstudioController::class, 'destroy'])->name('ordenes.destroy');
+    Route::post('ordenes/{orden}/adjuntos', [AdjuntoController::class, 'storeParaOrden'])
+        ->name('ordenes.adjuntos.store');
 
     Route::get('pacientes/{paciente}/tratamientos', [TratamientoController::class, 'index'])
         ->name('pacientes.tratamientos.index');

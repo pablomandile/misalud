@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Contracts\TieneArchivos;
 use App\Enums\TipoAdjunto;
 use App\Http\Requests\AdjuntoStoreRequest;
 use App\Models\Adjunto;
 use App\Models\Cobertura;
 use App\Models\Medicamento;
+use App\Models\OrdenEstudio;
 use App\Models\Paciente;
 use App\Services\ArchivoService;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\Response;
@@ -35,35 +38,12 @@ class AdjuntoController extends Controller
      */
     public function store(AdjuntoStoreRequest $peticion, Paciente $paciente): RedirectResponse
     {
-        Gate::authorize('update', $paciente);
-
-        $tipo = $peticion->tipo();
-        $descripcion = $peticion->input('descripcion');
-        $subidos = 0;
-
-        foreach ($peticion->file('archivos', []) as $archivo) {
-            $datos = $this->archivos->guardar($archivo, 'pacientes/'.$paciente->id);
-
-            /*
-             * Por la relación y no armando `adjuntable_*` a mano: de esa
-             * referencia cuelga toda la autorización, y por eso no es fillable.
-             */
-            $paciente->adjuntos()->create($datos + [
-                'tipo' => $tipo,
-                'descripcion' => $descripcion,
-            ]);
-
-            $subidos++;
-        }
-
-        return back()->with('exito', $subidos === 1
-            ? 'Se guardó el documento.'
-            : "Se guardaron {$subidos} documentos.");
+        return $this->guardarEn($peticion, $paciente);
     }
 
     /**
-     * Sube uno o varios archivos a una cobertura: la credencial, frente y
-     * dorso, como dos adjuntos tipo `credencial`.
+     * La credencial de una cobertura, frente y dorso, como dos adjuntos
+     * tipo `credencial`.
      *
      * Se pide `update` sobre la COBERTURA, que a su vez lo resuelve por el
      * rol en el paciente. Preguntarle directo al dueño -y no salteárselo
@@ -72,49 +52,59 @@ class AdjuntoController extends Controller
      */
     public function storeParaCobertura(AdjuntoStoreRequest $peticion, Cobertura $cobertura): RedirectResponse
     {
-        Gate::authorize('update', $cobertura);
-
-        $tipo = $peticion->tipo();
-        $descripcion = $peticion->input('descripcion');
-        $subidos = 0;
-
-        foreach ($peticion->file('archivos', []) as $archivo) {
-            $datos = $this->archivos->guardar($archivo, 'coberturas/'.$cobertura->id);
-
-            $cobertura->adjuntos()->create($datos + [
-                'tipo' => $tipo,
-                'descripcion' => $descripcion,
-            ]);
-
-            $subidos++;
-        }
-
-        return back()->with('exito', $subidos === 1
-            ? 'Se guardó el documento.'
-            : "Se guardaron {$subidos} documentos.");
+        return $this->guardarEn($peticion, $cobertura);
     }
 
     /**
-     * Sube el prospecto de un medicamento del catálogo.
+     * El prospecto de un medicamento del catálogo.
      *
-     * Mismo patrón que `storeParaCobertura`: se pide `update` sobre el
-     * DUEÑO -acá, el medicamento-, no un permiso propio del adjunto. Es lo
-     * que hace que una semilla compartida no admita prospecto propio: la
-     * niega `CatalogoPolicy::update()`, la misma regla que ya impide
-     * editarla (ver AdjuntoPolicy).
+     * Sale gratis una regla correcta: una semilla compartida no admite
+     * prospecto propio, porque la niega `CatalogoPolicy::update()` —la misma
+     * regla que ya impide editarla— (ver `AdjuntoPolicy`).
      */
     public function storeParaMedicamento(AdjuntoStoreRequest $peticion, Medicamento $medicamento): RedirectResponse
     {
-        Gate::authorize('update', $medicamento);
+        return $this->guardarEn($peticion, $medicamento);
+    }
+
+    /**
+     * El papel que dio el médico: la orden de estudio, en PDF o foto.
+     */
+    public function storeParaOrden(AdjuntoStoreRequest $peticion, OrdenEstudio $orden): RedirectResponse
+    {
+        return $this->guardarEn($peticion, $orden);
+    }
+
+    /**
+     * El cuerpo que comparten los cuatro.
+     *
+     * Cada dueño tiene su método con su type-hint concreto -hace falta para
+     * el route-model binding, igual que en los catálogos-, pero el cuerpo
+     * vive una sola vez: con cuatro copias, cada una era un lugar donde
+     * olvidarse el `Gate::authorize` o escribir mal el prefijo del disco.
+     *
+     * El prefijo lo declara el modelo (`carpetaDeArchivos()`) y no se arma
+     * acá, para que dos dueños distintos no puedan terminar escribiendo en
+     * la misma carpeta porque alguien copió una línea sin cambiar el string.
+     */
+    private function guardarEn(
+        AdjuntoStoreRequest $peticion,
+        Model&TieneArchivos $duenio,
+    ): RedirectResponse {
+        Gate::authorize('update', $duenio);
 
         $tipo = $peticion->tipo();
         $descripcion = $peticion->input('descripcion');
         $subidos = 0;
 
         foreach ($peticion->file('archivos', []) as $archivo) {
-            $datos = $this->archivos->guardar($archivo, 'medicamentos/'.$medicamento->id);
+            $datos = $this->archivos->guardar($archivo, $duenio->carpetaDeArchivos());
 
-            $medicamento->adjuntos()->create($datos + [
+            /*
+             * Por la relación y no armando `adjuntable_*` a mano: de esa
+             * referencia cuelga toda la autorización, y por eso no es fillable.
+             */
+            $duenio->adjuntos()->create($datos + [
                 'tipo' => $tipo,
                 'descripcion' => $descripcion,
             ]);

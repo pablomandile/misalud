@@ -28,6 +28,17 @@ trait TieneAdjuntos
     }
 
     /**
+     * Dónde van sus archivos en el disco privado.
+     *
+     * Por defecto, el nombre de la tabla y el id: `coberturas/12`. Alcanza
+     * para los cuatro dueños que hay, y el que necesite otra cosa lo pisa.
+     */
+    public function carpetaDeArchivos(): string
+    {
+        return $this->getTable().'/'.$this->getKey();
+    }
+
+    /**
      * Los archivos de un tipo puntual: el frente de la credencial, el informe
      * de un estudio.
      *

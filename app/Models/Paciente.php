@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Concerns\CifraCampos;
 use App\Concerns\TieneAdjuntos;
 use App\Contracts\CifraDatos;
+use App\Contracts\TieneArchivos;
 use App\Database\Eloquent\ConsultaVigilada;
 use App\Enums\RolPaciente;
 use App\Observers\PacienteObserver;
@@ -40,7 +41,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 #[ObservedBy(PacienteObserver::class)]
 #[UsePolicy(PacientePolicy::class)]
-class Paciente extends Model implements CifraDatos
+class Paciente extends Model implements CifraDatos, TieneArchivos
 {
     use CifraCampos;
 
@@ -153,6 +154,14 @@ class Paciente extends Model implements CifraDatos
     public function tratamientos(): HasMany
     {
         return $this->hasMany(Tratamiento::class);
+    }
+
+    /**
+     * @return HasMany<OrdenEstudio, $this>
+     */
+    public function ordenesEstudio(): HasMany
+    {
+        return $this->hasMany(OrdenEstudio::class);
     }
 
     /**

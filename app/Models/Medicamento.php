@@ -9,6 +9,7 @@ use App\Concerns\DeCatalogo;
 use App\Concerns\TieneAdjuntos;
 use App\Contracts\CifraDatos;
 use App\Contracts\EsCatalogo;
+use App\Contracts\TieneArchivos;
 use App\Database\Eloquent\ConsultaVigilada;
 use App\Policies\CatalogoPolicy;
 use Database\Factories\MedicamentoFactory;
@@ -41,7 +42,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $notas
  */
 #[UsePolicy(CatalogoPolicy::class)]
-class Medicamento extends Model implements CifraDatos, EsCatalogo
+class Medicamento extends Model implements CifraDatos, EsCatalogo, TieneArchivos
 {
     use CifraCampos;
     use DeCatalogo;

@@ -8,6 +8,7 @@ use App\Concerns\CifraCampos;
 use App\Concerns\TieneAdjuntos;
 use App\Contracts\CifraDatos;
 use App\Contracts\PerteneceAPaciente;
+use App\Contracts\TieneArchivos;
 use App\Database\Eloquent\ConsultaVigilada;
 use App\Enums\TipoCobertura;
 use App\Policies\RegistroClinicoPolicy;
@@ -42,7 +43,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $notas
  */
 #[UsePolicy(RegistroClinicoPolicy::class)]
-class Cobertura extends Model implements CifraDatos, PerteneceAPaciente
+class Cobertura extends Model implements CifraDatos, PerteneceAPaciente, TieneArchivos
 {
     use CifraCampos;
 

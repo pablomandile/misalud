@@ -1016,6 +1016,56 @@ Por eso la comparación vive en una regla y no repetida en cada FormRequest. Par
 `datetime` la regla es otra —hace falta la zona y un margen para el reloj del dispositivo—: eso
 sigue en `MedicionGuardarRequest`.
 
+## Órdenes de estudio
+
+El papel que da el médico **antes**; el estudio es el resultado de después (Etapa 9.2). Que
+sean dos tablas y no dos estados de una es la decisión que sostiene la etapa entera:
+
+> Una orden existe desde que el médico la firma y **puede no convertirse nunca** en un
+> estudio: se vence, cambia la indicación, uno no va.
+
+Modelarla como un `estudios` con los campos de resultado vacíos obligaría a que media tabla
+fuera nullable y, peor, dejaría la pantalla de "pendientes de hacer" apoyada en _"estudios
+donde falta casi todo"_ — una definición que se rompe sola en cuanto alguien cargue un
+estudio incompleto por otro motivo.
+
+La pantalla contesta **una sola pregunta: qué me falta hacerme.** Por eso lo pendiente va
+arriba y separado, y por eso el orden es `estado` primero y `fecha` después: una orden hecha
+la semana pasada no puede tapar una pendiente de hace un mes.
+
+### ⚠️ `estado` y el estudio NO son la misma cosa
+
+Cuando el paso 9.2 sume `estudio_id`, la regla es **de una sola dirección**:
+
+> Vincular un estudio implica `Hecha`; estar `Hecha` **no** implica que haya un estudio
+> cargado.
+
+No es un detalle: uno se hace el análisis y tarda semanas en subir el PDF, o no lo sube
+nunca. Si "hecha" se dedujera de `estudio_id`, todas esas órdenes seguirían apareciendo como
+pendientes y la pantalla que justifica la tabla entera diría cualquier cosa.
+
+`estudio_id` **no se creó en 9.1 a propósito**: `estudios` todavía no existe, así que la
+columna quedaría sin FK, sin validación y sin nada que la escriba. Es el mismo criterio que
+con `mediciones.enfermedad_id`, que llegó recién en la Etapa 7 y no costó ningún backfill.
+
+### `TieneArchivos`: el cuarto dueño obligó a dejar de copiar
+
+`ordenes_estudio` es el **primer registro clínico con archivos propios** —hasta acá los
+adjuntos colgaban del paciente, de una cobertura o de un catálogo—, y con eso el cuerpo de la
+subida pasaba a estar copiado cuatro veces en `AdjuntoController`.
+
+- `App\Contracts\TieneArchivos` declara qué es "algo que tiene archivos"; la implementación
+  sigue en el trait `TieneAdjuntos`. Mismo reparto que `EsCatalogo`/`DeCatalogo` y que
+  `PerteneceAPaciente`.
+- **Cada dueño conserva su método con su type-hint concreto** (`storeParaOrden`,
+  `storeParaCobertura`…): hace falta para el route-model binding, igual que en los catálogos.
+  Lo que quedó una sola vez es el cuerpo, en `guardarEn()`.
+- **El prefijo del disco lo declara el modelo** (`carpetaDeArchivos()`, por defecto
+  `<tabla>/<id>`) y no lo arma el controlador: era un string repetido cuatro veces, y dos
+  dueños escribiendo en la misma carpeta por un copiar-pegar no da ningún error.
+  ⚠️ Los tres prefijos que ya existían coinciden con ese default, así que el refactor **no
+  movió ningún archivo guardado** — hay un test que lo fija.
+
 ## Tratamientos
 
 Qué medicamento toma un paciente, con qué dosis y por qué. `medicamento_id` es la **tercera**
@@ -1482,8 +1532,24 @@ aparecer hasta un refresh manual, porque Inertia reutiliza la instancia del comp
 redirigir a la misma URL. Los 393 tests de Pest pasaban igual -prueban al servidor, no la
 reactividad del cliente-. Quedó como regla general en esa sección.
 
+**Paso 9.1 hecho**: `ordenes_estudio` con su papel en PDF y la pantalla de
+"pendientes de hacer". La decisión que sostiene la etapa es que una orden y
+un estudio son dos tablas y no dos estados de una; y queda anotada la regla
+de una sola dirección para cuando 9.2 sume `estudio_id` (vincular un estudio
+implica Hecha, estar Hecha no implica que haya estudio cargado).
+
+Es el primer registro clínico con archivos propios, y con eso el cuerpo de
+la subida quedaba copiado cuatro veces: se extrajo a `guardarEn()` detrás del
+contrato `TieneArchivos`, con el prefijo del disco declarado por cada modelo.
+Un test fija que los tres prefijos que ya existían no se movieron.
+
+Verificado en Chrome: la orden recién creada aparece sin refrescar -con
+`computed()`, la lección de la Etapa 8-, lo pendiente va arriba de lo hecho,
+el papel se sube y el visor lo **dibuja** (90000 píxeles), y marcarla como
+hecha la saca de pendientes. Más la matriz de desborde de la pantalla nueva.
+
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de
-variables · enfermedades y alergias · órdenes, estudios y resultados · salud ocular · turnos
-y recordatorios · casilla y recetas · contactos y envío · compartir la ficha · dashboard y
-deploy.
+variables · enfermedades y alergias · tratamientos · estudios y resultados (9.2 a 9.4) ·
+salud ocular · turnos y recordatorios · casilla y recetas · contactos y envío · compartir la
+ficha · dashboard y deploy.

@@ -2,6 +2,7 @@
 import { Form, Head, Link } from '@inertiajs/vue3';
 import {
     Activity,
+    ClipboardList,
     CreditCard,
     FileText,
     HeartPulse,
@@ -14,6 +15,7 @@ import { ref } from 'vue';
 import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
 import EnfermedadController from '@/actions/App/Http/Controllers/EnfermedadController';
 import MedicionController from '@/actions/App/Http/Controllers/MedicionController';
+import OrdenEstudioController from '@/actions/App/Http/Controllers/OrdenEstudioController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
 import TratamientoController from '@/actions/App/Http/Controllers/TratamientoController';
 import Heading from '@/components/Heading.vue';
@@ -257,6 +259,20 @@ function edadTexto(p: Paciente): string {
                                 <Pill />
                                 <span class="sr-only">
                                     Tratamientos de {{ paciente.nombre }}
+                                </span>
+                            </Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" as-child>
+                            <Link
+                                :href="
+                                    OrdenEstudioController.index({
+                                        paciente: paciente.id,
+                                    })
+                                "
+                            >
+                                <ClipboardList />
+                                <span class="sr-only">
+                                    Órdenes de estudio de {{ paciente.nombre }}
                                 </span>
                             </Link>
                         </Button>

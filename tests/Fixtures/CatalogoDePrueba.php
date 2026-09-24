@@ -9,6 +9,7 @@ use App\Concerns\DeCatalogo;
 use App\Concerns\TieneAdjuntos;
 use App\Contracts\CifraDatos;
 use App\Contracts\EsCatalogo;
+use App\Contracts\TieneArchivos;
 use App\Database\Eloquent\ConsultaVigilada;
 use App\Policies\CatalogoPolicy;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
@@ -29,7 +30,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $nombre
  */
 #[UsePolicy(CatalogoPolicy::class)]
-class CatalogoDePrueba extends Model implements CifraDatos, EsCatalogo
+class CatalogoDePrueba extends Model implements CifraDatos, EsCatalogo, TieneArchivos
 {
     use CifraCampos;
     use DeCatalogo;
