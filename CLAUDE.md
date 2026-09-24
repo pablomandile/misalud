@@ -1003,6 +1003,12 @@ Un solo `VisorDocumento.vue` a pantalla completa para imágenes **y PDFs**, con 
   `workerSrc`. Las dos formas andan —está probado en Chrome con las dos—; esta no depende de
   que la URL se resuelva bien en tiempo de ejecución, que es una cosa menos que puede quedar
   mal detrás del CDN o con otro `base`.
+- ⚠️ **Lo que se destruye al cerrar es la TAREA DE CARGA, no el documento.**
+  `PDFDocumentProxy` tuvo un `destroy()` hasta pdf.js 5 y en 6 ya no lo tiene: llamarlo tira
+  `destroy is not a function`, que no se ve en pantalla pero deja el worker y el documento
+  vivos —un PDF filtrado por cada uno que se abra—. `loadingTask.destroy()` es la API
+  documentada y la única que sobrevivió a las dos versiones. Apareció al subir a pdf.js 6 por
+  un aviso de seguridad, y lo delató el `console.error` que mira `npm run revisar:visor`.
 - **El canvas se dibuja a la densidad real del dispositivo y se baja por CSS.** Sin eso, en
   un celular con pantalla densa el texto del PDF se ve borroso justo en el aparato con el
   que más se lo mira.

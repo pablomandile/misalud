@@ -71,8 +71,17 @@ const lienzo = ref<HTMLCanvasElement | null>(null);
 const pdf = shallowRef<{
     numPages: number;
     getPage: (n: number) => Promise<unknown>;
-    destroy: () => Promise<void>;
 } | null>(null);
+
+/*
+ * La tarea de carga, aparte del documento, porque **es ella la que se
+ * destruye**: `PDFDocumentProxy` tenía un `destroy()` hasta pdf.js 5 y en 6
+ * ya no está. Llamarlo tiraba `destroy is not a function` al cerrar el
+ * visor —silencioso en pantalla, pero dejaba el worker y el documento vivos:
+ * un PDF filtrado por cada uno que se abriera—. `destroy()` de la tarea es
+ * la API documentada y la que sobrevivió a las dos versiones.
+ */
+const tareaDeCarga = shallowRef<{ destroy: () => Promise<void> } | null>(null);
 
 /**
  * pdf.js entra por `import()` dinámico y solo al abrir un PDF.
@@ -105,6 +114,7 @@ async function cargarPdf(url: string): Promise<void> {
         pdfjs.GlobalWorkerOptions.workerPort = new Trabajador();
 
         const tarea = pdfjs.getDocument({ url, withCredentials: true });
+        tareaDeCarga.value = tarea;
 
         /*
          * Tope de tiempo. Un visor que gira para siempre es peor que uno que
@@ -185,13 +195,14 @@ async function dibujar(): Promise<void> {
 }
 
 async function soltar(): Promise<void> {
-    const documento = pdf.value;
+    const tarea = tareaDeCarga.value;
     pdf.value = null;
+    tareaDeCarga.value = null;
     paginas.value = 0;
     escala.value = 1;
 
     // Libera el worker. Sin esto, abrir y cerrar varios PDFs deja uno vivo por vez.
-    await documento?.destroy().catch(() => undefined);
+    await tarea?.destroy().catch(() => undefined);
 }
 
 watch(
