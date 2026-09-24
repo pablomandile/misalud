@@ -61,6 +61,9 @@ const RUTAS = [
     '/pacientes',
     '/medicos',
     '/centros',
+    '/medicamentos',
+    '/vacunas',
+    '/tipos-medicion',
     '/settings/appearance',
 ];
 const ANCHOS = [320, 360, 414];

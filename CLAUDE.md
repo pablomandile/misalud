@@ -878,6 +878,57 @@ partida en dos, que es justo lo que el catálogo por usuario venía a evitar.
   y no por "paciente activo": confundirse de ficha acá es cargarle el peso de un familiar a
   otro.
 
+### `GraficoEvolucion.vue`: tres reglas que después se copian tres veces
+
+Lo reusan los resultados de estudios (Etapa 9) y la graduación ocular (Etapa 10), así que
+estas tres son del patrón y no de este componente:
+
+1. **El eje Y NO arranca en cero.** Una presión que va de 12 a 14 se ve como una línea plana
+   en una escala de 0 a 14, y esos dos puntos son justamente el dato. La escala se ajusta a
+   los valores con un respiro del 12%; cuando todos son iguales —o hay uno solo— el recorrido
+   es cero y hay que inventar uno, o la línea queda pegada al borde.
+2. **El rango de referencia va como banda de fondo**, nunca como línea de corte ni como color
+   de alarma sobre los puntos. Es información del mismo tipo que el rango impreso al costado
+   de un análisis (regla 1).
+3. **El gráfico nunca es la única fuente.** Debajo va siempre la lista con fechas y valores:
+   un `<canvas>` no lo lee un lector de pantalla, y dos tomas del mismo día quedan una encima
+   de la otra. El contenedor lleva `role="img"` con un resumen en `aria-label`.
+
+Detalles que cuestan de encontrar después:
+
+- **Con una sola medición no se dibuja nada**: una línea de un punto no es una evolución.
+- **El eje X es `linear` con la fecha en milisegundos, no una escala de tiempo.** La de tiempo
+  necesita un adaptador de fechas —otra dependencia— y acá alcanza con formatear la marca. Y
+  respeta la separación real entre tomas, que una escala de categorías aplanaría: diez tomas
+  de una semana y una de hace un año se verían igual de separadas.
+- Las etiquetas del eje se formatean con `Intl` y la **zona de la cuenta**, la misma con la
+  que el servidor armó las fechas de la lista. Con la del navegador, las dos no coincidirían.
+- **Chart.js mide sus fuentes en px**, así que no hereda el `font-size` de la raíz como todo
+  lo demás (Tailwind mide en rem). El componente lo lee y escala sus fuentes, o quien eligió
+  "Muy grande" tendría la app entera escalada y los números del eje chiquitos.
+- La banda es un **plugin de doce líneas** dibujando un rectángulo, no otra dependencia.
+- Los colores salen de las variables CSS y se vuelven a leer si cambia el tema: la
+  preferencia "según el sistema" puede cambiar sola mientras el gráfico está en pantalla.
+
+### Las semillas de variables, y por qué el IMC necesita una columna
+
+`CatalogosSeeder` siembra siete: peso, altura, presión, glucemia, temperatura, saturación y
+pulso. Con eso la app sirve sin que nadie configure nada, y la pantalla de Variables queda
+para el caso raro.
+
+**El IMC se deriva, no se guarda** (regla 4): sale del último peso y la última altura en cada
+request. Se muestra el número y de dónde salió, **sin ninguna categoría** —decir "sobrepeso"
+sería interpretar, y eso es del médico—.
+
+⚠️ Para eso hay que saber **cuál** de las variables es el peso, y por el nombre no se puede:
+está cifrado —no hay `where nombre = 'Peso'`— y además lo puede editar la persona. Buscarlo
+por su índice ciego andaría hasta que alguien renombre "Peso" a "Peso corporal", y ahí el IMC
+desaparecería sin explicación. De ahí sale `tipos_medicion.clave`: una etiqueta del sistema,
+en claro, que **solo escribe el seeder** (no es fillable, y por eso el seeder guarda con
+`forceFill`). Una variable creada a mano queda en `null` y el código no la reconoce, que es lo
+correcto; y al duplicar una semilla la copia se la lleva, así que el IMC sigue andando para
+quien se armó su propia copia de "Peso".
+
 ### `CatalogoVisible`, o el mismo OR por tercera vez
 
 La condición "lo mío más las semillas" ya hacía falta en tres lugares —el listado de un
@@ -1225,9 +1276,31 @@ Pest podía mostrar: que un "72,5" tipeado con coma llega y se guarda con sus
 decimales, que la hora cargada vuelve idéntica después del viaje a UTC, y que el
 segundo número aparece y desaparece al cambiar de variable.
 
-Pendiente de la Etapa 6: carga rápida (6.2), `GraficoEvolucion.vue` (6.3) y la
-semilla de tipos (6.4). Hasta que exista 6.4 no hay ninguna variable cargada:
-la pantalla de mediciones lo dice y manda a crear una.
+**Etapa 6 completa** con 6.2, 6.3 y 6.4: carga rápida (un toque por variable
+abre el formulario ya elegido y con el cursor en el número), `GraficoEvolucion.vue`
+con sus tres reglas, y las siete variables de siempre como semilla. El IMC se
+deriva del último peso y la última altura, y por eso existe `tipos_medicion.clave`.
+
+La pantalla pasó a estar **agrupada por variable** -gráfico arriba, lista
+abajo- en vez de una lista cronológica única: un peso entre dos presiones no
+dice nada, y es lo que el gráfico necesita.
+
+Verificado en Chrome: el gráfico **dibuja** de verdad (se cuentan los píxeles
+del canvas, no que el canvas exista), el resumen calcula mínimo, máximo y
+promedio sobre valores cifrados, el acceso rápido deja el foco en el número, y
+el IMC toma el peso más reciente. Y la matriz de desborde completa sobre la
+pantalla de mediciones: 18 combinaciones de ancho × tamaño de letra ×
+orientación, con los dos gráficos dibujados, sin desborde.
+
+De paso apareció que **el enlace del breadcrumb medía 23 px**: es la primera
+pantalla con breadcrumb de dos niveles, así que es la primera vez que ese
+componente dibuja un enlace de verdad -con un solo nivel, el último tramo es
+texto-. Arreglado en la primitiva, con el mismo criterio que el checkbox:
+área de 44 px sin cambiar el tamaño del texto.
+
+⚠️ **La pantalla de mediciones no entra en `npm run revisar:mobile`**: la ruta
+necesita el id de un paciente y el script recorre rutas fijas. Se verificó con
+un script aparte; si se toca esa pantalla, hay que repetirlo a mano.
 
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de

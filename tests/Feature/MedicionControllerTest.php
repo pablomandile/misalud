@@ -76,9 +76,10 @@ it('lista las mediciones de la más nueva a la más vieja', function (): void {
         ->assertOk()
         ->assertInertia(fn ($p) => $p
             ->component('mediciones/Index')
-            ->has('mediciones', 2)
-            ->where('mediciones.0.valor', 80)
-            ->where('mediciones.1.valor', 70)
+            ->has('series', 1)
+            ->has('series.0.mediciones', 2)
+            ->where('series.0.mediciones.0.valor', 80)
+            ->where('series.0.mediciones.1.valor', 70)
         );
 });
 
@@ -236,8 +237,8 @@ it('el listado arma el valor visible con los decimales del tipo', function (): v
         ->get(route('pacientes.mediciones.index', $paciente))
         ->assertInertia(fn ($p) => $p
             // Coma decimal para mostrar; float aparte para el gráfico.
-            ->where('mediciones.0.valorVisible', '72,5')
-            ->where('mediciones.0.valor', 72.5)
+            ->where('series.0.mediciones.0.valorVisible', '72,5')
+            ->where('series.0.mediciones.0.valor', 72.5)
         );
 });
 
@@ -276,9 +277,9 @@ it('muestra la fecha de vuelta en la zona de quien mira', function (): void {
     $this->actingAs($usuario)
         ->get(route('pacientes.mediciones.index', $paciente))
         ->assertInertia(fn ($p) => $p
-            ->where('mediciones.0.fechaVisible', '24/09/2026 23:30')
+            ->where('series.0.mediciones.0.fechaVisible', '24/09/2026 23:30')
             // La misma fecha en el formato que entiende un datetime-local.
-            ->where('mediciones.0.fechaLocal', '2026-09-24T23:30')
+            ->where('series.0.mediciones.0.fechaLocal', '2026-09-24T23:30')
         );
 });
 
@@ -535,4 +536,155 @@ it('exige sesión', function (): void {
     [, $paciente] = escenario();
 
     $this->get(route('pacientes.mediciones.index', $paciente))->assertRedirect(route('login'));
+});
+
+/*
+|--------------------------------------------------------------------------
+| Series: agrupadas por variable, con las cuentas hechas en PHP
+|--------------------------------------------------------------------------
+|
+| `valor` está cifrado: no hay AVG() ni MIN() ni ORDER BY sobre esa columna,
+| así que el resumen se calcula sobre los valores ya descifrados.
+|
+*/
+
+it('agrupa por variable y resume mínimo, máximo y promedio', function (): void {
+    [$usuario, $paciente] = escenario();
+    $peso = TipoMedicion::factory()->for($usuario, 'usuario')->create([
+        'nombre' => 'Peso', 'unidad' => 'kg', 'decimales' => 1,
+    ]);
+    $otra = TipoMedicion::factory()->for($usuario, 'usuario')->create(['nombre' => 'Pulso']);
+
+    foreach (['70', '80', '90'] as $indice => $valor) {
+        Medicion::factory()->for($paciente)->for($peso, 'tipo')
+            ->create(['valor' => $valor, 'fecha' => '2026-09-2'.$indice.' 10:00']);
+    }
+    Medicion::factory()->for($paciente)->for($otra, 'tipo')
+        ->create(['valor' => '60', 'fecha' => '2026-08-01 10:00']);
+
+    $this->actingAs($usuario)
+        ->get(route('pacientes.mediciones.index', $paciente))
+        ->assertInertia(fn ($p) => $p
+            ->has('series', 2)
+            // Primero la variable con la medición más reciente.
+            ->where('series.0.nombre', 'Peso')
+            ->where('series.0.resumen.cantidad', 3)
+            ->where('series.0.resumen.minimo', '70,0')
+            ->where('series.0.resumen.maximo', '90,0')
+            ->where('series.0.resumen.promedio', '80,0')
+            ->where('series.1.nombre', 'Pulso')
+        );
+});
+
+it('el resumen de una presión también cuenta el segundo valor', function (): void {
+    [$usuario, $paciente] = escenario();
+    $presion = TipoMedicion::factory()->deDosValores()->for($usuario, 'usuario')->create();
+
+    Medicion::factory()->for($paciente)->for($presion, 'tipo')
+        ->create(['valor' => '120', 'valor_secundario' => '80']);
+    Medicion::factory()->for($paciente)->for($presion, 'tipo')
+        ->create(['valor' => '140', 'valor_secundario' => '90']);
+
+    $this->actingAs($usuario)
+        ->get(route('pacientes.mediciones.index', $paciente))
+        ->assertInertia(fn ($p) => $p
+            ->where('series.0.resumen.promedio', '130')
+            ->where('series.0.resumen.minimoSecundario', '80')
+            ->where('series.0.resumen.maximoSecundario', '90')
+        );
+});
+
+/*
+|--------------------------------------------------------------------------
+| IMC: se deriva, no se guarda
+|--------------------------------------------------------------------------
+*/
+
+it('deriva el IMC del último peso y la última altura', function (): void {
+    // 80 kg y 1,78 m -> 25,2. No se guarda en ningún lado (regla 4).
+    [$usuario, $paciente] = escenario();
+    $peso = TipoMedicion::factory()->for($usuario, 'usuario')
+        ->create(['nombre' => 'Peso', 'unidad' => 'kg', 'decimales' => 1, 'clave' => 'peso']);
+    $altura = TipoMedicion::factory()->for($usuario, 'usuario')
+        ->create(['nombre' => 'Altura', 'unidad' => 'cm', 'decimales' => 0, 'clave' => 'altura']);
+
+    Medicion::factory()->for($paciente)->for($peso, 'tipo')
+        ->create(['valor' => '80', 'fecha' => '2026-09-20 10:00']);
+    Medicion::factory()->for($paciente)->for($altura, 'tipo')
+        ->create(['valor' => '178', 'fecha' => '2026-09-01 10:00']);
+
+    $this->actingAs($usuario)
+        ->get(route('pacientes.mediciones.index', $paciente))
+        ->assertInertia(fn ($p) => $p
+            ->where('imc.valor', '25,2')
+            ->where('imc.pesoUsado', '80,0 kg')
+            ->where('imc.alturaUsada', '178 cm')
+        );
+});
+
+it('usa el peso MÁS RECIENTE', function (): void {
+    [$usuario, $paciente] = escenario();
+    $peso = TipoMedicion::factory()->for($usuario, 'usuario')
+        ->create(['nombre' => 'Peso', 'unidad' => 'kg', 'decimales' => 1, 'clave' => 'peso']);
+    $altura = TipoMedicion::factory()->for($usuario, 'usuario')
+        ->create(['nombre' => 'Altura', 'unidad' => 'cm', 'decimales' => 0, 'clave' => 'altura']);
+
+    Medicion::factory()->for($paciente)->for($peso, 'tipo')
+        ->create(['valor' => '100', 'fecha' => '2026-01-01 10:00']);
+    Medicion::factory()->for($paciente)->for($peso, 'tipo')
+        ->create(['valor' => '80', 'fecha' => '2026-09-20 10:00']);
+    Medicion::factory()->for($paciente)->for($altura, 'tipo')
+        ->create(['valor' => '178', 'fecha' => '2026-09-01 10:00']);
+
+    $this->actingAs($usuario)
+        ->get(route('pacientes.mediciones.index', $paciente))
+        ->assertInertia(fn ($p) => $p->where('imc.valor', '25,2'));
+});
+
+it('sin altura no hay IMC', function (): void {
+    [$usuario, $paciente] = escenario();
+    $peso = TipoMedicion::factory()->for($usuario, 'usuario')
+        ->create(['nombre' => 'Peso', 'clave' => 'peso']);
+    Medicion::factory()->for($paciente)->for($peso, 'tipo')->create(['valor' => '80']);
+
+    $this->actingAs($usuario)
+        ->get(route('pacientes.mediciones.index', $paciente))
+        ->assertInertia(fn ($p) => $p->where('imc', null));
+});
+
+it('una variable sin clave NO cuenta como peso, aunque se llame Peso', function (): void {
+    /*
+     * El nombre está cifrado y además lo puede editar la persona: si el IMC
+     * dependiera de él, renombrar "Peso" a "Peso corporal" lo haría
+     * desaparecer sin explicación. Lo reconoce `clave`, que solo escribe el
+     * seeder.
+     */
+    [$usuario, $paciente] = escenario();
+    $peso = TipoMedicion::factory()->for($usuario, 'usuario')
+        ->create(['nombre' => 'Peso', 'clave' => null]);
+    $altura = TipoMedicion::factory()->for($usuario, 'usuario')
+        ->create(['nombre' => 'Altura', 'clave' => null]);
+
+    Medicion::factory()->for($paciente)->for($peso, 'tipo')->create(['valor' => '80']);
+    Medicion::factory()->for($paciente)->for($altura, 'tipo')->create(['valor' => '178']);
+
+    $this->actingAs($usuario)
+        ->get(route('pacientes.mediciones.index', $paciente))
+        ->assertInertia(fn ($p) => $p->where('imc', null));
+});
+
+it('una altura en cero no rompe la división', function (): void {
+    [$usuario, $paciente] = escenario();
+    $peso = TipoMedicion::factory()->for($usuario, 'usuario')
+        ->create(['nombre' => 'Peso', 'clave' => 'peso']);
+    $altura = TipoMedicion::factory()->for($usuario, 'usuario')
+        ->create(['nombre' => 'Altura', 'clave' => 'altura']);
+
+    Medicion::factory()->for($paciente)->for($peso, 'tipo')->create(['valor' => '80']);
+    Medicion::factory()->for($paciente)->for($altura, 'tipo')->create(['valor' => '0']);
+
+    $this->actingAs($usuario)
+        ->get(route('pacientes.mediciones.index', $paciente))
+        ->assertOk()
+        ->assertInertia(fn ($p) => $p->where('imc', null));
 });

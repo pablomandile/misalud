@@ -11,6 +11,7 @@ use App\Models\TipoMedicion;
 use App\Models\User;
 use App\Support\CatalogoVisible;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -42,9 +43,7 @@ class MedicionController extends Controller
             // Explícito: sin esto es una consulta por cada fila del listado.
             ->with('tipo')
             ->orderByDesc('fecha')
-            ->get()
-            ->map(fn (Medicion $medicion): array => $this->serializar($medicion, $usuario))
-            ->all();
+            ->get();
 
         return Inertia::render('mediciones/Index', [
             'paciente' => [
@@ -53,7 +52,8 @@ class MedicionController extends Controller
                 'puedeEditar' => $paciente->rolDe($usuario)?->puedeEditar() ?? false,
             ],
             'tipos' => $this->tiposDisponibles($paciente),
-            'mediciones' => $mediciones,
+            'series' => $this->series($mediciones, $usuario),
+            'imc' => $this->imc($mediciones),
 
             /*
              * El "ahora" con el que el formulario se precarga sale del
@@ -162,6 +162,127 @@ class MedicionController extends Controller
                 'maxNormalSecundario' => $tipo->max_normal_secundario,
             ])
             ->all());
+    }
+
+    /**
+     * Las mediciones agrupadas POR VARIABLE, cada una con sus puntos para el
+     * gráfico y su resumen.
+     *
+     * Agrupadas y no en una lista cronológica única porque lo que se mira
+     * acá es la evolución de cada cosa: un peso entre dos presiones no dice
+     * nada. Y porque es lo que el gráfico necesita.
+     *
+     * ⚠️ **Las cuentas van en PHP, nunca en SQL.** `valor` está cifrado: no
+     * existe `AVG()`, ni `MIN()`, ni `ORDER BY valor` sobre esa columna —
+     * devolverían basura sin dar error—. Se traen las filas (son decenas) y
+     * se cuenta acá sobre los valores ya descifrados.
+     *
+     * @param  Collection<int, Medicion>  $mediciones
+     * @return list<array<string, mixed>>
+     */
+    private function series(Collection $mediciones, ?User $usuario): array
+    {
+        return array_values($mediciones
+            ->groupBy('tipo_medicion_id')
+            ->map(function (Collection $delTipo) use ($usuario): array {
+                /** @var Medicion $primera */
+                $primera = $delTipo->first();
+                $tipo = $primera->tipo;
+
+                $valores = $delTipo->map(fn (Medicion $m): float => $m->valorNumerico());
+                $secundarios = $delTipo
+                    ->map(fn (Medicion $m): ?float => $m->valorSecundarioNumerico())
+                    ->filter(fn (?float $v): bool => $v !== null);
+
+                return [
+                    'tipoId' => $tipo->id,
+                    'nombre' => $tipo->nombre,
+                    'unidad' => $tipo->unidad,
+                    'unidadSecundaria' => $tipo->unidadSecundariaVisible(),
+                    'etiquetaPrincipal' => $tipo->etiquetaPrincipalVisible(),
+                    'etiquetaSecundaria' => $tipo->etiqueta_secundaria,
+                    'tieneValorSecundario' => $tipo->tieneValorSecundario(),
+                    'decimales' => $tipo->decimales,
+                    'minNormal' => $tipo->min_normal,
+                    'maxNormal' => $tipo->max_normal,
+                    'minNormalSecundario' => $tipo->min_normal_secundario,
+                    'maxNormalSecundario' => $tipo->max_normal_secundario,
+
+                    /*
+                     * El resumen: mínimo, máximo y promedio, calculados en la
+                     * colección. Redondeados a los decimales del tipo para que
+                     * no aparezca un promedio de peso con catorce cifras.
+                     */
+                    'resumen' => [
+                        'cantidad' => $delTipo->count(),
+                        'minimo' => $tipo->formatear($valores->min()),
+                        'maximo' => $tipo->formatear($valores->max()),
+                        'promedio' => $tipo->formatear(
+                            $valores->count() > 0 ? $valores->avg() : null,
+                        ),
+                        'minimoSecundario' => $tipo->formatear($secundarios->min()),
+                        'maximoSecundario' => $tipo->formatear($secundarios->max()),
+                        'promedioSecundario' => $tipo->formatear(
+                            $secundarios->count() > 0 ? $secundarios->avg() : null,
+                        ),
+                    ],
+
+                    // De la más nueva a la más vieja, igual que llegan.
+                    'mediciones' => $delTipo
+                        ->map(fn (Medicion $m): array => $this->serializar($m, $usuario))
+                        ->values()
+                        ->all(),
+                ];
+            })
+            // Arriba la variable con la medición más reciente: es la que la
+            // persona viene siguiendo.
+            ->sortByDesc(fn (array $serie): string => $serie['mediciones'][0]['fechaIso'])
+            ->values()
+            ->all());
+    }
+
+    /**
+     * El IMC, derivado del último peso y la última altura.
+     *
+     * **No se guarda** (regla 4 de CLAUDE.md): guardarlo lo dejaría viejo al
+     * día siguiente de pesarse. Se calcula en cada request a partir de las
+     * dos mediciones más recientes.
+     *
+     * Reconoce las variables por `clave` y no por el nombre, que está
+     * cifrado y además lo puede editar la persona (ver la migración de
+     * `clave`).
+     *
+     * Devuelve el número y de dónde salió, **sin ninguna categoría**: decir
+     * "sobrepeso" sería interpretar, y eso es del médico (regla 1).
+     *
+     * @param  Collection<int, Medicion>  $mediciones
+     * @return array<string, mixed>|null
+     */
+    private function imc(Collection $mediciones): ?array
+    {
+        $ultima = fn (string $clave): ?Medicion => $mediciones
+            ->first(fn (Medicion $m): bool => $m->tipo->clave === $clave);
+
+        $peso = $ultima(TipoMedicion::CLAVE_PESO);
+        $altura = $ultima(TipoMedicion::CLAVE_ALTURA);
+
+        if ($peso === null || $altura === null) {
+            return null;
+        }
+
+        $metros = $altura->valorNumerico() / 100;
+
+        // Una altura en cero o negativa no es un dato: es una carga mal
+        // hecha. Dividir por ella sería un error de PHP en pantalla.
+        if ($metros <= 0) {
+            return null;
+        }
+
+        return [
+            'valor' => number_format($peso->valorNumerico() / ($metros ** 2), 1, ',', '.'),
+            'pesoUsado' => $peso->tipo->formatear($peso->valorNumerico()).' '.$peso->tipo->unidad,
+            'alturaUsada' => $altura->tipo->formatear($altura->valorNumerico()).' '.$altura->tipo->unidad,
+        ];
     }
 
     /**

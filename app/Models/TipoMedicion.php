@@ -24,6 +24,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  *
  * @property int $id
  * @property int|null $usuario_id
+ * @property string|null $clave
  * @property string $nombre
  * @property string $unidad
  * @property string|null $unidad_secundaria
@@ -50,6 +51,17 @@ class TipoMedicion extends Model implements CifraDatos, EsCatalogo
     protected static string $builder = ConsultaVigilada::class;
 
     protected $table = 'tipos_medicion';
+
+    /**
+     * Las variables que el código reconoce por su cuenta.
+     *
+     * Solo las escribe el seeder: `clave` no es fillable, así que una
+     * variable creada a mano queda en `null` y no la reconoce nadie —que es
+     * lo correcto—. Ver la migración que agrega la columna.
+     */
+    public const CLAVE_PESO = 'peso';
+
+    public const CLAVE_ALTURA = 'altura';
 
     protected $fillable = [
         'nombre',

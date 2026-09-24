@@ -6,6 +6,7 @@ namespace Database\Seeders;
 
 use App\Contracts\CifraDatos;
 use App\Models\Medicamento;
+use App\Models\TipoMedicion;
 use App\Models\Vacuna;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Seeder;
@@ -43,6 +44,10 @@ class CatalogosSeeder extends Seeder
         foreach ($this->vacunas() as $nombre) {
             $this->crearSemillaSiNoExiste(Vacuna::class, 'nombre', ['nombre' => $nombre]);
         }
+
+        foreach ($this->tiposMedicion() as $datos) {
+            $this->crearSemillaSiNoExiste(TipoMedicion::class, 'nombre', $datos);
+        }
     }
 
     /**
@@ -51,6 +56,11 @@ class CatalogosSeeder extends Seeder
      * `usuario_id` no es fillable en ningún catálogo (ver CLAUDE.md), así
      * que ni hace falta pasarlo: al no venir en `$datos` queda NULL, que es
      * justo lo que define una semilla.
+     *
+     * Escribe con **`forceFill` y no con `create`** porque algunos de estos
+     * campos no son fillable a propósito —`tipos_medicion.clave` la pone
+     * solo este seeder, nunca un formulario—. Los índices ciegos se calculan
+     * igual: los llena el evento `saving` de `CifraCampos`.
      *
      * @param  class-string<Model&CifraDatos>  $modelo
      * @param  array<string, mixed>  $datos
@@ -66,8 +76,80 @@ class CatalogosSeeder extends Seeder
             ->exists();
 
         if (! $yaExiste) {
-            $modelo::create($datos);
+            (new $modelo)->forceFill($datos)->save();
         }
+    }
+
+    /**
+     * Las siete variables que cubren casi todo lo que sigue una persona en
+     * casa. Con estas cargadas, nadie tiene que crear nada para empezar a
+     * medir: la pantalla de "Variables" queda para el caso raro.
+     *
+     * ⚠️ Los rangos son **de referencia, no un veredicto** (regla 1: el
+     * sistema registra, no aconseja). Se muestran al lado del valor como en
+     * un análisis de laboratorio; ninguna pantalla pinta un número de rojo.
+     * Son los valores generales de adulto: el rango que le corresponde a una
+     * persona concreta lo dice su médico, y por eso cualquiera puede
+     * duplicar una de estas y ponerle el suyo.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function tiposMedicion(): array
+    {
+        return [
+            [
+                'clave' => TipoMedicion::CLAVE_PESO,
+                'nombre' => 'Peso',
+                'unidad' => 'kg',
+                'decimales' => 1,
+            ],
+            [
+                'clave' => TipoMedicion::CLAVE_ALTURA,
+                'nombre' => 'Altura',
+                'unidad' => 'cm',
+                'decimales' => 0,
+            ],
+            [
+                // El caso de dos valores, y el que motivó el esquema entero.
+                'nombre' => 'Presión arterial',
+                'unidad' => 'mmHg',
+                'etiqueta_principal' => 'Sistólica',
+                'etiqueta_secundaria' => 'Diastólica',
+                'min_normal' => 90,
+                'max_normal' => 140,
+                'min_normal_secundario' => 60,
+                'max_normal_secundario' => 90,
+                'decimales' => 0,
+            ],
+            [
+                'nombre' => 'Glucemia',
+                'unidad' => 'mg/dl',
+                'min_normal' => 70,
+                'max_normal' => 110,
+                'decimales' => 0,
+            ],
+            [
+                'nombre' => 'Temperatura',
+                'unidad' => '°C',
+                'min_normal' => 36,
+                'max_normal' => 37.5,
+                'decimales' => 1,
+            ],
+            [
+                'nombre' => 'Saturación de oxígeno',
+                'unidad' => '%',
+                'min_normal' => 95,
+                'max_normal' => 100,
+                'decimales' => 0,
+            ],
+            [
+                'nombre' => 'Pulso',
+                'unidad' => 'lpm',
+                'min_normal' => 60,
+                'max_normal' => 100,
+                'decimales' => 0,
+            ],
+        ];
     }
 
     /**
