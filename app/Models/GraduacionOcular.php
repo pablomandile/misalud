@@ -155,20 +155,27 @@ class GraduacionOcular extends Model implements CifraDatos, PerteneceAPaciente
      *
      * El cero se muestra **sin signo** -"0,00"-: un "+0,00" sugiere una
      * dirección que no existe.
+     *
+     * **Estática y no solo de instancia** porque la necesita también
+     * `PrescripcionOcularController::evolucion()`, para el resumen
+     * (mínimo/máximo/promedio) que arma sobre valores ya extraídos de varias
+     * filas -ahí no hay una sola `GraduacionOcular` de la que colgar el
+     * cálculo-.
      */
+    public static function formatearDioptria(float $valor): string
+    {
+        $texto = $valor === 0.0
+            ? number_format(0, 2, ',', '')
+            : sprintf('%+.2f', $valor);
+
+        return str_replace('.', ',', $texto);
+    }
+
     public function dioptriaVisible(string $campo): ?string
     {
         $numero = $this->numero($campo);
 
-        if ($numero === null) {
-            return null;
-        }
-
-        $texto = $numero === 0.0
-            ? number_format(0, 2, ',', '')
-            : sprintf('%+.2f', $numero);
-
-        return str_replace('.', ',', $texto);
+        return $numero === null ? null : self::formatearDioptria($numero);
     }
 
     /** El eje es un ángulo entero, sin decimales y con su grado. */

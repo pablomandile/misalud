@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { Form, Head } from '@inertiajs/vue3';
-import { ArrowLeft, Eye, FileText, Plus, Trash2 } from '@lucide/vue';
+import {
+    ArrowLeft,
+    ArrowLeftRight,
+    Eye,
+    FileText,
+    Plus,
+    Trash2,
+} from '@lucide/vue';
 import { ref } from 'vue';
 import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
 import PrescripcionOcularController from '@/actions/App/Http/Controllers/PrescripcionOcularController';
 import type { ValoresDeOjo } from '@/components/DiagramaOjo.vue';
 import DiagramaOjo from '@/components/DiagramaOjo.vue';
+import GraficoEvolucion from '@/components/GraficoEvolucion.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import SubirArchivo from '@/components/SubirArchivo.vue';
@@ -51,6 +59,15 @@ import {
  * controlador los guarda en una transacción. Un ojo sin datos dice "sin
  * datos", que es una respuesta —a diferencia de una fila que falta, que no
  * se sabe si es un ojo sano o una carga a medias—.
+ *
+ * ## Transponer es solo una forma distinta de MOSTRAR
+ *
+ * "Transponer" no guarda nada ni pega al servidor: alterna un `Set` local
+ * de ids que le pasa `transpuesto` a `DiagramaOjo`, que hace la cuenta con
+ * los valores que ya tiene en la mano (ver el comentario largo ahí). Por
+ * eso se pierde al recargar la página, y está bien que sea así -es una
+ * lectura distinta del mismo papel, no una preferencia que alguien
+ * necesite que persista-.
  */
 
 type Documento = DocumentoVisible & {
@@ -74,12 +91,32 @@ type Prescripcion = {
     adjuntos: Documento[];
 };
 
+type PuntoDeEsfera = {
+    fechaIso: string;
+    fechaVisible: string;
+    valor: number;
+    valorSecundario: null;
+};
+
+type EvolucionDeOjo = {
+    ojo: 'od' | 'oi';
+    etiqueta: string;
+    puntos: PuntoDeEsfera[];
+    resumen: {
+        cantidad: number;
+        minimo: string;
+        maximo: string;
+        promedio: string;
+    };
+};
+
 defineProps<{
     paciente: { id: number; nombre: string; puedeEditar: boolean };
     prescripciones: Prescripcion[];
     tipos: Array<{ valor: string; etiqueta: string }>;
     medicos: Array<{ id: number; nombre: string }>;
     centros: Array<{ id: number; nombre: string }>;
+    evolucion: EvolucionDeOjo[];
     hoy: string | null;
 }>();
 
@@ -107,6 +144,46 @@ function pesoLegible(bytes: number): string {
     return bytes < 1024 * 1024
         ? `${Math.round(bytes / 1024)} KB`
         : `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
+}
+
+// Qué recetas se están mostrando transpuestas. Ver el comentario de arriba:
+// es un `Set` de ids, no una propiedad de cada receta -no hay nada que
+// guardar-.
+const transpuestas = ref<Set<number>>(new Set());
+
+function alternarTransposicion(id: number): void {
+    const nuevo = new Set(transpuestas.value);
+
+    if (nuevo.has(id)) {
+        nuevo.delete(id);
+    } else {
+        nuevo.add(id);
+    }
+
+    transpuestas.value = nuevo;
+}
+
+/*
+ * Si ninguno de los dos ojos tiene cilindro, no hay nada que transponer -la
+ * esfera sola no tiene "otra forma"- y el botón sería un control que no
+ * hace nada. `cilindro` llega como string ("0", "-0.50", null): un `Number`
+ * antes de comparar, porque `Boolean("0")` es `true` en JS.
+ */
+function tieneAlgoQueTransponer(receta: Prescripcion): boolean {
+    return (
+        Number(receta.ojos.od.cilindro ?? 0) !== 0 ||
+        Number(receta.ojos.oi.cilindro ?? 0) !== 0
+    );
+}
+
+function resumenAccesibleDeOjo(serie: EvolucionDeOjo): string {
+    return (
+        `Esfera del ${serie.etiqueta}: ${serie.resumen.cantidad} recetas. ` +
+        `Mínimo ${serie.resumen.minimo} D. ` +
+        `Máximo ${serie.resumen.maximo} D. ` +
+        `Promedio ${serie.resumen.promedio} D. ` +
+        'El detalle está en cada receta, más arriba.'
+    );
 }
 </script>
 
@@ -166,26 +243,38 @@ function pesoLegible(bytes: number): string {
                             </p>
                         </div>
 
-                        <div
-                            v-if="paciente.puedeEditar"
-                            class="flex shrink-0 gap-1"
-                        >
+                        <div class="flex shrink-0 flex-wrap justify-end gap-1">
                             <Button
+                                v-if="tieneAlgoQueTransponer(receta)"
                                 variant="ghost"
                                 size="sm"
-                                @click="recetaAEditar = receta"
+                                @click="alternarTransposicion(receta.id)"
                             >
-                                Editar
+                                <ArrowLeftRight />
+                                {{
+                                    transpuestas.has(receta.id)
+                                        ? 'Volver al papel'
+                                        : 'Transponer'
+                                }}
                             </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                class="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                :aria-label="`Eliminar la receta del ${receta.fechaVisible}`"
-                                @click="recetaABorrar = receta"
-                            >
-                                <Trash2 class="size-4" />
-                            </Button>
+                            <template v-if="paciente.puedeEditar">
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    @click="recetaAEditar = receta"
+                                >
+                                    Editar
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    class="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                    :aria-label="`Eliminar la receta del ${receta.fechaVisible}`"
+                                    @click="recetaABorrar = receta"
+                                >
+                                    <Trash2 class="size-4" />
+                                </Button>
+                            </template>
                         </div>
                     </div>
 
@@ -193,17 +282,23 @@ function pesoLegible(bytes: number): string {
                         OD primero en el DOM: apilados en el celular queda
                         arriba, y en escritorio a la izquierda. Las dos cosas
                         son la misma convención.
+
+                        `transpuesto` solo cambia lo que se MUESTRA acá -el
+                        listado-, nunca el formulario de alta o edición, que
+                        siempre carga y guarda tal cual figura en el papel.
                     -->
                     <div class="grid gap-4 md:grid-cols-2">
                         <DiagramaOjo
                             ojo="od"
                             modo="lectura"
                             :valores="receta.ojos.od"
+                            :transpuesto="transpuestas.has(receta.id)"
                         />
                         <DiagramaOjo
                             ojo="oi"
                             modo="lectura"
                             :valores="receta.ojos.oi"
+                            :transpuesto="transpuestas.has(receta.id)"
                         />
                     </div>
 
@@ -283,6 +378,50 @@ function pesoLegible(bytes: number): string {
                 </CardContent>
             </Card>
         </div>
+
+        <!--
+            Solo con dos o más recetas por ojo: una línea de un punto no es
+            una evolución. Es `esfera` sola, no un "poder equivalente"
+            -sumar esfera y cilindro sería una cuenta que el papel no trae
+            escrita, y el sistema registra, no interpreta (regla 1)-.
+        -->
+        <section v-if="evolucion.length > 0" class="space-y-3">
+            <h2 class="text-lg font-medium">Evolución de la esfera</h2>
+
+            <Card v-for="serie in evolucion" :key="serie.ojo">
+                <CardContent class="space-y-2">
+                    <p class="text-sm text-muted-foreground">
+                        {{ serie.etiqueta }} ·
+                        {{ serie.resumen.cantidad }} recetas · mínimo
+                        {{ serie.resumen.minimo }} · máximo
+                        {{ serie.resumen.maximo }} · promedio
+                        {{ serie.resumen.promedio }} D
+                    </p>
+
+                    <!--
+                        `zona-horaria="UTC"`, string literal y no un binding:
+                        `prescripcion.fecha` es una fecha de CALENDARIO que
+                        Carbon guarda a medianoche UTC. Mostrarla en la zona
+                        del navegador corre el día -la misma trampa de
+                        `hoy()` vs `hoyCalendario()`, del lado del cliente
+                        (ver Etapa 9.4 en CLAUDE.md)-.
+                    -->
+                    <GraficoEvolucion
+                        :puntos="serie.puntos"
+                        :etiqueta-principal="serie.etiqueta"
+                        :etiqueta-secundaria="null"
+                        unidad="D"
+                        :decimales="2"
+                        :min-normal="null"
+                        :max-normal="null"
+                        :min-normal-secundario="null"
+                        :max-normal-secundario="null"
+                        zona-horaria="UTC"
+                        :resumen-accesible="resumenAccesibleDeOjo(serie)"
+                    />
+                </CardContent>
+            </Card>
+        </section>
 
         <div>
             <Button variant="outline" as-child>

@@ -15,6 +15,7 @@ use App\Models\Paciente;
 use App\Models\PrescripcionOcular;
 use App\Support\CatalogoVisible;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -38,11 +39,7 @@ class PrescripcionOcularController extends Controller
         $prescripciones = $paciente->prescripcionesOculares()
             // Explícito: sin esto son dos consultas por cada receta del listado.
             ->with(['medico', 'centro', 'graduaciones', 'adjuntos'])
-            ->get()
-            ->sortByDesc(fn (PrescripcionOcular $receta): string => $receta->fecha->format('Ymd'))
-            ->values()
-            ->map(fn (PrescripcionOcular $receta): array => $this->serializar($receta))
-            ->all();
+            ->get();
 
         return Inertia::render('ocular/Index', [
             'paciente' => [
@@ -50,7 +47,11 @@ class PrescripcionOcularController extends Controller
                 'nombre' => $paciente->nombre,
                 'puedeEditar' => $paciente->rolDe($usuario)?->puedeEditar() ?? false,
             ],
-            'prescripciones' => $prescripciones,
+            'prescripciones' => $prescripciones
+                ->sortByDesc(fn (PrescripcionOcular $receta): string => $receta->fecha->format('Ymd'))
+                ->values()
+                ->map(fn (PrescripcionOcular $receta): array => $this->serializar($receta))
+                ->all(),
             'tipos' => array_map(
                 fn (TipoPrescripcionOcular $tipo): array => [
                     'valor' => $tipo->value,
@@ -60,6 +61,7 @@ class PrescripcionOcularController extends Controller
             ),
             'medicos' => $this->medicosDisponibles($paciente),
             'centros' => $this->centrosDisponibles($paciente),
+            'evolucion' => $this->evolucion($prescripciones),
             'hoy' => $usuario?->hoyCalendario()->format('Y-m-d'),
         ]);
     }
@@ -174,6 +176,72 @@ class PrescripcionOcularController extends Controller
             ->values()
             ->map(fn (Centro $centro): array => ['id' => $centro->id, 'nombre' => $centro->nombre])
             ->all());
+    }
+
+    /**
+     * La evolución de la esfera de cada ojo, para quien tenga varias
+     * recetas a lo largo del tiempo. Reusa `GraficoEvolucion.vue` (paso 9.4).
+     *
+     * **Dos series independientes, no una con OD de principal y OI de
+     * secundario** -como hace una presión con sistólica/diastólica-: acá un
+     * ojo puede no tener corrección mientras el otro sí (`numero()` da
+     * `null`), y `GraficoEvolucion` no admite un punto con `valor` nulo.
+     * Cada serie se arma y se filtra por su cuenta, mismo criterio que la
+     * evolución de un resultado de estudio.
+     *
+     * @param  Collection<int, PrescripcionOcular>  $prescripciones  con sus graduaciones ya cargadas
+     * @return list<array<string, mixed>>
+     */
+    private function evolucion(Collection $prescripciones): array
+    {
+        $ordenadas = $prescripciones->sortBy(
+            fn (PrescripcionOcular $r): string => $r->fecha->format('Ymd'),
+        );
+
+        $series = [];
+
+        foreach (Ojo::cases() as $ojo) {
+            $puntos = $ordenadas
+                ->map(function (PrescripcionOcular $r) use ($ojo): ?array {
+                    $numero = $r->graduacionDe($ojo)?->numero('esfera');
+
+                    if ($numero === null) {
+                        return null;
+                    }
+
+                    return [
+                        'fechaIso' => $r->fecha->toIso8601String(),
+                        'fechaVisible' => $r->fecha->format('d/m/Y'),
+                        'valor' => $numero,
+                        'valorSecundario' => null,
+                    ];
+                })
+                ->filter()
+                ->values();
+
+            // Con menos de dos puntos no hay evolución que graficar: una
+            // línea de un punto no es una evolución (misma regla que
+            // mediciones y resultados de estudios).
+            if ($puntos->count() < 2) {
+                continue;
+            }
+
+            $valores = $puntos->pluck('valor');
+
+            $series[] = [
+                'ojo' => $ojo->value,
+                'etiqueta' => $ojo->etiqueta(),
+                'puntos' => $puntos->all(),
+                'resumen' => [
+                    'cantidad' => $puntos->count(),
+                    'minimo' => GraduacionOcular::formatearDioptria((float) $valores->min()),
+                    'maximo' => GraduacionOcular::formatearDioptria((float) $valores->max()),
+                    'promedio' => GraduacionOcular::formatearDioptria((float) $valores->avg()),
+                ],
+            ];
+        }
+
+        return $series;
     }
 
     /**

@@ -529,3 +529,88 @@ it('no deja tocar la receta de otra ficha desde una ruta de esta', function (): 
         ->delete(route('salud-ocular.destroy', $ajena))
         ->assertForbidden();
 });
+
+/*
+|--------------------------------------------------------------------------
+| formatearDioptria: el signo y el cero
+|--------------------------------------------------------------------------
+*/
+
+it('la dioptría lleva signo, salvo el cero', function (): void {
+    expect(GraduacionOcular::formatearDioptria(2.0))->toBe('+2,00')
+        ->and(GraduacionOcular::formatearDioptria(-1.25))->toBe('-1,25')
+        ->and(GraduacionOcular::formatearDioptria(0.0))->toBe('0,00')
+        // -0.0 es un cero igual: "-0,00" confundiría con una dirección.
+        ->and(GraduacionOcular::formatearDioptria(-0.0))->toBe('0,00');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Evolución de la esfera (paso 10.4)
+|--------------------------------------------------------------------------
+*/
+
+it('arma la evolución de cada ojo por separado', function (): void {
+    [$usuario, $paciente] = fichaOcular();
+    PrescripcionOcular::factory()->for($paciente)->conOjos(
+        od: ['esfera' => '-1.00'],
+        oi: ['esfera' => '-1.25'],
+    )->create(['fecha' => '2024-01-10']);
+    PrescripcionOcular::factory()->for($paciente)->conOjos(
+        od: ['esfera' => '-1.50'],
+        oi: ['esfera' => '-1.75'],
+    )->create(['fecha' => '2026-03-20']);
+
+    $this->actingAs($usuario)
+        ->get(route('pacientes.salud-ocular.index', $paciente))
+        ->assertInertia(fn ($p) => $p
+            ->has('evolucion', 2)
+            ->where('evolucion.0.ojo', 'od')
+            ->has('evolucion.0.puntos', 2)
+            // json_encode(-1.0) sin JSON_PRESERVE_ZERO_FRACTION emite -1, no
+            // -1.0: assertInertia compara estricto, así que el literal sin
+            // parte decimal va como entero (misma trampa de la Etapa 9).
+            ->where('evolucion.0.puntos.0.valor', -1)
+            ->where('evolucion.0.puntos.1.valor', -1.5)
+            ->where('evolucion.0.resumen.cantidad', 2)
+            ->where('evolucion.1.ojo', 'oi')
+            ->where('evolucion.1.puntos.0.valor', -1.25)
+        );
+});
+
+it('un ojo sin corrección no rompe la evolución del otro', function (): void {
+    /*
+     * Es justo el caso que obliga a dos series independientes y no una con
+     * OD de principal y OI de secundario: acá el OI no tiene esfera en
+     * ninguna receta -`GraficoEvolucion` no admite un `valor` nulo-.
+     *
+     * `conOjos()` sin pasar `oi:` deja el ojo izquierdo con el default de
+     * la factory -que SÍ trae esfera-, así que acá hay que anularla a mano
+     * para probar el caso real: un ojo sin ninguna corrección.
+     */
+    [$usuario, $paciente] = fichaOcular();
+    PrescripcionOcular::factory()->for($paciente)->conOjos(
+        od: ['esfera' => '-1.00'],
+        oi: ['esfera' => null, 'cilindro' => null, 'eje' => null],
+    )->create(['fecha' => '2024-01-10']);
+    PrescripcionOcular::factory()->for($paciente)->conOjos(
+        od: ['esfera' => '-1.50'],
+        oi: ['esfera' => null, 'cilindro' => null, 'eje' => null],
+    )->create(['fecha' => '2026-03-20']);
+
+    $this->actingAs($usuario)
+        ->get(route('pacientes.salud-ocular.index', $paciente))
+        ->assertInertia(fn ($p) => $p
+            ->has('evolucion', 1)
+            ->where('evolucion.0.ojo', 'od')
+        );
+});
+
+it('con una sola receta no hay evolución que graficar', function (): void {
+    [$usuario, $paciente] = fichaOcular();
+    PrescripcionOcular::factory()->for($paciente)->create();
+
+    $this->actingAs($usuario)
+        ->get(route('pacientes.salud-ocular.index', $paciente))
+        ->assertInertia(fn ($p) => $p->where('evolucion', []));
+});

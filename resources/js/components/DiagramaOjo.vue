@@ -79,8 +79,15 @@ const props = withDefaults(
         modo?: 'carga' | 'lectura';
         valores?: ValoresDeOjo | null;
         errores?: Record<string, string | undefined>;
+        /*
+         * Solo tiene efecto en modo lectura: muestra la esfera, el
+         * cilindro y el eje en su forma equivalente (transposición), sin
+         * tocar lo guardado. Ver el comentario largo sobre `transposicion`
+         * más abajo.
+         */
+        transpuesto?: boolean;
     }>(),
-    { modo: 'carga', valores: null, errores: () => ({}) },
+    { modo: 'carga', valores: null, errores: () => ({}), transpuesto: false },
 );
 
 const campoBase =
@@ -159,9 +166,102 @@ const escrito = reactive<Record<string, string>>(
     ),
 );
 
+/*
+ * Igual que `GraduacionOcular::formatearDioptria()` en el backend: signo
+ * obligatorio salvo en cero, dos decimales, coma. Se repite acá -y no se
+ * manda formateada desde el servidor- porque la transposición es un cálculo
+ * que solo tiene sentido hacerlo con el número ya en la mano, del lado
+ * donde se decide mostrarlo o no.
+ */
+function formatearDioptria(valor: number): string {
+    const limpio = valor === 0 ? 0 : valor;
+    const texto =
+        limpio === 0
+            ? (0).toFixed(2)
+            : `${limpio > 0 ? '+' : ''}${limpio.toFixed(2)}`;
+
+    return texto.replace('.', ',');
+}
+
+/*
+ * La transposición: la misma corrección óptica, escrita con el cilindro en
+ * el signo contrario.
+ *
+ *   esfera' = esfera + cilindro
+ *   cilindro' = -cilindro
+ *   eje' = eje + 90 (o -90 si eje ya pasa los 90, para quedar en 0-180)
+ *
+ * Es aritmética, no una opinión: las dos formas describen el mismo lente.
+ * Se guarda SIEMPRE la que trae el papel (ver `PrescripcionOcularController`
+ * y CLAUDE.md) y esto solo cambia lo que se MUESTRA, nunca lo guardado -por
+ * eso vive acá, del lado de la lectura, y no toca ningún campo del alta.
+ *
+ * Sin cilindro no hay nada que transponer: la esfera sola no tiene "la otra
+ * forma".
+ */
+const transposicion = computed(() => {
+    const v = props.valores;
+    const cilindro =
+        v?.cilindro !== null && v?.cilindro !== undefined
+            ? Number(v.cilindro)
+            : null;
+
+    if (
+        !v ||
+        cilindro === null ||
+        cilindro === 0 ||
+        v.esfera === null ||
+        v.eje === null
+    ) {
+        return null;
+    }
+
+    const esfera = Number(v.esfera);
+    const eje = Number(v.eje);
+
+    const esferaT = esfera + cilindro;
+    const cilindroT = -cilindro;
+    const ejeT = eje <= 90 ? eje + 90 : eje - 90;
+
+    const esferaVisible = formatearDioptria(esferaT);
+    const cilindroVisible = formatearDioptria(cilindroT);
+
+    const partes = [
+        esferaVisible,
+        `${cilindroVisible} x ${ejeT}°`,
+        v.adicionVisible ? `Add ${v.adicionVisible}` : null,
+    ].filter((p): p is string => p !== null);
+
+    return {
+        esferaVisible,
+        cilindroVisible,
+        eje: String(ejeT),
+        resumen: partes.join('  '),
+    };
+});
+
+// Lo efectivamente mostrado: transpuesto solo si se pidió Y hay algo que
+// transponer -sin cilindro, `transposicion` es null y se cae al original-.
+const mostrado = computed(() => {
+    if (
+        props.modo === 'carga' ||
+        !props.transpuesto ||
+        transposicion.value === null
+    ) {
+        return {
+            esferaVisible: props.valores?.esferaVisible ?? null,
+            cilindroVisible: props.valores?.cilindroVisible ?? null,
+            eje: props.valores?.eje ?? null,
+            resumen: props.valores?.resumen ?? null,
+        };
+    }
+
+    return transposicion.value;
+});
+
 const ejeDibujado = computed<number | null>(() => {
     const crudo =
-        props.modo === 'carga' ? escrito.eje : (props.valores?.eje ?? '');
+        props.modo === 'carga' ? escrito.eje : (mostrado.value.eje ?? '');
     const numero = Number(String(crudo ?? '').trim());
 
     if (!crudo || !Number.isFinite(numero) || numero < 0 || numero > 180) {
@@ -205,13 +305,15 @@ function errorDe(clave: string): string | undefined {
 
 // Las filas del modo lectura, sin las que no tienen nada cargado: un campo
 // vacío ocupa lugar y no dice nada (regla 2, "sin datos" se dice una vez).
+// Esfera, cilindro y eje salen de `mostrado` -el original o el transpuesto,
+// según el toggle-; el resto de la receta no cambia con la transposición.
 const filasVisibles = computed(() =>
     [
-        { etiqueta: 'Esfera', valor: props.valores?.esferaVisible },
+        { etiqueta: 'Esfera', valor: mostrado.value.esferaVisible },
         {
             etiqueta: 'Cilindro',
-            valor: props.valores?.cilindroVisible
-                ? `${props.valores.cilindroVisible}${props.valores.eje ? ` x ${props.valores.eje}°` : ''}`
+            valor: mostrado.value.cilindroVisible
+                ? `${mostrado.value.cilindroVisible}${mostrado.value.eje ? ` x ${mostrado.value.eje}°` : ''}`
                 : null,
         },
         { etiqueta: 'Adición', valor: props.valores?.adicionVisible },
@@ -349,7 +451,15 @@ const filasVisibles = computed(() =>
             </p>
 
             <template v-else>
-                <p class="text-center font-medium">{{ valores?.resumen }}</p>
+                <p class="text-center font-medium">
+                    {{ mostrado.resumen }}
+                    <span
+                        v-if="transpuesto && transposicion !== null"
+                        class="font-normal text-muted-foreground"
+                    >
+                        (transpuesto)
+                    </span>
+                </p>
 
                 <dl class="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
                     <div

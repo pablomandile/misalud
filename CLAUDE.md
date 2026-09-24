@@ -1375,6 +1375,73 @@ midiendo lo que no quería medir. Hay que esperar a que la posición del panel *
 entre dos frames, no a que el selector exista. Misma familia que el `canvas.width > 0` de
 `revisar-visor.mjs`.
 
+### La transposición del cilindro: aritmética, no una opinión
+
+El cilindro se escribe en forma negativa o positiva según la óptica, y las dos son
+equivalentes. Se guarda **siempre** la que trae el papel —para que la pantalla coincida con
+lo que la persona tiene en la mano—, y un botón "Transponer" muestra la otra forma sin tocar
+lo guardado:
+
+```
+esfera' = esfera + cilindro
+cilindro' = -cilindro
+eje' = eje + 90 (o -90 si eje ya pasa los 90, para quedar en 0-180)
+```
+
+- **Vive en `DiagramaOjo.vue`, no en el backend.** La transposición se calcula con los
+  valores crudos que el componente ya recibe (`valores.esfera`, `.cilindro`, `.eje`) —los
+  mismos que precargan el formulario de edición—, así que no hace falta ni una consulta más
+  ni mandar una segunda copia de cada receta. Es puramente una forma distinta de MOSTRAR: el
+  toggle vive en un `Set` local de `ocular/Index.vue` y se pierde al recargar la página, a
+  propósito —es una lectura distinta del mismo papel, no una preferencia que alguien necesite
+  que persista—.
+- **El botón no aparece si no hay nada que transponer.** Sin cilindro, la esfera sola no
+  tiene "otra forma", y un botón que no hace nada es peor que ningún botón. ⚠️ `cilindro`
+  llega como string (`"0"`, `"-0.50"`, `null`): hay que comparar con `Number(...)`, porque
+  `Boolean("0")` es `true` en JavaScript.
+- **El diagrama también rota**, no solo el texto: `ejeDibujado` lee del eje transpuesto
+  cuando el toggle está activo, así que ver el ángulo cambiar en pantalla es la confirmación
+  visual de que las dos formas describen el mismo lente. Verificado en Chrome con un caso
+  concreto: `-1,00 -2,00 x 60°` transpuesto da `-3,00 +2,00 x 150°`, con el dibujo girando de
+  60° a 150°, y "Volver al papel" devuelve el original byte a byte.
+- **Editar siempre muestra lo guardado**, nunca lo transpuesto: el toggle es del `<DiagramaOjo
+modo="lectura">` del listado, y el sheet de alta/edición no recibe `transpuesto` —abre
+  siempre con el valor tal cual está en la base, que es lo único que tiene sentido corregir.
+- `GraduacionOcular::formatearDioptria()` se hizo **estática** para esto: la necesitan tanto
+  la instancia (`dioptriaVisible()`) como `PrescripcionOcularController::evolucion()`, que
+  arma un resumen sobre varios valores sin tener una fila de la que colgar el cálculo.
+
+### La evolución de la esfera: dos series independientes, no una con secundario
+
+Reusa `GraficoEvolucion.vue` (Etapa 6.3), con la misma decisión de dos series separadas que
+ya tomó la evolución de un resultado de estudio —y por el mismo motivo—:
+
+> Un ojo puede no tener corrección mientras el otro sí, y un punto de `GraficoEvolucion` no
+> admite un `valor` nulo.
+
+Si se usara el mecanismo de "principal/secundario" que sí usa una presión (sistólica y
+diastólica **siempre llegan juntas**, del mismo evento), un ojo sin esfera en una receta
+puntual rompería el punto entero. `PrescripcionOcularController::evolucion()` arma OD y OI
+por separado, cada uno filtrando sus propios `null` y exigiendo dos o más puntos antes de
+existir —misma regla de siempre: una línea de un punto no es una evolución—.
+
+Se grafica **la esfera sola**, no un "poder equivalente" (esfera + cilindro/2). Aunque es una
+convención oftalmológica real, es una cuenta que el papel no trae escrita, y el sistema
+registra lo que se cargó, no una interpretación de eso (regla 1).
+
+⚠️ **`prescripciones_oculares.fecha` es una fecha de calendario**, la misma trampa que ya
+documentó la Etapa 9.4: `zona-horaria="UTC"` va como **string literal**, nunca un binding, o
+el navegador corre el día en cualquier zona horaria negativa.
+
+### Un descuido en la factory que hizo pasar un test con el caso equivocado
+
+`PrescripcionOcularFactory::conOjos(od: [...])`, sin pasar `oi:`, deja el ojo izquierdo con
+el **default de la factory** —que trae esfera y cilindro no nulos—, no en blanco. Un primer
+test de "un ojo sin corrección no rompe la evolución del otro" pasaba con el caso equivocado:
+el OI "sin corrección" en realidad tenía una esfera de sobra puesta por el default, y la
+evolución devolvía dos series en vez de una. Hay que anular `esfera`/`cilindro`/`eje` a mano
+cuando el test necesita un ojo realmente vacío.
+
 ## Cobertura médica
 
 `coberturas` es tabla propia y no columnas en `pacientes`: mucha gente tiene obra social y
@@ -1859,7 +1926,30 @@ cualquier cosa**: `waitForSelector({visible:true})` da el elemento por bueno mie
 todavía se desliza, y ahí `elementFromPoint` no encuentra nada. El chequeo informaba "20px"
 con el arreglo ya funcionando. Detalle y salida en la sección de arriba.
 
-Pendiente, en este orden: **salud ocular 10.3 y 10.4** (transposición del cilindro y evolución
-de la graduación, los dos de Sonnet 5) · turnos y recordatorios · casilla y recetas ·
-contactos y envío · compartir la ficha · dashboard y deploy. Queda también, sin fecha, la
-Etapa 16 (consultas y grabaciones), que el plan deja adelantable.
+**Etapa 10 completa** con 10.3 y 10.4: transposición del cilindro y evolución de la esfera,
+reusando `GraficoEvolucion.vue`. El PDF de la receta y el listado por fecha ya habían quedado
+resueltos en 10.1/10.2 -declarar `TieneArchivos` sin pantalla que lo usara hubiera sido el
+mismo error que ya evitó la Etapa 3-.
+
+La transposición es aritmética pura sobre los valores que el componente ya tiene en la
+mano -no pega al servidor, no persiste, se pierde al recargar a propósito- y el diagrama
+**rota** cuando se activa, no solo cambia el texto: es la confirmación visual de que las dos
+formas describen el mismo lente. La evolución necesitó dos series independientes por ojo, no
+una con OD de principal y OI de secundario como hace una presión: acá un ojo puede no tener
+corrección mientras el otro sí, y un punto de `GraficoEvolucion` no admite un `valor` nulo.
+
+Verificado en Chrome, con un caso concreto y no solo "se ve bien": `-1,00 -2,00 x 60°`
+transpuesto da `-3,00 +2,00 x 150°`, con el dibujo girando de 60° a 150° y "Volver al papel"
+devolviendo el original exacto; el botón está ausente cuando ningún ojo tiene cilindro real;
+el gráfico de evolución dibuja de verdad (177228 píxeles); y la matriz de desborde con el
+botón nuevo, en los tres tamaños de letra.
+
+Un hallazgo, esta vez en la propia suite de tests y no en Chrome: `conOjos(od: [...])` sin
+pasar `oi:` deja el ojo izquierdo con el default de la factory -que trae esfera y cilindro,
+no en blanco-, y un primer test de "un ojo sin corrección" pasaba probando el caso
+equivocado. Quedó documentado en la sección de arriba, para quien escriba el próximo test que
+necesite un ojo realmente vacío.
+
+Pendiente, en este orden: turnos y recordatorios · casilla y recetas · contactos y envío ·
+compartir la ficha · dashboard y deploy. Queda también, sin fecha, la Etapa 16 (consultas y
+grabaciones), que el plan deja adelantable.
