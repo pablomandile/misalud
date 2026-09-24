@@ -8,18 +8,18 @@ use App\Enums\TipoAdjunto;
 use App\Models\Adjunto;
 use App\Models\Cobertura;
 use App\Models\Paciente;
+use App\Models\Tratamiento;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
  * Panel principal.
  *
- * Por ahora resuelve un solo acceso rápido -la credencial de la obra
- * social del paciente activo-, que es el paso 4.2 del plan. El resto
- * (recetas disponibles, tratamientos, turnos, órdenes pendientes, últimas
- * mediciones) llega en la Etapa 15, cuando esos módulos existan: no tiene
- * sentido armar el layout final del dashboard con cuatro quintos de las
- * tarjetas vacías.
+ * Resuelve dos accesos rápidos: la credencial de la obra social (paso 4.2)
+ * y los tratamientos activos (paso 8.2) del paciente activo. El resto
+ * (recetas disponibles, turnos, órdenes pendientes, últimas mediciones)
+ * llega en la Etapa 15, cuando esos módulos existan: no tiene sentido armar
+ * el layout final del dashboard con la mitad de las tarjetas vacías.
  */
 class DashboardController extends Controller
 {
@@ -33,6 +33,7 @@ class DashboardController extends Controller
                 'nombre' => $paciente->nombre,
             ],
             'credenciales' => $paciente === null ? [] : $this->credencialesDe($paciente),
+            'tratamientosActivos' => $paciente === null ? [] : $this->tratamientosActivosDe($paciente),
         ]);
     }
 
@@ -49,7 +50,10 @@ class DashboardController extends Controller
     private function pacienteActivo(): ?Paciente
     {
         $pacientes = auth()->user()->pacientes()
-            ->with('coberturas.adjuntos')
+            ->with(['coberturas.adjuntos', 'tratamientos' => fn ($consulta) => $consulta
+                ->where('activo', true)
+                ->with('medicamento'),
+            ])
             ->get();
 
         $activoId = session('paciente_activo_id');
@@ -94,5 +98,24 @@ class DashboardController extends Controller
         // encadenado, que el resultado de flatMap()->map() ya sea una lista
         // con claves 0..n-1 -aunque en tiempo de ejecución lo sea-.
         return array_values($credenciales);
+    }
+
+    /**
+     * Los tratamientos activos, ya filtrados y con su medicamento cargados
+     * en `pacienteActivo()` -acá no se vuelve a consultar la base-.
+     *
+     * @return list<array{id: int, medicamento: string, dosis: string, frecuencia: string}>
+     */
+    private function tratamientosActivosDe(Paciente $paciente): array
+    {
+        return array_values($paciente->tratamientos
+            ->sortByDesc(fn (Tratamiento $t): string => $t->inicio->format('Ymd'))
+            ->map(fn (Tratamiento $t): array => [
+                'id' => $t->id,
+                'medicamento' => $t->medicamento->nombre_comercial,
+                'dosis' => $t->dosis,
+                'frecuencia' => $t->frecuencia,
+            ])
+            ->all());
     }
 }

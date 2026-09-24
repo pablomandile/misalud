@@ -15,6 +15,7 @@ use Database\Factories\MedicamentoFactory;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -84,5 +85,17 @@ class Medicamento extends Model implements CifraDatos, EsCatalogo
     public function indicesCiegos(): array
     {
         return ['nombre_comercial' => 'nombre_hash'];
+    }
+
+    /**
+     * Los tratamientos que usan este medicamento. `MedicamentoController::destroy()`
+     * la consulta antes de borrar: un medicamento con tratamientos cargados
+     * no se puede eliminar (ver esa clase y la migración de `tratamientos`).
+     *
+     * @return HasMany<Tratamiento, $this>
+     */
+    public function tratamientos(): HasMany
+    {
+        return $this->hasMany(Tratamiento::class);
     }
 }

@@ -5,6 +5,7 @@ import {
     CreditCard,
     FileText,
     HeartPulse,
+    Pill,
     Plus,
     Trash2,
     UserRound,
@@ -14,6 +15,7 @@ import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController'
 import EnfermedadController from '@/actions/App/Http/Controllers/EnfermedadController';
 import MedicionController from '@/actions/App/Http/Controllers/MedicionController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
+import TratamientoController from '@/actions/App/Http/Controllers/TratamientoController';
 import Heading from '@/components/Heading.vue';
 import PanelCobertura from '@/pages/pacientes/PanelCobertura.vue';
 import SubirArchivo from '@/components/SubirArchivo.vue';
@@ -241,6 +243,20 @@ function edadTexto(p: Paciente): string {
                                 <span class="sr-only">
                                     Enfermedades y alergias de
                                     {{ paciente.nombre }}
+                                </span>
+                            </Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" as-child>
+                            <Link
+                                :href="
+                                    TratamientoController.index({
+                                        paciente: paciente.id,
+                                    })
+                                "
+                            >
+                                <Pill />
+                                <span class="sr-only">
+                                    Tratamientos de {{ paciente.nombre }}
                                 </span>
                             </Link>
                         </Button>

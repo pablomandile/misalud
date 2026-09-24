@@ -1016,6 +1016,64 @@ Por eso la comparación vive en una regla y no repetida en cada FormRequest. Par
 `datetime` la regla es otra —hace falta la zona y un margen para el reloj del dispositivo—: eso
 sigue en `MedicionGuardarRequest`.
 
+## Tratamientos
+
+Qué medicamento toma un paciente, con qué dosis y por qué. `medicamento_id` es la **tercera**
+FK a un catálogo y sigue la misma regla que ya quedó escrita en la sección de Enfermedades:
+
+> Bloquear el borrado cuando la referencia es imprescindible para leer el registro; dejarla
+> ir cuando es metadato.
+
+Un tratamiento sin su medicamento es "500mg cada 8 horas" de nada: imprescindible, así que
+va con `restrictOnDelete` y `MedicamentoController::destroy()` lo frena antes con un mensaje
+—mismo freno que ya tiene `TipoMedicionController::destroy()` con las mediciones—.
+`medico_id` y `enfermedad_id` son metadato: `nullOnDelete`, sobreviven sin ellos.
+
+- **`activo` es un booleano, no un enum de estados.** Con dos estados reales -lo toma o no lo
+  toma- un enum sería una capa sin necesidad. Sigue el mismo patrón del checkbox `"on"` que
+  ya tiene `coberturas.activa`: se normaliza en `prepareForValidation()`.
+- **`inicio` NO tiene `FechaNoFutura`.** Al revés que una fecha de diagnóstico, un tratamiento
+  se puede cargar para empezar mañana -el médico lo indicó para después de terminar otro-.
+  Solo se valida `fin >= inicio`.
+- El medicamento, el médico y la enfermedad siguen el mismo criterio de "propio o semilla, o
+  ya usado en esta ficha" que enfermedades y mediciones (ver `CatalogoVisible`).
+
+### `misalud:cerrar-tratamientos-vencidos`: el primer comando del scheduler
+
+Corre una vez al día (`bootstrap/app.php`, `->withSchedule()`) y marca `activo = false` en
+todo tratamiento activo cuya `fin` ya pasó.
+
+⚠️ **Compara contra el día de hoy en UTC, no contra el de cada usuario**, y es la única
+excepción consciente a la regla de zona horaria del resto de la app. `User::hoyCalendario()`
+existe justo para esto, pero acá no hay un usuario: es un proceso de fondo para toda la base,
+y un paciente puede tener varios usuarios con distinta zona por el pivote. La imprecisión que
+queda -hasta unas horas cerca de la medianoche de cada zona- no tiene el costo que tiene en
+una validación en vivo: ahí un rechazo equivocado le arruina la carga a una persona; acá, en
+el peor caso, un tratamiento queda "activo" un día de más y el comando lo corrige solo al
+otro día. `activo` es informativo, no una condición de autorización ni un dato que se pierda.
+
+- Nunca pone `activo` en `true`: reactivar un tratamiento sigue siendo una acción manual de
+  quien lo edita.
+- Escribe con un `update()` masivo, no cargando cada modelo: no hace falta recalcular ningún
+  índice ciego -`activo` y `fin` no están cifrados- y son potencialmente muchas filas.
+- En producción lo dispara el cron de hPanel con `schedule:run` cada minuto (ver
+  `deploy-hostinger`); acá solo se declara qué correr y cuándo.
+
+### Un bug de reactividad que ningún test de Pest podía ver
+
+`tratamientos/Index.vue` separaba activos de inactivos con un `const` calculado una vez en el
+`setup()`. Cargar un tratamiento redirige a la **misma URL**, así que Inertia reutiliza la
+instancia del componente en vez de remontarla: `props.tratamientos` cambiaba, pero el `const`
+quedaba congelado con el valor de la carga inicial. El tratamiento recién creado no aparecía
+hasta un refresh manual de la página.
+
+Apareció recién verificando en Chrome real -los 393 tests de Pest pasaban igual, porque
+prueban la respuesta del servidor, no la reactividad del cliente-. Se arregla con
+`computed()` en vez de `const`, el mismo patrón que ya usa `enfermedades/Index.vue` para
+`vigentes`/`pasadas`. **Vale como regla general**: cualquier pantalla que derive listas de
+`props` filtrando o agrupando, y que pueda recibir un `redirect` a su propia URL, tiene que
+usar `computed()`. Un `const` es seguro solo si la pantalla nunca se revisita a sí misma.
+
 ## Cobertura médica
 
 `coberturas` es tabla propia y no columnas en `pacientes`: mucha gente tiene obra social y
@@ -1407,8 +1465,25 @@ píxeles), el promedio coincide con el de la pantalla de mediciones, la
 bitácora anota con la fecha de hoy y el selector de enfermedad aparece al
 cargar una medición.
 
+**Etapa 8 hecha**: tratamientos (8.1) y el cierre de vencidos por el scheduler más los
+tratamientos activos en el dashboard (8.2). `medicamento_id` es la tercera FK a un catálogo
+y confirma la regla que ya había quedado escrita en la Etapa 7 (bloquear cuando es
+imprescindible, dejar ir cuando es metadato) — `MedicamentoController::destroy()` ahora se
+frena igual que `TipoMedicionController::destroy()`.
+
+`misalud:cerrar-tratamientos-vencidos` es el primer comando del scheduler del proyecto
+(`bootstrap/app.php`, `->withSchedule()`), y la primera vez que un proceso de fondo compara
+contra "hoy" sin tener un usuario de quien tomar la zona horaria -ver esa sección para la
+decisión completa-.
+
+Verificando en Chrome apareció un bug real de reactividad en `tratamientos/Index.vue`: un
+`const` calculado una vez en vez de `computed()` dejaba el tratamiento recién cargado sin
+aparecer hasta un refresh manual, porque Inertia reutiliza la instancia del componente al
+redirigir a la misma URL. Los 393 tests de Pest pasaban igual -prueban al servidor, no la
+reactividad del cliente-. Quedó como regla general en esa sección.
+
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de
-variables · enfermedades y alergias · tratamientos · órdenes, estudios y resultados · salud
-ocular · turnos y recordatorios · casilla y recetas · contactos y envío · compartir la ficha ·
-dashboard y deploy.
+variables · enfermedades y alergias · órdenes, estudios y resultados · salud ocular · turnos
+y recordatorios · casilla y recetas · contactos y envío · compartir la ficha · dashboard y
+deploy.

@@ -15,6 +15,7 @@ use App\Http\Controllers\PacienteController;
 use App\Http\Controllers\RegistroEnfermedadController;
 use App\Http\Controllers\Settings\TamanioTextoController;
 use App\Http\Controllers\TipoMedicionController;
+use App\Http\Controllers\TratamientoController;
 use App\Http\Controllers\VacunaController;
 use Illuminate\Support\Facades\Route;
 
@@ -169,6 +170,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('pacientes.alergias.store');
     Route::put('alergias/{alergia}', [AlergiaController::class, 'update'])->name('alergias.update');
     Route::delete('alergias/{alergia}', [AlergiaController::class, 'destroy'])->name('alergias.destroy');
+
+    Route::get('pacientes/{paciente}/tratamientos', [TratamientoController::class, 'index'])
+        ->name('pacientes.tratamientos.index');
+    Route::post('pacientes/{paciente}/tratamientos', [TratamientoController::class, 'store'])
+        ->name('pacientes.tratamientos.store');
+    Route::put('tratamientos/{tratamiento}', [TratamientoController::class, 'update'])
+        ->name('tratamientos.update');
+    Route::delete('tratamientos/{tratamiento}', [TratamientoController::class, 'destroy'])
+        ->name('tratamientos.destroy');
 
     Route::get('pacientes', [PacienteController::class, 'index'])->name('pacientes.index');
     Route::post('pacientes', [PacienteController::class, 'store'])->name('pacientes.store');

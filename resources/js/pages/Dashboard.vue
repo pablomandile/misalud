@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { CreditCard } from '@lucide/vue';
+import { CreditCard, Pill } from '@lucide/vue';
 import { ref } from 'vue';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
+import TratamientoController from '@/actions/App/Http/Controllers/TratamientoController';
 import Heading from '@/components/Heading.vue';
 import type { DocumentoVisible } from '@/components/VisorDocumento.vue';
 import VisorDocumento from '@/components/VisorDocumento.vue';
@@ -13,11 +14,9 @@ import { dashboard } from '@/routes';
 /*
  * Panel principal.
  *
- * Por ahora el único contenido es el acceso rápido a la credencial (paso
- * 4.2 del plan): mostrarla en un mostrador es uno de los usos más
- * frecuentes de la app, y no puede estar a más de un toque. El resto del
- * dashboard -recetas, tratamientos, turnos, órdenes, últimas mediciones-
- * llega en la Etapa 15, cuando esos módulos existan.
+ * Dos accesos rápidos: la credencial (paso 4.2) y los tratamientos activos
+ * (paso 8.2). El resto del dashboard -recetas, turnos, órdenes, últimas
+ * mediciones- llega en la Etapa 15, cuando esos módulos existan.
  */
 
 type Credencial = DocumentoVisible & {
@@ -25,9 +24,17 @@ type Credencial = DocumentoVisible & {
     entidad: string;
 };
 
+type TratamientoActivo = {
+    id: number;
+    medicamento: string;
+    dosis: string;
+    frecuencia: string;
+};
+
 defineProps<{
     pacienteActivo: { id: number; nombre: string } | null;
     credenciales: Credencial[];
+    tratamientosActivos: TratamientoActivo[];
 }>();
 
 defineOptions({
@@ -110,6 +117,50 @@ const documentoAbierto = ref<DocumentoVisible | null>(null);
                             </span>
                         </button>
                     </div>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardContent class="space-y-3">
+                    <div class="flex items-center gap-2">
+                        <Pill class="size-5 text-muted-foreground" />
+                        <h2 class="font-medium">Tratamientos activos</h2>
+                    </div>
+
+                    <p
+                        v-if="tratamientosActivos.length === 0"
+                        class="text-sm text-muted-foreground"
+                    >
+                        Sin datos. No hay tratamientos activos cargados.
+                    </p>
+
+                    <ul v-else class="divide-y">
+                        <li
+                            v-for="tratamiento in tratamientosActivos"
+                            :key="tratamiento.id"
+                            class="py-2"
+                        >
+                            <p class="font-medium">
+                                {{ tratamiento.medicamento }}
+                            </p>
+                            <p class="text-sm text-muted-foreground">
+                                {{ tratamiento.dosis }} ·
+                                {{ tratamiento.frecuencia }}
+                            </p>
+                        </li>
+                    </ul>
+
+                    <Button variant="outline" size="sm" as-child>
+                        <Link
+                            :href="
+                                TratamientoController.index({
+                                    paciente: pacienteActivo.id,
+                                })
+                            "
+                        >
+                            Ver todos
+                        </Link>
+                    </Button>
                 </CardContent>
             </Card>
         </template>

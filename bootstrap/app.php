@@ -1,8 +1,10 @@
 <?php
 
+use App\Console\Commands\CerrarTratamientosVencidos;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\HandleTamanioTexto;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -24,6 +26,15 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
+    })
+    ->withSchedule(function (Schedule $schedule): void {
+        /*
+         * Una vez al día alcanza: `activo` es informativo, no algo que
+         * alguien necesite ver corregido al segundo. En producción lo
+         * dispara `schedule:run` cada minuto por el cron de hPanel (ver
+         * `deploy-hostinger`); acá solo se declara QUÉ correr y cuándo.
+         */
+        $schedule->command(CerrarTratamientosVencidos::class)->daily();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
