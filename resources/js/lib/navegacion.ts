@@ -1,13 +1,17 @@
 import {
     Building2,
     LayoutGrid,
+    Pill,
     Settings,
     Stethoscope,
+    Syringe,
     Users,
 } from '@lucide/vue';
 import CentroController from '@/actions/App/Http/Controllers/CentroController';
+import MedicamentoController from '@/actions/App/Http/Controllers/MedicamentoController';
 import MedicoController from '@/actions/App/Http/Controllers/MedicoController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
+import VacunaController from '@/actions/App/Http/Controllers/VacunaController';
 import { dashboard } from '@/routes';
 import { edit as editarPerfil } from '@/routes/profile';
 import type { NavItem } from '@/types';
@@ -38,10 +42,10 @@ export const destinosPrincipales: NavItem[] = [
     },
     /*
      * Los catálogos son del USUARIO, no de un paciente: por eso van al mismo
-     * nivel que Pacientes y no adentro. Con los otros dos (medicamentos,
-     * vacunas) va a convenir agruparlos bajo "Catálogos" -cuatro entradas
-     * sueltas son muchas para un menú que usan personas mayores-, y ese
-     * cambio vive entero en este archivo.
+     * nivel que Pacientes y no adentro. Ya son las cuatro entradas que este
+     * comentario anticipaba -cuatro sueltas son muchas para un menú que usan
+     * personas mayores-; agruparlas bajo "Catálogos" queda pendiente y sigue
+     * viviendo entero en este archivo el día que se haga.
      */
     {
         title: 'Médicos',
@@ -52,6 +56,16 @@ export const destinosPrincipales: NavItem[] = [
         title: 'Centros',
         href: CentroController.index(),
         icon: Building2,
+    },
+    {
+        title: 'Medicamentos',
+        href: MedicamentoController.index(),
+        icon: Pill,
+    },
+    {
+        title: 'Vacunas',
+        href: VacunaController.index(),
+        icon: Syringe,
     },
 ];
 

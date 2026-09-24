@@ -70,6 +70,22 @@ abstract class CatalogoBaseController extends Controller
     }
 
     /**
+     * Relaciones a traer con el listado, además del registro mismo.
+     *
+     * Vacío por defecto, por la misma razón que `propsExtra()`: no es que
+     * los otros catálogos no puedan tener relaciones, es que hoy no las
+     * necesitan. `medicamentos` la pisa con `['adjuntos']` para poder
+     * mostrar el prospecto sin una consulta por fila -"todo listado con
+     * eager loading explícito", CLAUDE.md-.
+     *
+     * @return array<int, string>
+     */
+    protected function conEager(): array
+    {
+        return [];
+    }
+
+    /**
      * El listado: lo del usuario más las semillas compartidas.
      *
      * El nombre está cifrado, así que **no hay `orderBy` en SQL**: se traen
@@ -81,6 +97,7 @@ abstract class CatalogoBaseController extends Controller
         $modelo = $this->modelo();
 
         $registros = $modelo::query()
+            ->with($this->conEager())
             ->where($this->visiblesPara(auth()->user()))
             ->get()
             ->sortBy(fn (Model&EsCatalogo $registro): string => mb_strtolower($registro->nombreVisible()))

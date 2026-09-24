@@ -690,6 +690,38 @@ cada catálogo que lo necesite, en vez de agregar un método de tres líneas.
   cascada real solo se ve con `forceDelete()`. Medido con un test: sin él, hubiera quedado
   como un "debería andar" sin comprobar.
 
+### Medicamentos y vacunas: el tercero y el cuarto, sin decisiones nuevas
+
+Copiados del patrón sin tocar nada de lo anterior — es justo lo que el patrón prometía.
+
+- **`medicamentos` pisa `columnaNombre()`** por `nombre_comercial`: es lo que trae la caja,
+  no la droga, y de esa columna dependen el orden del listado, el índice ciego y el mensaje
+  de "ya existe uno así" (ver más arriba, "si el nombre no se llama `nombre`").
+- **`medicamentos` es el primer catálogo que suma `TieneAdjuntos`**: el prospecto es un
+  adjunto tipo `Prospecto` colgado del medicamento. La autorización **no necesitó ni una
+  línea nueva** — es exactamente lo que la refactorización de `AdjuntoPolicy` (ver sección
+  Adjuntos) estaba anticipando: subir el prospecto pide `update` sobre el medicamento, y
+  `CatalogoPolicy::update()` ya negaba una semilla desde antes de que existiera esta pantalla.
+  Sale gratis, también, que una semilla no admita prospecto propio.
+- Subirlo y borrarlo **no viven en `MedicamentoController`**: son `AdjuntoController`
+  (`storeParaMedicamento` y el `destroy` genérico), el mismo camino que usa una cobertura
+  para su credencial. El controlador del catálogo solo serializa el prospecto para el
+  listado.
+- ⚠️ **Sumé un hook nuevo a `CatalogoBaseController`: `conEager()`.** Mismo patrón que
+  `propsExtra()` -vacío por defecto, lo pisa quien lo necesita-, pero para relaciones: sin
+  él, `$registro->adjuntosDe(...)` dispara una consulta por cada medicamento del listado.
+  "Todo listado con eager loading explícito" no es una regla que valga solo para el dominio
+  clínico.
+- **`vacunas` NO lleva `TieneAdjuntos`.** El comprobante de una dosis aplicada no cuelga de
+  acá: cuelga de `aplicaciones_vacuna` (Etapa 11), que es el registro clínico real. La
+  vacuna del catálogo es solo el nombre, compartido entre dosis y pacientes — colgarle un
+  archivo sería mezclar el nombre genérico con el papel de una dosis puntual.
+- Las claves que viajan al frontend para columnas que **coinciden con el nombre de la
+  columna en la base** van en snake_case (`nombre_comercial`, `para_que_sirve`), igual que
+  `fecha_nacimiento` o `grupo_sanguineo` en `pacientes`. Solo lo derivado va en camelCase
+  (`esSemilla`, `tipoEtiqueta`). Mezclar los dos estilos en la misma respuesta por prolijidad
+  visual rompe esa convención sin necesidad.
+
 ## Cobertura médica
 
 `coberturas` es tabla propia y no columnas en `pacientes`: mucha gente tiene obra social y
@@ -993,6 +1025,15 @@ consumidor real de "elegir de un catálogo" (anticipado en el párrafo de arriba
 no necesitaba `ComboboxCatalogo`: un checklist de checkboxes alcanza y sobra,
 porque un catálogo personal son decenas de médicos, no cientos que pidan buscar
 o desplazarse. Ese componente sigue esperando a quien de verdad lo necesite.
+
+Etapa 5.3 hecha: `medicamentos` -con su prospecto en PDF- y `vacunas`, los dos
+últimos catálogos que copian el patrón. Ninguno pidió tocar autorización: es la
+prueba de que la delegación de `AdjuntoPolicy` (deuda saldada antes de este
+paso) estaba bien resuelta. Lo único nuevo fue un hook de eager loading
+(`conEager()`) en `CatalogoBaseController`, mismo patrón que `propsExtra()`.
+Verificado en Chrome real: alta, subida del prospecto, apertura en
+`VisorDocumento`, borrado del prospecto y del medicamento, y alta/edición/baja
+de una vacuna.
 
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de

@@ -5,10 +5,12 @@ use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\CentroController;
 use App\Http\Controllers\CoberturaController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\MedicamentoController;
 use App\Http\Controllers\MedicoController;
 use App\Http\Controllers\PacienteActivoController;
 use App\Http\Controllers\PacienteController;
 use App\Http\Controllers\Settings\TamanioTextoController;
+use App\Http\Controllers\VacunaController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
@@ -98,6 +100,25 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('centros/{centro}', [CentroController::class, 'destroy'])->name('centros.destroy');
     Route::post('centros/{centro}/duplicar', [CentroController::class, 'duplicar'])
         ->name('centros.duplicar');
+
+    Route::get('medicamentos', [MedicamentoController::class, 'index'])->name('medicamentos.index');
+    Route::post('medicamentos', [MedicamentoController::class, 'store'])->name('medicamentos.store');
+    Route::put('medicamentos/{medicamento}', [MedicamentoController::class, 'update'])
+        ->name('medicamentos.update');
+    Route::delete('medicamentos/{medicamento}', [MedicamentoController::class, 'destroy'])
+        ->name('medicamentos.destroy');
+    Route::post('medicamentos/{medicamento}/duplicar', [MedicamentoController::class, 'duplicar'])
+        ->name('medicamentos.duplicar');
+    // El prospecto: mismo patrón que la credencial de una cobertura.
+    Route::post('medicamentos/{medicamento}/adjuntos', [AdjuntoController::class, 'storeParaMedicamento'])
+        ->name('medicamentos.adjuntos.store');
+
+    Route::get('vacunas', [VacunaController::class, 'index'])->name('vacunas.index');
+    Route::post('vacunas', [VacunaController::class, 'store'])->name('vacunas.store');
+    Route::put('vacunas/{vacuna}', [VacunaController::class, 'update'])->name('vacunas.update');
+    Route::delete('vacunas/{vacuna}', [VacunaController::class, 'destroy'])->name('vacunas.destroy');
+    Route::post('vacunas/{vacuna}/duplicar', [VacunaController::class, 'duplicar'])
+        ->name('vacunas.duplicar');
 
     Route::get('pacientes', [PacienteController::class, 'index'])->name('pacientes.index');
     Route::post('pacientes', [PacienteController::class, 'store'])->name('pacientes.store');

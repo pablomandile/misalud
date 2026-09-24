@@ -8,6 +8,7 @@ use App\Enums\TipoAdjunto;
 use App\Http\Requests\AdjuntoStoreRequest;
 use App\Models\Adjunto;
 use App\Models\Cobertura;
+use App\Models\Medicamento;
 use App\Models\Paciente;
 use App\Services\ArchivoService;
 use Illuminate\Http\RedirectResponse;
@@ -81,6 +82,39 @@ class AdjuntoController extends Controller
             $datos = $this->archivos->guardar($archivo, 'coberturas/'.$cobertura->id);
 
             $cobertura->adjuntos()->create($datos + [
+                'tipo' => $tipo,
+                'descripcion' => $descripcion,
+            ]);
+
+            $subidos++;
+        }
+
+        return back()->with('exito', $subidos === 1
+            ? 'Se guardó el documento.'
+            : "Se guardaron {$subidos} documentos.");
+    }
+
+    /**
+     * Sube el prospecto de un medicamento del catálogo.
+     *
+     * Mismo patrón que `storeParaCobertura`: se pide `update` sobre el
+     * DUEÑO -acá, el medicamento-, no un permiso propio del adjunto. Es lo
+     * que hace que una semilla compartida no admita prospecto propio: la
+     * niega `CatalogoPolicy::update()`, la misma regla que ya impide
+     * editarla (ver AdjuntoPolicy).
+     */
+    public function storeParaMedicamento(AdjuntoStoreRequest $peticion, Medicamento $medicamento): RedirectResponse
+    {
+        Gate::authorize('update', $medicamento);
+
+        $tipo = $peticion->tipo();
+        $descripcion = $peticion->input('descripcion');
+        $subidos = 0;
+
+        foreach ($peticion->file('archivos', []) as $archivo) {
+            $datos = $this->archivos->guardar($archivo, 'medicamentos/'.$medicamento->id);
+
+            $medicamento->adjuntos()->create($datos + [
                 'tipo' => $tipo,
                 'descripcion' => $descripcion,
             ]);
