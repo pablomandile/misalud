@@ -1,4 +1,5 @@
 import {
+    Activity,
     Building2,
     LayoutGrid,
     Pill,
@@ -11,6 +12,7 @@ import CentroController from '@/actions/App/Http/Controllers/CentroController';
 import MedicamentoController from '@/actions/App/Http/Controllers/MedicamentoController';
 import MedicoController from '@/actions/App/Http/Controllers/MedicoController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
+import TipoMedicionController from '@/actions/App/Http/Controllers/TipoMedicionController';
 import VacunaController from '@/actions/App/Http/Controllers/VacunaController';
 import { dashboard } from '@/routes';
 import { edit as editarPerfil } from '@/routes/profile';
@@ -66,6 +68,11 @@ export const destinosPrincipales: NavItem[] = [
         title: 'Vacunas',
         href: VacunaController.index(),
         icon: Syringe,
+    },
+    {
+        title: 'Variables',
+        href: TipoMedicionController.index(),
+        icon: Activity,
     },
 ];
 

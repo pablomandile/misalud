@@ -56,6 +56,29 @@ Sin Pinia ni Vue Router: el estado viaja en props de Inertia y las rutas las def
 - `dayjs` en el front, Carbon en el back. Carbon sigue solo a `app()->getLocale()`: no hace
   falta `Carbon::setLocale()`.
 
+> **Esta sección describió durante cinco etapas algo que no existía.** La columna y los seis
+> métodos se escribieron recién en el paso 6.1, porque `mediciones.fecha` es el **primer
+> `datetime` que carga una persona**: hasta ahí, todo lo que tenía fecha era una columna
+> `date` (nacimiento, vigencia de una cobertura) o un `timestamp` del servidor, y ninguna de
+> las dos tiene hora local que corregir. Vale como recordatorio de que lo escrito acá dice lo
+> que se decidió, no siempre lo que ya está hecho: cuando una sección describa una pieza,
+> conviene abrirla antes de apoyarse en ella.
+
+- **`aUtc()` al guardar, `enSuZona()` al mostrar**, y las dos mitades en el mismo viaje. Lo
+  que manda un `datetime-local` no trae zona: guardarlo tal cual corre el registro tantas
+  horas como diga el huso, sin ningún síntoma hasta que alguien mira la hora.
+- La conversión de una medición vive en `MedicionGuardarRequest::fechaEnUtc()` y no en el
+  controlador: así es imposible olvidarla en una acción nueva.
+- **Lo que precarga el formulario también sale del servidor** (`ahoraLocal`), no de
+  `new Date()`. Si el celular está en otra zona que la cuenta, precargar con el reloj del
+  navegador escribe una hora que el servidor después reinterpreta en la zona de la cuenta:
+  la medición queda corrida y nada lo avisa.
+- Una zona inválida cae al default en vez de tirar un 500: una columna editada a mano no
+  puede dejar a alguien afuera de toda pantalla con fechas.
+- **No hay pantalla para cambiar la zona horaria todavía.** La columna tiene default
+  (`America/Argentina/Buenos_Aires`) y se respeta en todo el código; elegirla queda para
+  cuando haga falta de verdad.
+
 ## Cifrado — la restricción que manda sobre el esquema
 
 Se cifra **todo el contenido clínico** con el cast `encrypted` de Laravel. Eso trae una
@@ -580,8 +603,8 @@ Policy y esto no se vuelve a tocar al sumar un dueño nuevo.
 
 ## Catálogos
 
-Médicos, centros, medicamentos, vacunas — y `tipos_medicion` en la Etapa 6. Lo que los
-separa de todo el resto del dominio es una sola cosa, y de ahí sale el diseño entero:
+Médicos, centros, medicamentos, vacunas y `tipos_medicion`: **los cinco ya existen**. Lo que
+los separa de todo el resto del dominio es una sola cosa, y de ahí sale el diseño entero:
 
 > **Un catálogo cuelga del USUARIO, no del paciente.** El mismo médico atiende a toda la
 > familia que uno administra. Duplicarlo por paciente sería cargar tres veces el mismo
@@ -746,6 +769,125 @@ php artisan db:seed --class="Database\Seeders\CatalogosSeeder"
   la misma cantidad de filas las dos veces.
 - Una semilla y un registro propio pueden compartir nombre sin problema: el UNIQUE está
   acotado por `usuario_id`, y NULL contra un id real nunca choca.
+
+## Seguimiento de variables
+
+Peso, presión, glucemia. Dos tablas: **`tipos_medicion` es un catálogo** (el quinto, del
+usuario, con semillas) y **`mediciones` es dominio clínico** (del paciente, por el pivote).
+La separación no es cosmética: el "qué se mide" lo define una persona para toda la familia,
+y el "cuánto dio" pertenece a un paciente concreto.
+
+### El caso que define el esquema: dos números
+
+La presión son 120/80, así que hay `valor_secundario` en la medición y `*_secundario` en el
+tipo. Tres decisiones que se siguen de eso:
+
+- **Un tipo tiene dos valores si y solo si declara `etiqueta_secundaria`.** Lo decide la
+  etiqueta y no la unidad, porque la etiqueta es lo que el formulario necesita para rotular
+  el segundo campo —sin "Diastólica" escrito no hay forma honesta de pedirlo— y porque la
+  unidad secundaria suele estar vacía: en presión las dos son mmHg. `unidad_secundaria` cae
+  en la principal cuando no se declara.
+- **`etiqueta_principal` no estaba en el plan y se sumó.** Con solo la del segundo, el
+  formulario pide "Valor" y "Diastólica": la asimetría que confunde. Con las dos, pide
+  "Sistólica" y "Diastólica".
+- **El segundo valor es obligatorio o prohibido, nunca opcional.** Una presión sin
+  diastólica no es media presión, es un dato ilegible; y un peso con un segundo número es un
+  fantasma que nadie sabe después qué significaba. Lo valida `MedicionGuardarRequest` mirando
+  el tipo elegido, y la pantalla muestra u oculta el campo con el mismo criterio.
+
+### Los rangos de referencia no son un semáforo
+
+`min_normal`/`max_normal` (y sus pares secundarios, que tampoco estaban en el plan: si hay
+dos valores tiene que haber dos rangos, o el gráfico del 6.3 dibuja la banda equivocada justo
+en el tipo que motivó todo).
+
+Se muestran **al lado del valor, como en un análisis de laboratorio**. Ninguna pantalla pinta
+un número de otro color ni dice si está "mal" — es la regla 1 (_el sistema registra, no
+aconseja_). Quedan **en claro**: no son el dato clínico de nadie, son una propiedad del tipo,
+que encima puede ser una semilla compartida por todos.
+
+### ⚠️ El valor está cifrado, así que es un STRING
+
+No existe un cast `encrypted:float`: lo que sale del modelo es el texto tal cual se guardó.
+Eso convierte en trampa cualquier cuenta directa, y ninguna de las tres falla —devuelven algo,
+y está mal—:
+
+```php
+$mediciones->sortBy('valor')   // ordena como texto: "100" < "9"
+$mediciones->max('valor')      // el máximo alfabético
+$a->valor > $b->valor          // comparación de strings
+```
+
+El número se pide siempre por `valorNumerico()` / `valorSecundarioNumerico()`. El listado
+manda las dos formas: `valor` (float, para el gráfico) y `valorVisible` (ya formateado con
+los decimales del tipo y coma decimal).
+
+### ⚠️ La coma decimal: lo que escribe de verdad un teclado en español
+
+Acá se escribe "72,5", y un teclado numérico de celular en español ofrece la coma. Sin
+normalizar pasa una de dos, las dos malas: `numeric` rechaza el valor —y la persona ve "debe
+ser un número" mirando un número válido para ella— o un `(float)` lo convierte en **72.0** y
+el peso pierde los gramos sin avisar.
+
+Lo corrige el trait `NormalizaDecimales` en `prepareForValidation()`, **antes** de que la
+regla `numeric` mire el valor. Lo usan las mediciones y los rangos del catálogo, y va a
+hacer falta otra vez en resultados de estudios (Etapa 9) y en graduaciones (Etapa 10).
+
+Del lado de la pantalla, los valores van con **`inputmode="decimal"` y `type="text"`, nunca
+`type="number"`**: un `type="number"` con coma en un navegador es-AR entrega un valor
+**vacío** al enviar, porque considera el campo inválido y no expone lo tipeado.
+
+### Una ficha compartida comparte su vocabulario
+
+Un tipo se puede elegir si esta persona lo ve —propio o semilla— **o si esta ficha ya lo
+viene usando**. La segunda mitad no es un agregado: los catálogos son del usuario, y una ficha
+la escriben varios. Sin ella, un cuidador no podría sumar un peso a la serie que arrancó el
+dueño —el tipo es del dueño, no suyo— y terminaría creando un "Peso" propio: la misma variable
+partida en dos, que es justo lo que el catálogo por usuario venía a evitar.
+
+- **No expone nada nuevo**: son los tipos que esa persona ya está viendo en el listado de esa
+  misma ficha. El resto del catálogo del dueño sigue siendo suyo, y hay un test que lo fija.
+- El formulario y la validación usan el **mismo** criterio. Si el `select` ofreciera algo que
+  la validación rechaza, el error aparecería recién al guardar.
+- Queda un hueco chico para la Etapa 14: si el dueño creó un tipo propio y **todavía no lo
+  usó**, el cuidador no puede elegirlo. Se resuelve usándolo una vez, o con una semilla.
+
+### Otras decisiones que no son obvias
+
+- **`fecha` es `datetime`, no `date`**: en la mitad de las variables la hora _es_ el dato
+  —una presión de la mañana y una de la noche no son comparables, una glucemia en ayunas
+  tampoco—. Queda en claro, como todas las fechas: es por donde ordena el listado y va a
+  paginar el gráfico.
+- **No se puede cargar una medición futura**, con cinco minutos de gracia para el reloj del
+  dispositivo: es el registro de algo que ya pasó, pero rechazar "ahora" por dos segundos de
+  diferencia sería incomprensible.
+- **`tipo_medicion_id` va con `restrictOnDelete`**, que es la última línea: `cascade` se
+  llevaría doscientas mediciones por borrar un tipo, y `nullOnDelete` dejaría doscientos
+  números sin unidad ni nombre —peor que borrarlos, porque parecen datos—. Antes que la base,
+  lo frena `TipoMedicionController::destroy` con un mensaje que explica la salida real
+  (editar el tipo).
+- **`Medicion::tipo()` va con `withTrashed()`.** Un tipo cuyas mediciones están todas en la
+  papelera sí se puede borrar; si después alguna se restaura, sin esto la relación devolvería
+  `null` y la fila aparecería como un número sin nombre ni unidad.
+- **Autorizar va antes de validar.** `MedicionGuardarRequest::authorize()` existe para eso: sin
+  él, a alguien sin permiso le contesta primero la validación ("Elegí una variable de tu
+  lista") en vez de un 403, y de paso le confirma que la ficha existe. Lo mismo en
+  `TipoMedicionController::destroy`, que autoriza antes de mirar si el tipo tiene datos.
+- **Las mediciones son pantalla propia y no un panel** del paciente: crecen con el tiempo y en
+  el 6.3 suman su gráfico, que no entra en un sheet. Van por `/pacientes/{paciente}/mediciones`
+  y no por "paciente activo": confundirse de ficha acá es cargarle el peso de un familiar a
+  otro.
+
+### `CatalogoVisible`, o el mismo OR por tercera vez
+
+La condición "lo mío más las semillas" ya hacía falta en tres lugares —el listado de un
+catálogo, qué médicos puede vincular un centro, qué tipo puede elegir una medición—, y
+escribirla mal **no da error, devuelve de más**. Vive en `App\Support\CatalogoVisible` y
+devuelve una clausura que entra en un solo `where()`, así no hay forma de encadenarla suelta.
+Sirve igual para un builder de Eloquent y para el crudo de `Rule::exists()`.
+
+⚠️ En `Rule::exists()` hay que agregar **`whereNull('deleted_at')` a mano**: esa regla va
+contra la tabla cruda y no filtra soft deletes como Eloquent.
 
 ## Cobertura médica
 
@@ -1065,6 +1207,27 @@ medicamentos y diecisiete vacunas de uso común en Argentina, como semillas
 compartidas. Verificado contra MySQL real -no solo con el test- que correrlo
 dos veces no duplica nada, que una semilla se ve pero no se edita, y que
 duplicarla arma una copia propia y editable en el catálogo de quien la copió.
+
+Etapa 6.1 hecha: `tipos_medicion` (quinto catálogo) y `mediciones`, con el caso
+de dos valores resuelto de punta a punta -esquema, validación y pantalla-.
+
+Lo que apareció en el camino y no estaba previsto: **la capa de zona horaria no
+existía**. `CLAUDE.md` la describía desde la Etapa 0, pero `users.zona_horaria`
+y los seis métodos de `User` nunca se habían escrito, porque hasta acá ninguna
+fecha la cargaba una persona con hora. Se construyeron en este paso, que es el
+primero que los necesita.
+
+También se centralizó en `CatalogoVisible` el "lo mío más las semillas", que ya
+iba por su tercera copia de un OR que hay que agrupar bien.
+
+Verificado en Chrome real, que es donde se ven las tres cosas que ningún test de
+Pest podía mostrar: que un "72,5" tipeado con coma llega y se guarda con sus
+decimales, que la hora cargada vuelve idéntica después del viaje a UTC, y que el
+segundo número aparece y desaparece al cambiar de variable.
+
+Pendiente de la Etapa 6: carga rápida (6.2), `GraficoEvolucion.vue` (6.3) y la
+semilla de tipos (6.4). Hasta que exista 6.4 no hay ninguna variable cargada:
+la pantalla de mediciones lo dice y manda a crear una.
 
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de

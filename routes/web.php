@@ -6,10 +6,12 @@ use App\Http\Controllers\CentroController;
 use App\Http\Controllers\CoberturaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MedicamentoController;
+use App\Http\Controllers\MedicionController;
 use App\Http\Controllers\MedicoController;
 use App\Http\Controllers\PacienteActivoController;
 use App\Http\Controllers\PacienteController;
 use App\Http\Controllers\Settings\TamanioTextoController;
+use App\Http\Controllers\TipoMedicionController;
 use App\Http\Controllers\VacunaController;
 use Illuminate\Support\Facades\Route;
 
@@ -119,6 +121,27 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('vacunas/{vacuna}', [VacunaController::class, 'destroy'])->name('vacunas.destroy');
     Route::post('vacunas/{vacuna}/duplicar', [VacunaController::class, 'duplicar'])
         ->name('vacunas.duplicar');
+
+    Route::get('tipos-medicion', [TipoMedicionController::class, 'index'])->name('tipos-medicion.index');
+    Route::post('tipos-medicion', [TipoMedicionController::class, 'store'])->name('tipos-medicion.store');
+    Route::put('tipos-medicion/{tipo_medicion}', [TipoMedicionController::class, 'update'])
+        ->name('tipos-medicion.update');
+    Route::delete('tipos-medicion/{tipo_medicion}', [TipoMedicionController::class, 'destroy'])
+        ->name('tipos-medicion.destroy');
+    Route::post('tipos-medicion/{tipo_medicion}/duplicar', [TipoMedicionController::class, 'duplicar'])
+        ->name('tipos-medicion.duplicar');
+
+    /*
+     * Mediciones: van por PACIENTE y no por "paciente activo". Una medición
+     * pertenece a una persona concreta, y confundirse de ficha acá es
+     * cargarle el peso de un familiar a otro.
+     */
+    Route::get('pacientes/{paciente}/mediciones', [MedicionController::class, 'index'])
+        ->name('pacientes.mediciones.index');
+    Route::post('pacientes/{paciente}/mediciones', [MedicionController::class, 'store'])
+        ->name('pacientes.mediciones.store');
+    Route::put('mediciones/{medicion}', [MedicionController::class, 'update'])->name('mediciones.update');
+    Route::delete('mediciones/{medicion}', [MedicionController::class, 'destroy'])->name('mediciones.destroy');
 
     Route::get('pacientes', [PacienteController::class, 'index'])->name('pacientes.index');
     Route::post('pacientes', [PacienteController::class, 'store'])->name('pacientes.store');

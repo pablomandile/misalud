@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Contracts\EsCatalogo;
 use App\Models\User;
+use App\Support\CatalogoVisible;
 use Illuminate\Contracts\Database\Query\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
@@ -121,13 +122,16 @@ abstract class CatalogoBaseController extends Controller
      * cualquier filtro. Es el modo de falla clásico de un OR sin agrupar, y
      * no da error: devuelve de más.
      *
+     * La condición vive en `CatalogoVisible` y no acá porque la necesitan
+     * también lugares que no heredan de este controlador —la validación de
+     * un centro, la de una medición—, y tres copias de un OR que hay que
+     * agrupar bien son tres oportunidades de agruparlo mal.
+     *
      * @return \Closure(Builder): void
      */
     protected function visiblesPara(User $usuario): \Closure
     {
-        return function ($consulta) use ($usuario): void {
-            $consulta->where('usuario_id', $usuario->id)->orWhereNull('usuario_id');
-        };
+        return CatalogoVisible::para($usuario->id);
     }
 
     /**

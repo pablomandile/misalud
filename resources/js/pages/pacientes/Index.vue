@@ -1,8 +1,16 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
-import { CreditCard, FileText, Plus, Trash2, UserRound } from '@lucide/vue';
+import { Form, Head, Link } from '@inertiajs/vue3';
+import {
+    Activity,
+    CreditCard,
+    FileText,
+    Plus,
+    Trash2,
+    UserRound,
+} from '@lucide/vue';
 import { ref } from 'vue';
 import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
+import MedicionController from '@/actions/App/Http/Controllers/MedicionController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
 import Heading from '@/components/Heading.vue';
 import PanelCobertura from '@/pages/pacientes/PanelCobertura.vue';
@@ -199,6 +207,25 @@ function edadTexto(p: Paciente): string {
                             <span class="sr-only">
                                 Documentos de {{ paciente.nombre }}
                             </span>
+                        </Button>
+                        <!--
+                            Las mediciones son pantalla propia y no un panel:
+                            crecen con el tiempo y en la Etapa 6.3 suman su
+                            gráfico, que no entra en un sheet.
+                        -->
+                        <Button variant="ghost" size="sm" as-child>
+                            <Link
+                                :href="
+                                    MedicionController.index({
+                                        paciente: paciente.id,
+                                    })
+                                "
+                            >
+                                <Activity />
+                                <span class="sr-only">
+                                    Mediciones de {{ paciente.nombre }}
+                                </span>
+                            </Link>
                         </Button>
                         <Button
                             v-if="paciente.puedeEditar"
