@@ -1210,6 +1210,171 @@ binding**: no hay ningún camino en tiempo de ejecución por el que ese valor pu
 siendo otra cosa. Es la misma trampa de `hoy()` contra `hoyCalendario()` de la sección de
 Fechas, esta vez del lado del cliente y con un gráfico en vez de una validación.
 
+## Salud ocular
+
+Una receta de anteojos son **dos tablas**: `prescripciones_oculares` es la cabecera —cuándo,
+quién, qué tipo de lente— y `graduaciones_oculares` tiene **una fila por ojo**.
+
+> **Una receta tiene SIEMPRE sus dos ojos**, aunque uno no necesite corrección.
+
+No es prolijidad: una fila que falta no se puede interpretar —¿ese ojo está sano, o la carga
+quedó a medias?—, y una fila en blanco sí, porque dice "sin datos" (regla 2). Lo sostienen
+tres cosas juntas: el `unique(prescripcion_id, ojo)`, la transacción de
+`PrescripcionOcularController::store()` y el `configure()` de `PrescripcionOcularFactory`
+—que crea los dos ojos igual que el controlador, así ningún test prueba contra una receta que
+en producción no puede existir—.
+
+Con ocho columnas por ojo en la cabecera (`esfera_od`, `esfera_oi`, …) serían dieciséis
+columnas cifradas y toda validación, pantalla y gráfico repetiría su lógica dos veces con
+distinto sufijo. Con dos filas, "la graduación de un ojo" es un objeto: se valida una vez, se
+dibuja una vez, y la evolución del paso 10.4 es un `groupBy('ojo')`.
+
+### El único UNIQUE del proyecto que no necesitó índice ciego
+
+`prescripcion_id` y `ojo` están **en claro** —una FK y un enum de dos casos—, así que el
+UNIQUE es uno común y corriente. Es la excepción que muestra para qué existen los `*_hash`:
+no hace falta ninguno cuando lo que hay que comparar no es contenido clínico.
+
+`graduaciones_oculares` tampoco lleva soft deletes: una graduación no se borra sola, nace y
+muere con su receta, y no hay ninguna acción de "borrar un ojo". ⚠️ Como la cascada de MySQL
+**no dispara con un soft delete**, dar de baja una receta deja sus dos filas intactas —y es lo
+correcto: restaurarla la devuelve completa en vez de con los dos ojos vacíos. Hay un test que
+lo fija.
+
+### La validación clínica: se rechaza lo que no puede existir
+
+Es el criterio que ordena `PrescripcionOcularGuardarRequest` entero, y conviene tenerlo
+presente antes de agregarle una regla más:
+
+> **Se rechaza lo que no puede existir, nunca lo que es poco común.**
+
+Un `-1,30` de esfera no es una graduación rara: **no se fabrica**, así que es un tipeo, y
+atajarlo evita unos anteojos mal hechos. Una receta "para lejos" que además trae una adición
+sí es rara, pero **existe** —es el papel que esa persona tiene en la mano— y rechazarla la
+dejaría sin poder cargar su propia receta. Eso es opinar sobre el contenido, que es lo que la
+regla 1 no hace. Hay un test que fija cada mitad.
+
+| Campo           | Qué se valida                         | Por qué                                                |
+| --------------- | ------------------------------------- | ------------------------------------------------------ |
+| `esfera`        | ±25, pasos de 0,25                    | Atrapa el tipeo clásico: "125" por "1,25"              |
+| `cilindro`      | ±12, pasos de 0,25                    | Ídem; el signo se guarda **tal cual el papel**         |
+| `eje`           | entero 0–180, **atado al cilindro**   | Es un meridiano: 20° y 200° son la misma línea         |
+| `adicion`       | 0,25 a 4, pasos de 0,25, **positiva** | Una adición es una suma; negativa es un error de signo |
+| `dp_monocular`  | 20 a 45 mm                            | Atrapa un "320" por un "32"                            |
+| `prisma`/`base` | van juntos o no van                   | Ninguno de los dos se fabrica solo                     |
+
+El plan ponía ±20 para la esfera y ±6 para el cilindro. Se ampliaron a ±25 y ±12: una miopía
+alta y un queratocono pasan de ahí **sin ser un error de carga**, y el rango está para atrapar
+un tipeo, no para decidir hasta dónde puede ver alguien.
+
+⚠️ **`App\Rules\PasoDeDioptria` cuenta en enteros, no con `fmod()`.** En binario, `0.75` y
+`0.25` no son exactos: `fmod(0.75, 0.25)` puede dar `2.7E-17` en vez de `0`, y entonces la
+regla rechazaría un valor **válido** —peor que no validar nada—. Pasar a centésimas con
+`round()` primero deja la comparación donde sí es exacta. El tope de dos decimales lo pone
+`decimal:0,2` al lado, no la regla: sin él, un `1,249999` redondearía a 125 centésimas y
+pasaría.
+
+⚠️ **El eje es obligatorio o prohibido, nunca opcional** —la misma forma que el segundo valor
+de una medición—, y acá el motivo es más duro: un cilindro sin eje **no se puede fabricar**, y
+un eje sin cilindro es un número que dentro de un año nadie sabrá qué significaba. Un cilindro
+en `0` cuenta como "sin cilindro": un "0,00 x 180" es una costumbre de escritura, no una
+corrección.
+
+**No se cruza `dp_total` contra la suma de las dos monoculares**, a propósito: se miden por
+separado y el redondeo a medio milímetro las hace diferir seguido. Cruzarlas rechazaría
+recetas correctas.
+
+### ⚠️ El trait `NormalizaDecimales` no sirve para campos anidados
+
+Ese trait hace `merge(['valor' => ...])`, que para `od.esfera` crearía la clave **literal**
+`'od.esfera'` —con el punto adentro del nombre— en vez de escribir dentro del array `od`. El
+valor original quedaría intacto, la coma sin convertir, y `numeric` rechazaría un "-1,25"
+perfectamente válido sin que nada explicara por qué. Por eso
+`PrescripcionOcularGuardarRequest::prepareForValidation()` reconstruye entero el array de cada
+ojo en vez de usar el trait.
+
+### `DiagramaOjo.vue`: el diagrama orienta, los campos cargan
+
+El SVG **no es una forma de cargar datos**: no recibe foco, no responde a ningún toque y va
+con `aria-hidden`. Todo lo que se escribe va en un `<input>` rotulado. En una app para
+personas mayores, un dibujo al que hay que acertarle a una zona es lo contrario de lo que
+hace falta.
+
+Lo que el dibujo sí hace, y ningún campo puede hacer, es mostrar **el eje como un ángulo**:
+"x 90" no le dice nada a nadie, una línea vertical sobre un ojo se entiende sin explicación.
+El número va igual al lado —el dibujo agrega, nunca reemplaza—.
+
+- **OD va a la izquierda**, y se cumple por el **orden del DOM**: así vale igual cuando los
+  dos ojos quedan uno arriba del otro en el celular. Cada uno lleva su rótulo completo
+  —"OD · ojo derecho"—, que es lo que de verdad desambigua: la mayoría de la gente no sabe qué
+  es OD, y confundirse acá termina en unos anteojos hechos al revés.
+- **Un solo componente para cargar y para leer** (`modo`), porque el rótulo y el lado tienen
+  que vivir una sola vez: con dos componentes, el formulario y el listado podrían terminar en
+  desacuerdo sobre cuál ojo es cuál.
+- **El ojo se dibuja simétrico**, no espejado. Un ojo espejado sugeriría que la escala del eje
+  también se espeja, y **no se espeja**: el eje se mide igual para los dos ojos tal como los
+  ve quien está enfrente, y de ahí sale que un astigmatismo simétrico se anote 20° en un ojo y
+  160° en el otro. Verificado en Chrome: el mismo número da el mismo ángulo en los dos.
+
+### ⚠️ Mezclar `:value` con `v-model` en un mismo componente borra lo tipeado
+
+Es el bug más caro de esta etapa, y **ningún test de Pest podía verlo**.
+
+El eje tiene que ser `v-model` para que el dibujo lo siga en vivo. Los otros siete campos
+estaban con `:value`, como el resto de los formularios de la app. En cuanto **un solo** campo
+del componente maneja estado propio, cada tecla que se escribe en él vuelve a renderizar el
+componente entero y **pisa los `:value` de los hermanos con el valor del prop**.
+
+Medido en Chrome: escribir la esfera, el cilindro y recién después el eje —el orden natural,
+el del papel— dejaba los dos primeros **vacíos** al primer tecleo del eje.
+
+```
+1. despues de escribir esfera y cilindro : {"esfera":"-2,00","cilindro":"-0,75","eje":""}
+2. despues de UNA tecla en el eje        : {"esfera":"","cilindro":"","eje":"9"}
+```
+
+Y como esfera y cilindro son opcionales, **la receta se guardaba con el ojo en blanco y un
+"Se agregó la receta" en verde**: el peor modo de falla posible, sin ningún síntoma. La regla
+que queda: **si un campo de un formulario necesita estado local, todos los de ese componente
+lo necesitan.**
+
+⚠️ El estado local se llama `escrito` y no `valores` **a propósito**: `valores` ya es el
+nombre del prop, y una constante local con ese nombre lo taparía en el template —el modo
+lectura pasaría a leer los campos del formulario en vez de lo guardado, y mostraría "sin
+datos" en toda receta—.
+
+### El sexto dueño de archivos, otra vez en tres líneas
+
+`PrescripcionOcular` implementa `TieneArchivos` igual que los otros cinco, y sumarlo fue
+`storeParaPrescripcionOcular()` llamando a `guardarEn()`. Es la segunda vez que la
+refactorización de la Etapa 9.1 cobra lo que prometía. El papel se sube **aunque los valores
+estén cargados**: es el documento que pide la óptica, y es lo que manda si alguna vez no
+coinciden.
+
+### La X de cerrar de `Sheet` y `Dialog` medía 20 px
+
+Encontrado verificando esta etapa, pero **estaba en toda la app desde siempre** —lo tenían
+todos los sheets y diálogos—. Arreglado en las dos primitivas con el mismo patrón que el
+checkbox: la caja visual sigue midiendo 20 px y el área que responde al toque la expande un
+pseudo-elemento (`before:size-12`), porque agrandar el ícono se vería mal. Medido después del
+arreglo: **59 px efectivos**. `npm run revisar:mobile` sigue en verde en las 36 pantallas.
+
+### ⚠️ Verificar un sheet sin esperar a que termine de entrar mide cualquier cosa
+
+`waitForSelector({ visible: true })` **no espera a que el sheet termine de abrirse**: lo da
+por bueno apenas el elemento tiene caja, y para entonces el panel todavía se está deslizando
+desde la derecha (`slide-in-from-right`, 500 ms).
+
+Costó un rato: el chequeo de áreas táctiles informaba "Cerrar: 20px" con el arreglo ya puesto
+y funcionando. El botón estaba midiéndose en **x=651 con un viewport de 390** —fuera de
+pantalla—, así que `elementFromPoint` no encontraba nada y toda área colapsaba a su caja.
+
+El modo de falla es traicionero, y es el mismo de `revisar-mobile.mjs` con la cookie: **los
+controles que ya miden 44 px de caja "pasan" igual**, así que el chequeo informa verde
+midiendo lo que no quería medir. Hay que esperar a que la posición del panel **se estabilice**
+entre dos frames, no a que el selector exista. Misma familia que el `canvas.width > 0` de
+`revisar-visor.mjs`.
+
 ## Cobertura médica
 
 `coberturas` es tabla propia y no columnas en `pacientes`: mucha gente tiene obra social y
@@ -1655,7 +1820,46 @@ Dos hallazgos antes de mandarlo, ninguno atrapado por los 454 tests de Pest:
   Chrome: "14/1" sin la corrección, "15/1" con ella. Misma trampa de `hoy()` vs
   `hoyCalendario()`, esta vez del lado del cliente.
 
-Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
-pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de
-variables · enfermedades y alergias · tratamientos · salud ocular · turnos y recordatorios ·
-casilla y recetas · contactos y envío · compartir la ficha · dashboard y deploy.
+**Pasos 10.1 y 10.2 hechos**: el modelo clínico de salud ocular y `DiagramaOjo.vue`. Van
+juntos a propósito —un componente que nadie usa no se puede verificar en un navegador, la
+lección de la Etapa 3—, y de paso se adelantó el PDF de la receta que el plan ponía en el
+10.3: declarar `TieneArchivos` sin una pantalla que lo ejercite habría sido el mismo error.
+
+La decisión que sostiene la etapa es que **una receta tiene siempre sus dos ojos**, aunque uno
+no necesite corrección: una fila que falta no se puede interpretar y una fila en blanco sí.
+Lo sostienen el UNIQUE, la transacción del controlador y la factory, los tres a la vez.
+
+La validación clínica sigue un solo criterio —se rechaza lo que **no puede existir**, nunca lo
+que es poco común—, y por eso una receta "para lejos" con adición entra sin chistar mientras
+un `-1,30` de esfera no: el primero es un papel raro pero real, el segundo es una lente que no
+se fabrica.
+
+Dos hallazgos en Chrome que ningún test de Pest podía ver:
+
+- **Mezclar `:value` con `v-model` en el mismo componente borraba lo tipeado.** El eje necesita
+  `v-model` para que el dibujo lo siga en vivo, y eso alcanzaba para que cada tecla escrita ahí
+  pisara la esfera y el cilindro con el valor del prop. Medido: escribir en el orden natural
+  —esfera, cilindro, eje— dejaba los dos primeros vacíos al primer tecleo del eje. Y como son
+  opcionales, **la receta se guardaba con el ojo en blanco y un cartel verde de éxito**. Quedó
+  como regla general en la sección de arriba.
+- **La X de cerrar de `Sheet` y `Dialog` medía 20 px**, en toda la app desde siempre. Arreglada
+  en las dos primitivas con el pseudo-elemento del checkbox: 59 px efectivos, con la caja
+  visual igual que antes.
+
+Verificado en Chrome: el diagrama **dibuja** el eje en el ángulo correcto (45° y 90° medidos
+sobre el SVG), el mismo número da el mismo ángulo en los dos ojos —la escala no se espeja—, la
+coma decimal sobrevive el viaje completo, el signo vuelve con el valor (`+2,00`), los errores
+clínicos aparecen al lado del campo y no en un toast, y el visor dibuja el PDF de la receta.
+Más la matriz de desborde de la pantalla nueva —18 combinaciones de ancho × tamaño de letra ×
+orientación, con el formulario de dieciséis campos abierto— y `npm run revisar:mobile` entero
+en verde después de tocar las primitivas.
+
+⚠️ De paso apareció que **verificar un sheet sin esperar a que termine de entrar mide
+cualquier cosa**: `waitForSelector({visible:true})` da el elemento por bueno mientras el panel
+todavía se desliza, y ahí `elementFromPoint` no encuentra nada. El chequeo informaba "20px"
+con el arreglo ya funcionando. Detalle y salida en la sección de arriba.
+
+Pendiente, en este orden: **salud ocular 10.3 y 10.4** (transposición del cilindro y evolución
+de la graduación, los dos de Sonnet 5) · turnos y recordatorios · casilla y recetas ·
+contactos y envío · compartir la ficha · dashboard y deploy. Queda también, sin fecha, la
+Etapa 16 (consultas y grabaciones), que el plan deja adelantable.

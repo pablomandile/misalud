@@ -51,8 +51,14 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
     >
       <slot />
 
+      <!--
+        `relative` + el pseudo-elemento `before:size-12` -mismo patrón que
+        el checkbox (ver CLAUDE.md, Accesibilidad): esta X mide 16px visual,
+        y agrandar el ícono se vería mal. Lo que tiene que medir 44px es lo
+        que responde al toque, no el dibujo.
+      -->
       <DialogClose
-        class="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none"
+        class="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none before:absolute before:top-1/2 before:left-1/2 before:size-12 before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']"
       >
         <X class="size-4" />
         <span class="sr-only">Cerrar</span>

@@ -14,6 +14,7 @@ use App\Http\Controllers\MedicoController;
 use App\Http\Controllers\OrdenEstudioController;
 use App\Http\Controllers\PacienteActivoController;
 use App\Http\Controllers\PacienteController;
+use App\Http\Controllers\PrescripcionOcularController;
 use App\Http\Controllers\RegistroEnfermedadController;
 use App\Http\Controllers\ResultadoEstudioController;
 use App\Http\Controllers\Settings\TamanioTextoController;
@@ -208,6 +209,26 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('resultados.update');
     Route::delete('resultados/{resultado}', [ResultadoEstudioController::class, 'destroy'])
         ->name('resultados.destroy');
+
+    /*
+     * Salud ocular: las recetas de anteojos. Las graduaciones NO tienen
+     * rutas propias -viajan adentro de su receta y se guardan con ella, las
+     * dos juntas-, que es lo que sostiene el invariante de "una receta tiene
+     * dos ojos".
+     *
+     * `salud-ocular` y no `recetas`: en este proyecto "receta" ya significa
+     * la de medicamentos que llega por mail (Etapa 12).
+     */
+    Route::get('pacientes/{paciente}/salud-ocular', [PrescripcionOcularController::class, 'index'])
+        ->name('pacientes.salud-ocular.index');
+    Route::post('pacientes/{paciente}/salud-ocular', [PrescripcionOcularController::class, 'store'])
+        ->name('pacientes.salud-ocular.store');
+    Route::put('salud-ocular/{prescripcion}', [PrescripcionOcularController::class, 'update'])
+        ->name('salud-ocular.update');
+    Route::delete('salud-ocular/{prescripcion}', [PrescripcionOcularController::class, 'destroy'])
+        ->name('salud-ocular.destroy');
+    Route::post('salud-ocular/{prescripcion}/adjuntos', [AdjuntoController::class, 'storeParaPrescripcionOcular'])
+        ->name('salud-ocular.adjuntos.store');
 
     Route::get('pacientes/{paciente}/tratamientos', [TratamientoController::class, 'index'])
         ->name('pacientes.tratamientos.index');

@@ -173,6 +173,16 @@ class Paciente extends Model implements CifraDatos, TieneArchivos
     }
 
     /**
+     * Las recetas de anteojos. Cada una trae sus dos graduaciones, una por ojo.
+     *
+     * @return HasMany<PrescripcionOcular, $this>
+     */
+    public function prescripcionesOculares(): HasMany
+    {
+        return $this->hasMany(PrescripcionOcular::class);
+    }
+
+    /**
      * La edad NO se guarda: se deriva de `fecha_nacimiento` en cada request.
      * Guardarla como dato dejaría desactualizada a toda ficha al día
      * siguiente de cargada.

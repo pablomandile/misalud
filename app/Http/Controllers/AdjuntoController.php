@@ -13,6 +13,7 @@ use App\Models\Estudio;
 use App\Models\Medicamento;
 use App\Models\OrdenEstudio;
 use App\Models\Paciente;
+use App\Models\PrescripcionOcular;
 use App\Services\ArchivoService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
@@ -86,11 +87,28 @@ class AdjuntoController extends Controller
     }
 
     /**
-     * El cuerpo que comparten los cinco.
+     * El PDF o la foto de la receta de anteojos.
+     *
+     * **Sexto dueño, y otra vez tres líneas.** Es lo que la extracción de
+     * `guardarEn()` en la Etapa 9.1 venía prometiendo: sumar un dueño no
+     * toca el cuerpo compartido ni la autorización.
+     *
+     * Se sube aunque los valores estén cargados: es el documento que pide la
+     * óptica, y el papel es lo que manda si alguna vez no coinciden.
+     */
+    public function storeParaPrescripcionOcular(
+        AdjuntoStoreRequest $peticion,
+        PrescripcionOcular $prescripcion,
+    ): RedirectResponse {
+        return $this->guardarEn($peticion, $prescripcion);
+    }
+
+    /**
+     * El cuerpo que comparten los seis.
      *
      * Cada dueño tiene su método con su type-hint concreto -hace falta para
      * el route-model binding, igual que en los catálogos-, pero el cuerpo
-     * vive una sola vez: con cinco copias, cada una era un lugar donde
+     * vive una sola vez: con seis copias, cada una era un lugar donde
      * olvidarse el `Gate::authorize` o escribir mal el prefijo del disco.
      *
      * El prefijo lo declara el modelo (`carpetaDeArchivos()`) y no se arma

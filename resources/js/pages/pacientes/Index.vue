@@ -4,6 +4,7 @@ import {
     Activity,
     ClipboardList,
     CreditCard,
+    Eye,
     FlaskConical,
     FileText,
     HeartPulse,
@@ -19,6 +20,7 @@ import EstudioController from '@/actions/App/Http/Controllers/EstudioController'
 import MedicionController from '@/actions/App/Http/Controllers/MedicionController';
 import OrdenEstudioController from '@/actions/App/Http/Controllers/OrdenEstudioController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
+import PrescripcionOcularController from '@/actions/App/Http/Controllers/PrescripcionOcularController';
 import TratamientoController from '@/actions/App/Http/Controllers/TratamientoController';
 import Heading from '@/components/Heading.vue';
 import PanelCobertura from '@/pages/pacientes/PanelCobertura.vue';
@@ -289,6 +291,20 @@ function edadTexto(p: Paciente): string {
                                 <FlaskConical />
                                 <span class="sr-only">
                                     Estudios de {{ paciente.nombre }}
+                                </span>
+                            </Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" as-child>
+                            <Link
+                                :href="
+                                    PrescripcionOcularController.index({
+                                        paciente: paciente.id,
+                                    })
+                                "
+                            >
+                                <Eye />
+                                <span class="sr-only">
+                                    Salud ocular de {{ paciente.nombre }}
                                 </span>
                             </Link>
                         </Button>

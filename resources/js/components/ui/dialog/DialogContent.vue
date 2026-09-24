@@ -40,10 +40,14 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
     >
       <slot />
 
+      <!--
+        Mismo patrón que el checkbox: el ícono queda chico, el área que
+        responde al toque no (ver CLAUDE.md, Accesibilidad).
+      -->
       <DialogClose
         v-if="showCloseButton"
         data-slot="dialog-close"
-        class="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+        class="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 before:absolute before:top-1/2 before:left-1/2 before:size-12 before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']"
       >
         <X />
         <span class="sr-only">Cerrar</span>
