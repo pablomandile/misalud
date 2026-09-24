@@ -722,6 +722,31 @@ Copiados del patrón sin tocar nada de lo anterior — es justo lo que el patró
   (`esSemilla`, `tipoEtiqueta`). Mezclar los dos estilos en la misma respuesta por prolijidad
   visual rompe esa convención sin necesidad.
 
+### `CatalogosSeeder`: la idempotencia la garantiza el código, no la base
+
+Carga las semillas compartidas de medicamentos y vacunas, y corre **en producción**:
+
+```bash
+php artisan db:seed --class="Database\Seeders\CatalogosSeeder"
+```
+
+- **Solo medicamentos y vacunas.** Ni médicos ni centros llevan semilla: nadie publica una
+  lista de médicos o de consultorios compartida entre usuarios (ver el comentario de la
+  migración de `medicos`). Cuando `tipos_medicion` (Etapa 6) necesite las suyas, es un método
+  más acá, no un seeder aparte.
+- ⚠️ **El `UNIQUE(usuario_id, nombre_hash)` no protege entre semillas**, como ya avisaba la
+  sección de arriba: MySQL admite cualquier cantidad de filas con `usuario_id` NULL en un
+  índice único. Correr el seeder dos veces sin este cuidado duplicaría las quince entradas de
+  medicamentos y las diecisiete de vacunas en la segunda pasada, sin que la base se queje.
+  Por eso `CatalogosSeeder` chequea **antes de crear** —por el índice ciego, igual que
+  `CatalogoBaseController::duplicarRegistro()`—, y no confía en un `firstOrCreate` ni en
+  capturar la excepción del UNIQUE: sobre una columna cifrada, un `firstOrCreate` compararía
+  ciphertexts distintos entre sí y jamás encontraría la fila existente.
+- Verificado contra MySQL real, no solo con el test: correr el comando dos veces seguidas dejó
+  la misma cantidad de filas las dos veces.
+- Una semilla y un registro propio pueden compartir nombre sin problema: el UNIQUE está
+  acotado por `usuario_id`, y NULL contra un id real nunca choca.
+
 ## Cobertura médica
 
 `coberturas` es tabla propia y no columnas en `pacientes`: mucha gente tiene obra social y
@@ -1034,6 +1059,12 @@ paso) estaba bien resuelta. Lo único nuevo fue un hook de eager loading
 Verificado en Chrome real: alta, subida del prospecto, apertura en
 `VisorDocumento`, borrado del prospecto y del medicamento, y alta/edición/baja
 de una vacuna.
+
+**Etapa 5 completa** con el paso 5.4: `CatalogosSeeder` carga quince
+medicamentos y diecisiete vacunas de uso común en Argentina, como semillas
+compartidas. Verificado contra MySQL real -no solo con el test- que correrlo
+dos veces no duplica nada, que una semilla se ve pero no se edita, y que
+duplicarla arma una copia propia y editable en el catálogo de quien la copió.
 
 Pendiente, en este orden: capa de cifrado y sondas de riesgo · accesibilidad, layout y PWA ·
 pacientes y Google · adjuntos y visor · cobertura médica · catálogos · seguimiento de
