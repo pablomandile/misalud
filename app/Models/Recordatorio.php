@@ -108,6 +108,21 @@ class Recordatorio extends Model implements PerteneceAPaciente
     }
 
     /**
+     * Cuándo pasa lo que este aviso anuncia.
+     *
+     * Es la inversa exacta de lo que hizo `GeneradorDeRecordatorios`
+     * -`fecha = evento − anticipación`-, así que sumarla de vuelta da el
+     * instante original sin tener que abrir el polimórfico. Eso importa por
+     * dos motivos: el mail necesita decir cuándo es el turno (no cuándo
+     * avisa), y así **no hace falta descifrar nada del origen** para
+     * calcularlo.
+     */
+    public function instanteDelEvento(): CarbonImmutable
+    {
+        return $this->fecha->addHours($this->tipo->horasDeAnticipacion());
+    }
+
+    /**
      * Marcarlo hecho. Es **lo único** que una persona puede cambiarle.
      */
     public function completar(): void

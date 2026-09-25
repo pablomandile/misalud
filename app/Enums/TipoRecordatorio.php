@@ -55,6 +55,23 @@ enum TipoRecordatorio: string
     }
 
     /**
+     * El asunto del mail.
+     *
+     * ⚠️ **Sin el nombre de nadie, a propósito.** El asunto es la parte más
+     * expuesta de un mail: aparece en la pantalla bloqueada del teléfono, en
+     * la vista previa de la bandeja, y es lo que más termina en los registros
+     * de cualquier servidor de correo por el que pase. El nombre del paciente
+     * va en el cuerpo; acá solo qué clase de aviso es.
+     */
+    public function asunto(): string
+    {
+        return match ($this) {
+            self::TurnoProximo => 'MiSalud: tenés un turno próximo',
+            self::TratamientoTermina => 'MiSalud: un tratamiento está por terminar',
+        };
+    }
+
+    /**
      * Cuánto antes del evento se avisa.
      *
      * Las dos van a 24 horas: es el aviso que sirve —"mañana tenés que

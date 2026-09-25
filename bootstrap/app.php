@@ -1,6 +1,7 @@
 <?php
 
 use App\Console\Commands\CerrarTratamientosVencidos;
+use App\Console\Commands\EnviarRecordatorios;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\HandleTamanioTexto;
@@ -35,6 +36,20 @@ return Application::configure(basePath: dirname(__DIR__))
          * `deploy-hostinger`); acá solo se declara QUÉ correr y cuándo.
          */
         $schedule->command(CerrarTratamientosVencidos::class)->daily();
+
+        /*
+         * Cada HORA, no una vez al día: un recordatorio vence a cualquier
+         * hora -la de su turno menos la anticipación-, así que un job diario
+         * lo mandaría con hasta 24 horas de atraso. Para un aviso de 24 horas
+         * de anticipación, eso es exactamente inútil.
+         *
+         * `withoutOverlapping()` es seguro barato: la transición de estado
+         * (`Pendiente` → `Enviado`) ya evita mandar dos veces, pero dos
+         * corridas simultáneas podrían leer la misma fila antes de que
+         * ninguna la marque. Usa el lock de caché, y la tabla `cache_locks`
+         * existe.
+         */
+        $schedule->command(EnviarRecordatorios::class)->hourly()->withoutOverlapping();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

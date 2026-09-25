@@ -1590,6 +1590,101 @@ información que el sistema no necesita distinguir de un turno cancelado —las 
 significan "no pasó"— y separarlas invitaría a que la pantalla opine sobre por qué (regla 1).
 Mismo criterio que `EstadoOrdenEstudio`.
 
+### `misalud:enviar-recordatorios`: el segundo comando del scheduler
+
+Corre **cada hora**, no una vez al día. Un recordatorio vence a cualquier hora —la de su turno
+menos la anticipación—, así que un job diario lo mandaría con hasta 24 horas de atraso, que
+para un aviso de 24 horas de anticipación es exactamente inútil.
+
+Lleva `withoutOverlapping()`: la transición de estado (`Pendiente` → `Enviado`) ya evita mandar
+dos veces, pero dos corridas simultáneas podrían leer la misma fila antes de que ninguna la
+marque. Usa el lock de caché y la tabla `cache_locks` existe.
+
+### ⚠️ No se avisa de algo que ya pasó, y el corte NO es una constante
+
+Si el servidor estuvo caído una semana, mandar "tenés un turno" por un turno que ya fue es peor
+que no mandar nada: no se puede actuar, y encima hace desconfiar del resto de los avisos.
+
+La tentación era una "ventana de gracia" de N horas. No hace falta, y esto es lo lindo del
+modelo: `Recordatorio::instanteDelEvento()` es `fecha + anticipación`, así que **el corte se
+deduce** y la condición es literalmente _"¿el evento ya pasó?"_. Sin número mágico, y sin que
+cambiar la anticipación de un tipo deje el corte desalineado.
+
+Esos quedan en `Vencido`: no se mandan, pero **tampoco se pierden**, así la pantalla puede
+distinguir "no te avisamos" de "te avisamos y no lo resolviste".
+
+`instanteDelEvento()` sirve para otra cosa además: es la inversa exacta de lo que hizo el
+generador, así que el mail sabe cuándo es el turno **sin abrir el polimórfico y sin descifrar
+nada del origen**.
+
+### Un fallo no se lleva la tanda
+
+El `try`/`catch` va **por destinatario**: un mail rebotado no puede impedir que salgan los
+demás ni que se procese el resto de los recordatorios.
+
+⚠️ Un recordatorio se marca `Enviado` si salió **al menos uno** de sus mails, y es una decisión
+con filo: si eran dos destinatarios y el segundo falló, esa persona se queda sin aviso. La
+alternativa —no marcarlo y reintentar— le mandaría al primero el mismo mail cada hora hasta que
+el evento pase, hasta veinticuatro veces. Entre perder un aviso y volverse insoportable gana lo
+primero, y el fallo queda en el log con el id del usuario para ir a buscarlo.
+
+⚠️ **Al log no va ningún dato clínico**, ni el nombre del paciente ni la dirección de mail: los
+ids alcanzan para encontrar a quién le falló, y un log es un archivo de texto que termina en
+cualquier lado. Misma regla que los errores de Socialite.
+
+### A quién se le manda: dos filtros, cada uno con su motivo
+
+- **Solo quien puede editar** (propietario y cuidador). Un `Lector` no puede hacer nada con el
+  aviso —no agenda, no cancela, no marca hecho—, así que para él sería solo correo.
+- **Solo mails verificados.** Un mail sin verificar es una dirección que nadie probó que sea
+  suya, y puede ser un tipeo que apunta a un tercero. La app ya exige verificarlo para entrar;
+  mandar un aviso con el nombre de un paciente a una dirección no probada sería el único lugar
+  donde eso no se respeta. Si nadie verificó, el aviso queda `Pendiente` y se reintenta —y si
+  nunca se verifica, vence solo—.
+
+### El mail: uno por destinatario, sin `ShouldQueue`, y en texto plano
+
+**Sin `ShouldQueue`, a propósito.** Lo dispara un comando del scheduler, que ya corre en
+segundo plano: encolarlo no lo haría más asíncrono, solo agregaría un `queue:work` del que
+depender. Y en hosting compartido un worker se cae en silencio, así que el modo de falla sería
+**quedarse sin avisos sin que nadie se entere** —el peor posible para lo único que esta app
+hace por su cuenta—.
+
+**Uno por destinatario, nunca uno con varios `To`.** Dos razones que apuntan al mismo lado: la
+hora (cada uno la lee en su propia zona, y un solo mail solo puede traer una) y la privacidad
+(varios `To` o `Cc` le muestran a cada uno la dirección de los demás).
+
+**Texto plano y no HTML.** Un aviso de tres líneas no necesita maquetado, se ve bien en
+cualquier cliente y no depende de que carguen estilos. Y de paso evita el layout de markdown de
+Laravel, que viene en inglés y habría que traducir entero para cumplir la regla de idioma.
+
+### ⚠️ Qué dice el mail y qué no
+
+Un mail sale del sistema **sin cifrar** y queda en el servidor de correo de quien lo reciba,
+fuera de todo lo que esta app controla. Así que dice **cuándo**, no **qué**:
+
+| Va en el mail                 | Se queda detrás del login  |
+| ----------------------------- | -------------------------- |
+| De qué clase es el aviso      | El motivo del turno        |
+| El nombre del paciente        | Qué médico, en qué centro  |
+| La fecha y la hora del evento | Qué medicamento, qué dosis |
+
+El nombre del paciente sí va, y es la única concesión: sin él, un cuidador que administra tres
+fichas recibe un aviso que no puede usar.
+
+⚠️ **El asunto no lleva ningún nombre.** Es la parte más expuesta de un mail: aparece en la
+pantalla bloqueada del teléfono, en la vista previa de la bandeja, y es lo que más termina en
+los registros de cualquier servidor por el que pase. Por eso vive en
+`TipoRecordatorio::asunto()` y no se arma con datos de nadie. Hay un test que lo fija.
+
+Verificado corriendo el comando de verdad contra el mailer de log —no solo con `Mail::fake()`—
+y leyendo el mail renderizado: `Content-Type: text/plain`, el motivo aparece **0 veces**, el
+nombre del paciente 1, y la hora en la zona de la cuenta.
+
+⚠️ El ensayo en seco (`--seco`) muestra la hora **etiquetada como UTC**: en un ensayo no hay un
+destinatario del que tomar la zona. Sin la etiqueta, quien compare esa salida con el mail que
+llega creería que se contradicen.
+
 ### ⚠️ Un perfil de Chrome propio para los scripts de verificación
 
 `puppeteer.launch()` empezó a fallar con `Failed to launch the browser process: Code: 0` y
@@ -1801,6 +1896,7 @@ npm run revisar:pwa       # el veredicto de instalabilidad de Chrome, no "se ve 
 npm run revisar:visor     # sube un PDF y verifica que pdf.js lo dibuje de verdad
 npm run generar:iconos    # regenera el set de íconos desde resources/marca/
 
+php artisan misalud:enviar-recordatorios --seco   # qué avisos saldrían, sin mandar nada
 php artisan misalud:sonda-imap   # ¿sale el 993 desde acá?
 php artisan misalud:recifrar     # rotar APP_KEY (--seco para ensayar)
 php artisan wayfinder:generate --with-form   # SIEMPRE con --with-form
@@ -2136,7 +2232,29 @@ funcione-, pero `adjuntos` es polimórfica y no tiene FK, así que un `forceDele
 deja la fila **y su archivo cifrado en disco** para siempre. Se vuelve alcanzable cuando la
 Etapa 14 exponga el `forceDelete` del propietario; hay que resolverlo ahí.
 
-Pendiente, en este orden: **el paso 11.2** (comando horario y mail de avisos) y el 11.3
-(agenda y pendientes en el dashboard) · casilla y recetas · contactos y envío ·
+**Paso 11.2 hecho**: `misalud:enviar-recordatorios`, cada hora por el scheduler, con su mail.
+
+Dos decisiones que valen más que el código. La primera: **no se avisa de algo que ya pasó**, y
+el corte no es una constante inventada -`instanteDelEvento()` es `fecha + anticipación`, así que
+la condición es literalmente "¿el evento ya pasó?"-. Esos quedan en `Vencido`, no borrados, para
+que la pantalla pueda distinguir "no te avisamos" de "te avisamos y no lo resolviste".
+
+La segunda: **el mail dice cuándo, no qué**. Sale sin cifrar y queda en el servidor de correo de
+quien lo reciba, así que lleva el tipo de aviso, el nombre del paciente y la fecha; el motivo,
+el médico y el medicamento se quedan detrás del login. El asunto no lleva ningún nombre, porque
+es lo que se ve en la pantalla bloqueada de un teléfono.
+
+Sin `ShouldQueue`, uno por destinatario -cada uno lee la hora en su zona, y varios `To` se
+filtran las direcciones entre sí- y en texto plano.
+
+Verificado corriendo el comando de verdad contra el mailer de log y leyendo el mail renderizado,
+no solo con `Mail::fake()`: `text/plain`, el motivo aparece **0 veces**, el nombre 1, y la hora
+en la zona de la cuenta.
+
+⚠️ **`MAIL_FROM_ADDRESS` sigue siendo el `hello@example.com` del starter kit.** Los avisos no
+van a salir de producción hasta configurar el mailer real; queda para el deploy (Etapa 15.3).
+
+Pendiente, en este orden: **el paso 11.3** (agenda y pendientes en el dashboard, Sonnet 5) ·
+casilla y recetas · contactos y envío ·
 compartir la ficha · dashboard y deploy. Queda también, sin fecha, la Etapa 16 (consultas y
 grabaciones), que el plan deja adelantable.
