@@ -15,11 +15,13 @@ use App\Http\Controllers\OrdenEstudioController;
 use App\Http\Controllers\PacienteActivoController;
 use App\Http\Controllers\PacienteController;
 use App\Http\Controllers\PrescripcionOcularController;
+use App\Http\Controllers\RecordatorioController;
 use App\Http\Controllers\RegistroEnfermedadController;
 use App\Http\Controllers\ResultadoEstudioController;
 use App\Http\Controllers\Settings\TamanioTextoController;
 use App\Http\Controllers\TipoMedicionController;
 use App\Http\Controllers\TratamientoController;
+use App\Http\Controllers\TurnoController;
 use App\Http\Controllers\VacunaController;
 use Illuminate\Support\Facades\Route;
 
@@ -238,6 +240,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('tratamientos.update');
     Route::delete('tratamientos/{tratamiento}', [TratamientoController::class, 'destroy'])
         ->name('tratamientos.destroy');
+
+    /*
+     * Turnos: la agenda de un paciente. Los RECORDATORIOS no tienen rutas de
+     * alta ni de baja -los genera un observer, ver `GeneradorDeRecordatorios`-;
+     * lo único que se puede hacer con uno es marcarlo hecho.
+     */
+    Route::get('pacientes/{paciente}/turnos', [TurnoController::class, 'index'])
+        ->name('pacientes.turnos.index');
+    Route::post('pacientes/{paciente}/turnos', [TurnoController::class, 'store'])
+        ->name('pacientes.turnos.store');
+    Route::put('turnos/{turno}', [TurnoController::class, 'update'])->name('turnos.update');
+    Route::delete('turnos/{turno}', [TurnoController::class, 'destroy'])->name('turnos.destroy');
+
+    Route::put('recordatorios/{recordatorio}', [RecordatorioController::class, 'update'])
+        ->name('recordatorios.update');
 
     Route::get('pacientes', [PacienteController::class, 'index'])->name('pacientes.index');
     Route::post('pacientes', [PacienteController::class, 'store'])->name('pacientes.store');

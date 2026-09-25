@@ -8,13 +8,16 @@ use App\Concerns\CifraCampos;
 use App\Contracts\CifraDatos;
 use App\Contracts\PerteneceAPaciente;
 use App\Database\Eloquent\ConsultaVigilada;
+use App\Observers\TratamientoObserver;
 use App\Policies\RegistroClinicoPolicy;
 use Carbon\CarbonImmutable;
 use Database\Factories\TratamientoFactory;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -32,6 +35,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property bool $activo
  * @property string|null $notas
  */
+#[ObservedBy(TratamientoObserver::class)]
 #[UsePolicy(RegistroClinicoPolicy::class)]
 class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente
 {
@@ -86,6 +90,17 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente
          * después-, así que un UNIQUE acá sería un estorbo.
          */
         return [];
+    }
+
+    /**
+     * Sus recordatorios -el aviso de que está por terminar-. Los mantiene
+     * `TratamientoObserver`, nunca un formulario.
+     *
+     * @return MorphMany<Recordatorio, $this>
+     */
+    public function recordatorios(): MorphMany
+    {
+        return $this->morphMany(Recordatorio::class, 'origen');
     }
 
     /**

@@ -183,6 +183,25 @@ class Paciente extends Model implements CifraDatos, TieneArchivos
     }
 
     /**
+     * @return HasMany<Turno, $this>
+     */
+    public function turnos(): HasMany
+    {
+        return $this->hasMany(Turno::class);
+    }
+
+    /**
+     * Los avisos de esta ficha. `paciente_id` está denormalizado acá justo
+     * para que esta consulta no tenga que resolver un polimórfico por fila.
+     *
+     * @return HasMany<Recordatorio, $this>
+     */
+    public function recordatorios(): HasMany
+    {
+        return $this->hasMany(Recordatorio::class);
+    }
+
+    /**
      * La edad NO se guarda: se deriva de `fecha_nacimiento` en cada request.
      * Guardarla como dato dejaría desactualizada a toda ficha al día
      * siguiente de cargada.

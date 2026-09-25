@@ -1442,6 +1442,161 @@ el OI "sin corrección" en realidad tenía una esfera de sobra puesta por el def
 evolución devolvía dos series en vez de una. Hay que anular `esfera`/`cilindro`/`eje` a mano
 cuando el test necesita un ojo realmente vacío.
 
+## Turnos y recordatorios
+
+Dos tablas con dos naturalezas muy distintas: `turnos` es dominio clínico que carga una
+persona, y `recordatorios` es **dato derivado que nadie escribe a mano**.
+
+### `turnos.fecha_hora` es el segundo `datetime` que carga una persona
+
+El primero fue `mediciones.fecha` (paso 6.1), así que corre la misma regla: `aUtc()` al
+guardar, `enSuZona()` al mostrar, la conversión vive en el FormRequest
+(`TurnoGuardarRequest::fechaHoraEnUtc()`) para que no se pueda olvidar en una acción nueva, y
+la precarga del formulario sale del servidor (`ahoraLocal`) y no de `new Date()`.
+
+Lo que **cambia** respecto de una medición, y es la decisión del paso:
+
+> Un turno en el FUTURO es el caso normal. No lleva ninguna validación de rango.
+
+Una medición registra algo que ya pasó y por eso rechaza mañana; un turno se agenda
+justamente para mañana, y también se carga hacia atrás para registrar que se fue. Poner una
+`FechaNoFutura` por simetría con el resto de las fechas de la app haría imposible usar la
+pantalla para lo que existe.
+
+Las tres FK (`medico_id`, `centro_id`, `orden_estudio_id`) son metadato: `nullOnDelete`,
+siguiendo la regla de la Etapa 7. `orden_estudio_id` cierra el circuito que la Etapa 9 había
+dejado a medias —la orden dice qué hacerse, el turno cuándo, el estudio el resultado— y se
+ofrecen **todas** las órdenes de la ficha, no solo las pendientes: un turno de control por un
+estudio ya hecho es un caso real.
+
+### La agenda ordena al revés que todo el resto de la app
+
+Los demás listados van de lo más reciente a lo más viejo, porque muestran historia. Una
+agenda muestra futuro: lo inminente es lo que importa, y un turno de mañana no puede quedar
+debajo de uno de diciembre. Por eso `proximos` va de menor a mayor.
+
+**La separación entre "lo que viene" y "ya pasaron" la hace el servidor**, no un `computed()`
+en la pantalla: depende de la hora, y el reloj del navegador puede estar corrido —con él se
+correría la mitad de la agenda—.
+
+### `recordatorios`: la idempotencia es el diseño entero
+
+> Los genera un observer. **No hay ninguna ruta que cree ni que borre un recordatorio.**
+
+Lo único que hace una persona es marcarlo hecho (`RecordatorioController` tiene un solo
+método, y esa ausencia _es_ la decisión: garantiza que la tabla no pueda entrar en un estado
+que ningún origen justifique).
+
+La clave de idempotencia es `origen_type` + `origen_id` + `tipo`, con **UNIQUE en la base**.
+Un observer corre en cada guardado de su origen, así que generar el recordatorio tiene que
+poder repetirse mil veces; el código lo resuelve buscando antes de crear, y el UNIQUE está
+igual para convertir un bug de lógica en un error ruidoso en vez de una bandeja con el mismo
+aviso repetido.
+
+⚠️ **`paciente_id` NO entra en el UNIQUE**: el par (origen_type, origen_id) ya determina de
+qué paciente es, y sumarlo permitiría dos filas que solo difieren en el paciente para el mismo
+origen —justo el estado imposible que hay que prohibir—. Está igual en la tabla,
+denormalizado, porque de él cuelga la autorización y porque "los pendientes de esta ficha" no
+puede depender de resolver un polimórfico por fila.
+
+**Sin soft deletes**: es dato derivado, se regenera con el próximo guardado del origen. Un
+`deleted_at` acá solo lograría que el UNIQUE viera una fila fantasma y bloqueara la
+regeneración.
+
+### `GeneradorDeRecordatorios`: las cuatro filas de la tabla de verdad
+
+| Lo que llega                | Lo que hace                          |
+| --------------------------- | ------------------------------------ |
+| instante `null`             | **Borra** el recordatorio si existía |
+| no existe todavía           | Lo crea, `Pendiente`                 |
+| existe y la fecha NO cambió | **Nada**, ni un `touch`              |
+| existe y la fecha cambió    | La actualiza y lo **reabre**         |
+
+⚠️ **Las dos del medio son el corazón del asunto, y son opuestas a propósito.**
+
+Si la fecha **no** cambió no se toca nada, porque el observer corre también cuando alguien
+edita el motivo del turno: resetear el estado ahí haría reaparecer como pendiente un aviso que
+la persona ya resolvió, por haber corregido una falta de ortografía.
+
+Si la fecha **sí** cambió se reabre —`estado` a `Pendiente`, `enviado_en` a `null`—, porque el
+turno se movió de día: el "ya lo sé" que la persona dio antes era sobre otra fecha, y el mail
+que ya salió decía un día que ya no es.
+
+⚠️ La comparación de fechas va **formateada al segundo**, no con `equalTo()` sobre los
+objetos: la base guarda segundos, y un microsegundo de diferencia entre el valor recién
+calculado y el que volvió de una columna `datetime` haría ver como "cambió" algo que no
+cambió, reabriendo el recordatorio de alguien en cada guardado.
+
+### Los observers son finos porque no deciden casi nada
+
+`TipoRecordatorio::horasDeAnticipacion()` declara _cuándo_ avisar (24 h para los dos tipos),
+`GeneradorDeRecordatorios` sabe _cómo_ guardarlo, y el observer solo resuelve **cuál es el
+instante del evento, o si ya no hay evento del que avisar**.
+
+- **Cancelar un turno y borrarlo terminan en el mismo lugar** —pasar `null`—, que es lo que
+  hace que haya una sola regla donde podría haber dos.
+- `saved` cubre el alta, la edición **y restaurar** de la papelera (`restore()` llama a
+  `save()`); agregar un método `restored` haría correr todo dos veces. Y con soft deletes,
+  `deleted` dispara al mandar a la papelera sin pasar por `save()`, así que los dos caminos no
+  se pisan.
+- Un tratamiento avisa solo si está **activo y con fecha de fin**: sin `fin` no termina nunca
+  (es un crónico), e inactivo ya se suspendió antes de llegar al final.
+
+⚠️ **La anticipación es aritmética de instantes, sin zona horaria, y es deliberado.** "24
+horas antes" da el mismo instante para todos; la alternativa —"el día anterior a las 9, hora
+del usuario"— no tiene respuesta única cuando una ficha la comparten personas en husos
+distintos, que es exactamente lo que habilita el pivote `paciente_usuario`. Mismo
+razonamiento que `misalud:cerrar-tratamientos-vencidos`.
+
+⚠️ Cuando el origen es una fecha de **calendario** (`tratamientos.fin` es `date`, que Carbon
+lee a medianoche UTC), restarle 24 h da la medianoche UTC del día anterior: las 21:00 en
+Argentina. Es una hora razonable para recibir "mañana termina tu tratamiento", pero **salió
+así por la aritmética y no porque alguien la eligiera**.
+
+⚠️ **`misalud:cerrar-tratamientos-vencidos` no dispara el observer**, porque escribe con un
+`update()` masivo. Se dejó así: para cuando el comando cierra un tratamiento su `fin` ya pasó,
+así que el recordatorio venció hace rato y el comando horario lo descarta solo. Cargar
+cientos de modelos para producir un cambio que no se nota sería peor.
+
+### `Recordatorio` es el primer modelo del dominio que NO cifra nada
+
+Todas sus columnas son metadato del sistema: tipo, fecha, de qué fila salió, en qué estado
+está. **El contenido no vive acá** —el motivo del turno, el medicamento del tratamiento están
+cifrados en su propia tabla—. Por eso tampoco declara `$builder = ConsultaVigilada::class`: no
+hay ninguna columna cifrada sobre la que un `where` pueda mentir. Si algún día necesitara un
+texto propio, esa columna iría cifrada y el modelo pasaría a implementar `CifraDatos`.
+
+⚠️ **Y por eso no tiene factory.** Una `RecordatorioFactory` tendría que inventarse un origen,
+y el camino corto —crear un `Turno`— choca contra el UNIQUE: el observer de ese turno ya
+generó su recordatorio antes de que la factory llegue a insertar el suyo. No es algo para
+tapar con un `firstOrCreate`: es la tabla avisando que solo tiene un camino de escritura. En
+un test se crea el turno y se deja que el observer trabaje; para forzar un estado que tardaría
+en producirse (uno ya enviado) se usa `forceFill()`, que además queda explícito como "esto no
+es un camino normal".
+
+### Cuatro estados, porque hay dos historias conviviendo
+
+`EstadoRecordatorio`: lo que hizo el **sistema** (`Pendiente` → `Enviado`, o → `Vencido` si
+nadie pudo avisar en tiempo) y lo que hizo la **persona** (cualquiera de esos →
+`Completado`). Un `Enviado` sigue abierto _para la persona_: la pantalla muestra los dos
+juntos, y lo que `Enviado` evita es mandar el mismo aviso dos veces.
+
+⚠️ **Reabrir un recordatorio ya enviado lo deja en `Enviado`, no en `Pendiente`.** El mail
+salió y eso es un hecho del pasado: volverlo a pendiente haría que el comando horario lo
+mandara de nuevo, que es justo lo que `enviado_en` existe para evitar.
+
+`EstadoTurno` tiene tres casos y no cuatro: **no hay "ausente"**. Que alguien no haya ido es
+información que el sistema no necesita distinguir de un turno cancelado —las dos cosas
+significan "no pasó"— y separarlas invitaría a que la pantalla opine sobre por qué (regla 1).
+Mismo criterio que `EstadoOrdenEstudio`.
+
+### ⚠️ Un perfil de Chrome propio para los scripts de verificación
+
+`puppeteer.launch()` empezó a fallar con `Failed to launch the browser process: Code: 0` y
+stderr vacío —nada que diagnosticar—. Se resolvió pasando un `userDataDir` temporal y único
+por proceso. Vale como default para todo script nuevo: no pelea por el lock de un perfil que
+otro proceso tenga abierto, y **no toca el Chrome del usuario**.
+
 ## Cobertura médica
 
 `coberturas` es tabla propia y no columnas en `pacientes`: mucha gente tiene obra social y
@@ -1950,6 +2105,38 @@ no en blanco-, y un primer test de "un ojo sin corrección" pasaba probando el c
 equivocado. Quedó documentado en la sección de arriba, para quien escriba el próximo test que
 necesite un ojo realmente vacío.
 
-Pendiente, en este orden: turnos y recordatorios · casilla y recetas · contactos y envío ·
+**Paso 11.1 hecho**: `turnos` con su agenda, y `recordatorios` con los observers que los
+generan. Van juntos porque uno sin el otro no se puede verificar: la pantalla existe para que
+el observer se vea trabajar.
+
+La decisión que sostiene el paso es que **un recordatorio es dato derivado**: no hay ninguna
+ruta que lo cree ni que lo borre, lo único que hace una persona es marcarlo hecho. Toda la
+idempotencia vive en `GeneradorDeRecordatorios` -cuatro casos, dos de ellos opuestos a
+propósito: si la fecha del origen no cambió NO se toca nada (para no reabrir un aviso que
+alguien ya resolvió al corregir una falta de ortografía), y si cambió se reabre entero (porque
+el mail que salió decía un día que ya no es)-, respaldada por un UNIQUE en la base.
+
+El futuro pasó a ser un caso normal: `turnos.fecha_hora` es el segundo `datetime` que carga
+una persona y el primero que **no** lleva validación de rango, al revés que una medición.
+
+Verificado en Chrome: crear el turno hace aparecer el aviso sin refrescar y exactamente 24
+horas antes en la zona de la cuenta (15:30 del 15/3 → aviso el 14/3 15:30), moverlo al 20/3
+09:00 mueve el aviso al 19/3 09:00, cancelarlo se lo saca, y "Ya está" lo saca de la lista sin
+borrar la fila. Más la matriz de desborde de la pantalla nueva -18 combinaciones- y las áreas
+táctiles del formulario.
+
+De paso: `puppeteer.launch()` empezó a fallar con un `Code: 0` y stderr vacío. Se resolvió con
+un `userDataDir` temporal por proceso, que además no toca el Chrome del usuario -queda como
+default para todo script de verificación-.
+
+⚠️ **Hueco latente encontrado, NO arreglado todavía** (es de otra etapa): nada limpia los
+`adjuntos` cuando se borra su dueño de verdad. Hoy no se nota porque ningún controlador llama
+a `forceDelete()` -solo hay soft deletes, y ahí los adjuntos deben quedarse para que restaurar
+funcione-, pero `adjuntos` es polimórfica y no tiene FK, así que un `forceDelete` del dueño
+deja la fila **y su archivo cifrado en disco** para siempre. Se vuelve alcanzable cuando la
+Etapa 14 exponga el `forceDelete` del propietario; hay que resolverlo ahí.
+
+Pendiente, en este orden: **el paso 11.2** (comando horario y mail de avisos) y el 11.3
+(agenda y pendientes en el dashboard) · casilla y recetas · contactos y envío ·
 compartir la ficha · dashboard y deploy. Queda también, sin fecha, la Etapa 16 (consultas y
 grabaciones), que el plan deja adelantable.
