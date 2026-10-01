@@ -60,4 +60,17 @@ class CuentaMailPolicy
     {
         return $this->view($usuario, $cuenta);
     }
+
+    /**
+     * Importar ahora, sin esperar a que corra el scheduler.
+     *
+     * Entrada propia y no `update`: lo que hace no es editar la casilla sino
+     * **crear recetas** y mover su marca de sincronización. Tiene el mismo dueño
+     * que todo lo demás, pero el día que haya que limitarlo -que alguien no
+     * pueda disparar una importación cada dos segundos- el lugar ya existe.
+     */
+    public function sincronizar(User $usuario, CuentaMail $cuenta): bool
+    {
+        return $this->view($usuario, $cuenta);
+    }
 }

@@ -8,11 +8,13 @@ use App\Concerns\CifraCampos;
 use App\Contracts\CifraDatos;
 use App\Database\Eloquent\ConsultaVigilada;
 use App\Policies\CuentaMailPolicy;
+use Carbon\CarbonImmutable;
 use Database\Factories\CuentaMailFactory;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * La casilla de correo de la que se importan las recetas.
@@ -42,6 +44,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $password
  * @property string $carpeta
  * @property list<string>|null $filtros
+ * @property CarbonImmutable|null $sincronizado_hasta
  */
 #[UsePolicy(CuentaMailPolicy::class)]
 class CuentaMail extends Model implements CifraDatos
@@ -82,6 +85,7 @@ class CuentaMail extends Model implements CifraDatos
             'password' => 'encrypted',
             'filtros' => 'encrypted:array',
             'puerto' => 'integer',
+            'sincronizado_hasta' => 'immutable_datetime',
         ];
     }
 
@@ -102,6 +106,20 @@ class CuentaMail extends Model implements CifraDatos
     public function usuario(): BelongsTo
     {
         return $this->belongsTo(User::class, 'usuario_id');
+    }
+
+    /**
+     * Las recetas que entraron por esta casilla.
+     *
+     * ⚠️ Es `nullOnDelete`, no `cascade`: borrar la casilla **no** se lleva las
+     * recetas ya importadas, que son documentos de la persona. Lo que se pierde
+     * es saber de dónde vinieron.
+     *
+     * @return HasMany<Receta, $this>
+     */
+    public function recetas(): HasMany
+    {
+        return $this->hasMany(Receta::class, 'cuenta_mail_id');
     }
 
     /**

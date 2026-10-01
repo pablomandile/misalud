@@ -7,10 +7,13 @@ namespace App\Http\Controllers;
 use App\Http\Requests\CuentaMailGuardarRequest;
 use App\Models\CuentaMail;
 use App\Services\ProbadorDeCasilla;
+use App\Services\SincronizadorDeRecetas;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
+use Throwable;
 
 /**
  * La casilla de correo de la que se importan las recetas.
@@ -47,6 +50,10 @@ class CuentaMailController extends Controller
              * espera cualquiera.
              */
             ->orderBy('id')
+            // Explícito: sin esto es una consulta por casilla para contar sus
+            // recetas. "Todo listado con eager loading explícito" vale igual para
+            // un contador.
+            ->withCount('recetas')
             ->get()
             ->map(fn (CuentaMail $cuenta): array => $this->serializar($cuenta))
             ->all() ?? [];
@@ -125,6 +132,45 @@ class CuentaMailController extends Controller
     }
 
     /**
+     * Importa ahora, sin esperar a que corra el scheduler.
+     *
+     * Existe por dos motivos y el segundo es el que la justifica: alguien que
+     * acaba de configurar la casilla quiere ver que funciona **ya**, y sin este
+     * botón la única forma de comprobar la importación sería esperar hasta una
+     * hora o entrar por SSH a correr el comando.
+     */
+    public function sincronizar(
+        CuentaMail $cuenta,
+        SincronizadorDeRecetas $sincronizador,
+    ): RedirectResponse {
+        Gate::authorize('sincronizar', $cuenta);
+
+        try {
+            $resumen = $sincronizador->sincronizar($cuenta);
+        } catch (Throwable $e) {
+            /*
+             * El mensaje de la excepción NO va a la pantalla: puede venir del
+             * servidor IMAP, en inglés y con partes del comando que lo provocó
+             * (ver `ProbadorDeCasilla`). Lo que sirve acá es mandar a la prueba de
+             * conexión, que traduce el fallo a algo que se entiende y se puede
+             * arreglar.
+             */
+            Log::error('Falló una sincronización pedida a mano', [
+                'cuenta_mail_id' => $cuenta->id,
+                'usuario_id' => $cuenta->usuario_id,
+                'excepcion' => $e::class,
+            ]);
+
+            return back()->with(
+                'error',
+                'No se pudo importar de esa casilla. Probá la conexión para ver qué está pasando.',
+            );
+        }
+
+        return back()->with('exito', $resumen->paraPantalla());
+    }
+
+    /**
      * ⚠️ Sin `password`. Ver el comentario de la clase.
      *
      * @return array<string, mixed>
@@ -138,6 +184,17 @@ class CuentaMailController extends Controller
             'direccion' => $cuenta->direccion,
             'carpeta' => $cuenta->carpeta,
             'filtros' => $cuenta->remitentesAceptados(),
+
+            /*
+             * Ahora sí hay algo que la escribe (el paso 12.1 la dejó afuera a
+             * propósito). Va en la zona del usuario: es una hora, y una hora en
+             * UTC en pantalla no se puede comparar con nada.
+             */
+            'sincronizadoHasta' => $cuenta->sincronizado_hasta === null
+                ? null
+                : auth()->user()?->enSuZona($cuenta->sincronizado_hasta)?->format('d/m/Y H:i'),
+
+            'recetasImportadas' => (int) ($cuenta->recetas_count ?? 0),
         ];
     }
 }

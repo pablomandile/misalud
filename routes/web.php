@@ -273,6 +273,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('casilla/{cuenta}/probar', [CuentaMailController::class, 'probar'])
         ->name('casilla.probar');
 
+    /*
+     * Importar ahora, sin esperar al scheduler. Las RECETAS no tienen rutas de
+     * alta: entran solo por acá y por `misalud:sincronizar-recetas` -lo fija
+     * `RecetaPolicy::create()`, que devuelve `false` a propósito-.
+     */
+    Route::post('casilla/{cuenta}/sincronizar', [CuentaMailController::class, 'sincronizar'])
+        ->name('casilla.sincronizar');
+
     Route::get('pacientes', [PacienteController::class, 'index'])->name('pacientes.index');
     Route::post('pacientes', [PacienteController::class, 'store'])->name('pacientes.store');
     Route::put('pacientes/{paciente}', [PacienteController::class, 'update'])->name('pacientes.update');

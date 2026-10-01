@@ -2,6 +2,7 @@
 
 use App\Console\Commands\CerrarTratamientosVencidos;
 use App\Console\Commands\EnviarRecordatorios;
+use App\Console\Commands\SincronizarRecetas;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\HandleTamanioTexto;
@@ -50,6 +51,20 @@ return Application::configure(basePath: dirname(__DIR__))
          * existe.
          */
         $schedule->command(EnviarRecordatorios::class)->hourly()->withoutOverlapping();
+
+        /*
+         * Cada hora también. Una receta sirve para ir a la farmacia, así que la
+         * pregunta que contesta es "¿tengo una disponible ahora?", y la ventana
+         * con solapamiento hace que una corrida de más cueste unas cabeceras.
+         *
+         * `withoutOverlapping()` acá importa más que en los otros dos: una
+         * corrida puede tardar -abre una conexión IMAP por casilla y se baja los
+         * adjuntos-, así que dos solapadas son plausibles de verdad. Las dos
+         * importarían los mismos mails: la deduplicación por `message_id_hash` lo
+         * frenaría, pero recién después de haber bajado y escrito los archivos
+         * dos veces.
+         */
+        $schedule->command(SincronizarRecetas::class)->hourly()->withoutOverlapping();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

@@ -102,6 +102,20 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
         return $this->hasMany(CuentaMail::class, 'usuario_id');
     }
 
+    /**
+     * Las recetas importadas del mail.
+     *
+     * Cuelgan del usuario y no de un paciente: un mail de la farmacia no dice de
+     * quién es la receta, así que la receta pertenece a quien administra la
+     * casilla a la que llegó (ver la migración de `recetas`).
+     *
+     * @return HasMany<Receta, $this>
+     */
+    public function recetas(): HasMany
+    {
+        return $this->hasMany(Receta::class, 'usuario_id');
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Zona horaria

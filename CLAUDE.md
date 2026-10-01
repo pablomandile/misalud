@@ -1833,6 +1833,174 @@ FormRequest los parte **antes** de validar, igual que `NormalizaDecimales` con l
 regla `array` viera el string crudo, rechazaría algo perfectamente escrito. Se parte por líneas
 **y por comas**, y se normaliza a minúsculas.
 
+### La importación: `misalud:sincronizar-recetas`
+
+Cada hora por el scheduler, más el botón **"Importar ahora"** en la pantalla de la casilla —que
+no es un lujo: sin él, comprobar que una casilla recién configurada importa de verdad obliga a
+esperar hasta una hora o a entrar por SSH—.
+
+Una receta **es su archivo**. La fila de `recetas` es la ficha del mail del que salió y el PDF
+cuelga como un `Adjunto` de tipo `Receta`: `Receta` es el **séptimo dueño de archivos** y
+declaró `TieneArchivos` sin tocar nada de autorización, igual que los seis anteriores.
+
+### ⚠️ La separación que hace testeable el paso entero
+
+Es la decisión de arquitectura del 12.2, y sin ella no habría tests de nada:
+
+| Pieza                                 | Qué hace                                                        |
+| ------------------------------------- | --------------------------------------------------------------- |
+| `LectorDeCasilla`                     | **Lo único que habla IMAP.** Traduce mensajes a DTOs y nada más |
+| `MensajeDeCasilla`/`AdjuntoDeCasilla` | Los DTOs: no saben nada de IMAP                                 |
+| `SincronizadorDeRecetas`              | **Todas las decisiones**: ventana, filtros, dedupe, qué adjunto |
+| `SincronizarRecetas`                  | El comando: recorre casillas y aísla los fallos                 |
+
+El lector es tonto **a propósito**, porque es la única pieza que no puede tener tests
+automáticos —necesitaría un servidor de verdad—. Todo lo que decide algo está del otro lado de
+los DTOs, y los 27 tests del sincronizador corren **sin red**, reemplazando el lector por un
+doble. Sin esta costura, probar "una receta no se importa dos veces" habría necesitado una
+casilla real con un mail puesto a mano, y nadie lo habría escrito.
+
+Lo que se paga: el lector queda cubierto solo por verificación a mano. Por eso las dos reglas
+sueltas que sí viven ahí —descartar adjuntos `inline` y el reemplazo del `Message-ID`— están una
+documentada con su motivo y la otra **extraída a una función pura**
+(`MensajeDeCasilla::identificadorPara()`) justamente para poder probarla.
+
+### ⚠️ La ventana NO es "desde el día 1 del mes"
+
+Era lo que decía el plan original, y tiene un agujero: una receta que llegó el 31 de enero
+desaparece el 1 de febrero aunque nadie la haya usado. El contador del mes de la bandeja es una
+**vista sobre lo importado**, no el criterio con el que se importa.
+
+- **Primera corrida** (`sincronizado_hasta` en `null`): `misalud.recetas.dias_iniciales` hacia
+  atrás, 60 por defecto y configurable por `RECETAS_DIAS_INICIALES`.
+- **Después**: desde `sincronizado_hasta` **menos 7 días de solapamiento**.
+
+El solapamiento no es paranoia: **el `SINCE` de IMAP compara fechas, no instantes** —es por día,
+contra la fecha interna del servidor, y es `>=`—, y un mail puede entregarse tarde o aparecer
+fuera de orden. Reimportar es gratis (lo frena el UNIQUE del índice ciego), así que de más no
+cuesta nada y de menos sería un agujero que nadie nota.
+
+### ⚠️ Hasta dónde avanza la marca, y por qué no siempre a `now()`
+
+| Situación                           | La marca va a…                            |
+| ----------------------------------- | ----------------------------------------- |
+| se vio la ventana entera            | el instante en que **arrancó** la corrida |
+| se truncó por el tope de la corrida | la fecha del **último mail mirado**       |
+
+El primero es al inicio y no a `now()` porque un mail que llegó mientras corríamos no puede
+quedar del lado ya revisado.
+
+El segundo es lo que hace avanzar a una casilla con mucho correo acumulado: si la marca fuera al
+inicio de la corrida, todo lo que quedó sin mirar caería fuera de la próxima ventana y **se
+perdería**; y si no se moviera, la corrida siguiente traería los mismos cincuenta y la casilla no
+avanzaría nunca. De ahí también que el lector devuelva los mensajes **en orden ascendente**: no
+es cosmético, la marca depende de eso.
+
+⚠️ **Y nunca va hacia atrás.** Cuando todos los mails de la ventana caen en la zona de
+solapamiento, la fecha del último es anterior a la marca actual: moverla ahí agrandaría la
+ventana en cada corrida hasta volver a mirar la casilla entera.
+
+El tope existe porque cada mensaje se trae con su cuerpo y sus adjuntos **en memoria**, y una
+casilla sin filtros apuntada a la bandeja de entrada puede tener miles de mails en la ventana
+inicial: sin tope, esa primera corrida se muere por tiempo de ejecución y no termina nunca.
+
+### ⚠️ Qué mail se convierte en receta
+
+Tres cortes, y los tres descartan en silencio porque ninguno es un error:
+
+1. **El remitente tiene que pasar el filtro.** Sin filtros pasa todo —quien ya armó una regla en
+   su correo para que las recetas caigan en una carpeta propia filtró antes que nosotros—. Un
+   filtro de dominio acepta subdominios (`osde.com.ar` vale para `avisos.osde.com.ar`), pero no
+   un dominio que apenas termina parecido (`no-osde.com.ar` no entra).
+2. **Tiene que traer al menos un archivo servible.** "Tu receta está lista, entrá a nuestro
+   sitio" no trae ninguna, y guardar una fila por ese mail llenaría la bandeja de recetas que no
+   se pueden mostrar.
+3. **No tiene que estar ya importado.**
+
+⚠️ Los adjuntos se descartan **de a uno, no de a mail entero**: que uno se pase de los 12 MB o
+sea un `.docx` es un resultado normal. Si el mail trae la receta en PDF y además un instructivo
+en Word, se importa la receta.
+
+⚠️ **Se descartan los adjuntos `inline`, que son el logo de la firma.** Media empresa manda
+mails con firma en HTML y cada imagen de esa firma viaja como adjunto: sin este filtro, una
+casilla sin filtros de remitente importa el logotipo de la farmacia como si fuera una receta —un
+JPG de 4 KB que pasa la lista blanca sin problema—. Lo que los distingue es el
+`Content-Disposition`. Un adjunto **sin** disposición declarada se acepta: hay clientes que no
+la mandan, y rechazarlo perdería recetas de verdad.
+
+⚠️ **El mime se deduce del contenido con finfo, nunca del `Content-Type` del mail**, que lo
+escribe alguien de afuera. Es la misma regla que `getMimeType()` vs `getClientMimeType()`, y acá
+pesa más. Para eso `ArchivoService` ganó `mimeAceptado()` —que pregunta sin escribir nada, lo que
+permite descartar el logo **antes** de abrir una transacción— y `guardarContenido()`, para
+archivos que nunca fueron un `UploadedFile`.
+
+### ⚠️ El UNIQUE de deduplicación va por USUARIO, no global
+
+El plan pedía `message_id_hash UNIQUE` a secas, y eso tiene un bug concreto: el `Message-ID` es
+único **del mensaje**, así que si la farmacia le manda el mismo mail a dos personas que las dos
+usan MiSalud, la segunda no podría importarlo nunca —y en silencio, porque parece "ya estaba"—.
+
+Por usuario además sobrevive a que alguien borre y vuelva a configurar la casilla, y deduplica
+cuando dos casillas de la misma persona reciben el mismo mail por un alias.
+
+⚠️ **La consulta de deduplicación va con `withTrashed()`.** El UNIQUE de la base no sabe de soft
+deletes: una receta en la papelera sigue ocupando su hash, así que sin eso el `create()` se
+estrellaría contra la base en vez de contarse como repetida. Y es el comportamiento correcto:
+esa receta todavía existe y se puede restaurar.
+
+⚠️ **Un mail sin `Message-ID` necesita un reemplazo determinístico.** Es raro pero existe, y sin
+eso su hash queda nulo —y en MySQL un UNIQUE admite todos los nulos que quiera—: ese mail se
+reimportaría **en cada corrida, para siempre**, escribiendo otra copia cifrada de su adjunto cada
+hora. Es el peor tipo de bug: crece solo y nadie lo mira.
+
+### Aislamiento de fallos, en dos niveles
+
+- **Por casilla**, en el comando: una contraseña de aplicación revocada es el caso más probable
+  de todos —se revocan solas cuando alguien cambia la clave de su cuenta de Google— y no tiene
+  por qué dejar sin importar a las otras casillas. El comando devuelve `FAILURE` si alguna falló,
+  pero las demás ya importaron.
+- **Por mensaje**, en el sincronizador: un mail roto no se lleva la tanda de su propia casilla.
+
+⚠️ **El mensaje de la excepción no se imprime ni se muestra en pantalla.** Puede venir del
+servidor IMAP y traer partes del comando que lo provocó (ver `ProbadorDeCasilla`). Tanto el
+comando como el toast mandan a **probar la conexión**, que es la pantalla que traduce el fallo a
+algo que se entiende y se puede arreglar.
+
+⚠️ **Si la transacción se cae hay que borrar del disco lo que ya se escribió.** Un rollback
+deshace las filas pero no los archivos, y un archivo cifrado que nada referencia es invisible y
+para siempre. Para eso existe `ArchivoService::borrarRuta()`.
+
+### Lo que queda afuera del 12.2, y por qué
+
+La regla de este paso: **entra la columna que la importación escribe.**
+
+- **`recetas.paciente_id` NO existe.** El plan la ponía y no se puede escribir: un mail de la
+  farmacia **no dice de quién es la receta**, y adivinarlo sería cargársela a un familiar
+  equivocado. Peor: una `paciente_id` nullable rompería el invariante de `RegistroClinicoPolicy`
+  —"un paciente nulo es NO"— y obligaría a inventar un camino de autorización para un estado que
+  ninguna pantalla puede producir. Así que la receta pertenece a **quien administra la casilla**
+  (`usuario_id`, no fillable), que es lo verdadero: el mail llegó a su correo.
+  ⚠️ **El día que una receta se pueda asignar a un paciente hay que contestar si un cuidador de
+  esa ficha puede verla.** Hoy la respuesta es que no.
+- **`fecha_uso` tampoco.** La escribe la misma acción que pone `EstadoReceta::Usada`, que es la
+  bandeja del 12.3.
+- **"Vencida" no es un estado guardado**: se deriva de `fecha_recepcion + vigencia_dias`
+  (`Receta::estaVencida()`), igual que la edad sale de la fecha de nacimiento (regla 4).
+  Guardarla obligaría a un segundo comando del scheduler cuyo único trabajo sería corregir una
+  cuenta que se hace sola, y entre que vence y que ese comando corre la pantalla mostraría como
+  "disponible" una receta que ya no sirve.
+
+El vencimiento se cuenta **desde que llegó el mail**, no desde que se importó: si el servidor
+estuvo caído tres días, la receta no gana tres días de vida.
+
+### Qué NO se le toca a la casilla
+
+La pantalla promete "solo lee: no manda mails ni borra nada", y eso lo cumplen dos cosas
+explícitas en `LectorDeCasilla`: **`FT_PEEK`** (traer el mensaje sin ponerle la marca `\Seen`) y
+**`leaveUnread()`** en la consulta. `FT_PEEK` ya es el default del paquete y va escrito igual: si
+algún día cambia, el síntoma sería que la app le marca como leídos los mails a alguien, y eso no
+lo descubre ningún test.
+
 ### ⚠️ Tres trampas de los scripts de verificación, encontradas acá
 
 Las tres hicieron que el script informara fallas que no existían, que es el modo de falla
@@ -1852,6 +2020,19 @@ espejo del de `revisar-mobile.mjs` con la cookie (informar verde midiendo nada):
 Y una cuarta, de método: **el script tiene que limpiar la base ANTES y no solo después.** Si una
 corrida muere a mitad, la casilla que quedó hace fallar el alta de la siguiente por dirección
 repetida, y de ahí en adelante todo mide cualquier cosa.
+
+Dos más que aparecieron verificando el 12.2:
+
+- ⚠️ **Registrar un doble en el contenedor DESPUÉS de resolver quien lo usa no hace nada.** El
+  script de verificación hacía `app(SincronizadorDeRecetas::class)` y recién entonces registraba
+  el lector falso: el sincronizador ya tenía inyectado el real, y la verificación salió a buscar
+  un servidor IMAP de verdad. El doble se registra primero, o se vuelve a resolver el consumidor
+  después.
+- ⚠️ **`npm run build` después de tocar un `.vue`, antes de verificar en el navegador.** Un
+  `artisan serve` sirve el bundle compilado: sin rebuild, el script mide la pantalla **anterior**.
+  Acá informó que faltaba un botón que estaba escrito y andaba. Y ojo con el hijo `php -S`, que
+  sobrevive a que se mate al `artisan serve` padre: hay que buscar quién escucha el puerto, no el
+  comando.
 
 ## Cobertura médica
 
@@ -2058,6 +2239,8 @@ npm run revisar:visor     # sube un PDF y verifica que pdf.js lo dibuje de verda
 npm run generar:iconos    # regenera el set de íconos desde resources/marca/
 
 php artisan misalud:enviar-recordatorios --seco   # qué avisos saldrían, sin mandar nada
+php artisan misalud:sincronizar-recetas --seco    # qué recetas entrarían, sin guardar nada
+php artisan misalud:sincronizar-recetas --casilla=3   # una sola casilla
 php artisan misalud:sonda-imap   # ¿sale el 993 desde acá?
 php artisan misalud:recifrar     # rotar APP_KEY (--seco para ensayar)
 php artisan wayfinder:generate --with-form   # SIEMPRE con --with-form
@@ -2454,6 +2637,39 @@ De paso, tres trampas de los scripts de verificación que informaban fallas inex
 viejo, canario de un caracter, `fetch` de Inertia con versión inventada) quedaron documentadas en
 la sección de la casilla.
 
-Pendiente, en este orden: **12.2** (`misalud:sincronizar-recetas`, Opus 5) y **12.3** (la bandeja,
-Sonnet 5) · contactos y envío · compartir la ficha · dashboard y deploy. Queda también, sin
-fecha, la Etapa 16 (consultas y grabaciones), que el plan deja adelantable.
+**Paso 12.2 hecho**: `recetas`, `misalud:sincronizar-recetas` cada hora, y el botón de importar a
+mano en la pantalla de la casilla.
+
+La decisión que ordena el paso es la **separación entre el lector de IMAP y las reglas**: el
+lector es tonto a propósito —es la única pieza sin tests automáticos, porque necesitaría un
+servidor— y todo lo que decide algo vive del otro lado de dos DTOs, probado sin red.
+
+Tres correcciones al plan, cada una por un bug concreto:
+
+- **La ventana no es "desde el día 1 del mes"**: una receta del 31 de enero desaparecía el 1 de
+  febrero. Va desde la última sincronización menos 7 días de solapamiento.
+- **El UNIQUE de deduplicación va por usuario, no global**: si la farmacia le manda el mismo mail
+  a dos personas que usan MiSalud, con un UNIQUE global la segunda no podría importarlo nunca.
+- **`recetas.paciente_id` no se creó**: un mail no dice de quién es la receta, y nada puede
+  escribir esa columna todavía. ⚠️ Queda **una pregunta abierta** para cuando se pueda asignar:
+  si un cuidador de esa ficha puede ver la receta. Hoy la ve quien tiene la casilla.
+
+Verificado en Chrome real: la pantalla dice cuándo fue la última importación y cuántas recetas
+entraron, el botón avisa "Importando…" mientras trabaja, y un fallo manda a probar la conexión
+**sin mostrar lo que contestó el servidor IMAP ni la contraseña** —más las 18 combinaciones de
+desborde y las áreas táctiles—. Y contra **MySQL y disco reales**, con el lector reemplazado por
+un doble pero todo el resto siendo el código de producción: las columnas quedan ilegibles y la
+fecha en claro, el archivo se escribe cifrado y **descifrado vuelve byte a byte igual al PDF
+original**, el mime se dedujo del contenido, el nombre con eñe sobrevive, la segunda corrida no
+reimporta ni deja una segunda copia del archivo, una receta en la papelera sigue ocupando su hash,
+el `UNIQUE(usuario_id, message_id_hash)` frena el duplicado, y borrar la casilla **no** se lleva la
+receta ni su archivo. Y el PDF importado se abre de verdad por `/adjuntos/{id}`: la cadena
+completa, de los bytes del mail al navegador.
+
+⚠️ **Lo que no está verificado: la lectura real de IMAP** (`LectorDeCasilla`) contra una casilla
+con credenciales de verdad. Es la única pieza sin cobertura, y es justamente por eso que no decide
+nada. Se prueba configurando una casilla real y tocando "Importar ahora".
+
+Pendiente, en este orden: **12.3** (la bandeja: contador del mes, visor, marcar usada, Sonnet 5) ·
+contactos y envío · compartir la ficha · dashboard y deploy. Queda también, sin fecha, la Etapa 16
+(consultas y grabaciones), que el plan deja adelantable.

@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 use App\Enums\EstadoDeConexion;
 use App\Models\CuentaMail;
+use App\Models\Receta;
 use App\Models\User;
 use App\Services\ProbadorDeCasilla;
+use App\Services\SincronizadorDeRecetas;
 use App\Support\PruebaDeConexion;
+use App\Support\ResumenDeSincronizacion;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 
@@ -122,7 +125,10 @@ it('⚠️ NO manda la contraseña a la pantalla', function (): void {
     $respuesta = $this->actingAs($this->usuario)->get(route('casilla.index'));
 
     $respuesta->assertInertia(fn ($pagina) => $pagina->has('cuentas.0', fn ($c) => $c
-        ->hasAll(['id', 'host', 'puerto', 'direccion', 'carpeta', 'filtros'])
+        ->hasAll([
+            'id', 'host', 'puerto', 'direccion', 'carpeta', 'filtros',
+            'sincronizadoHasta', 'recetasImportadas',
+        ])
         // Explícito además del `hasAll`: si alguien suma la clave al
         // serializador, este test dice exactamente qué se rompió.
         ->missing('password')));
@@ -346,6 +352,71 @@ it('no guarda el resultado de la prueba en ninguna parte', function (): void {
     $this->actingAs($this->usuario)->post(route('casilla.probar', $cuenta));
 
     expect(DB::table('cuentas_mail')->sole())->toEqual($antes);
+});
+
+/*
+|--------------------------------------------------------------------------
+| Importar ahora
+|--------------------------------------------------------------------------
+*/
+
+it('importa a pedido y avisa cuántas entraron', function (): void {
+    $cuenta = CuentaMail::factory()->for($this->usuario, 'usuario')->create();
+
+    $this->mock(SincronizadorDeRecetas::class)
+        ->shouldReceive('sincronizar')
+        ->once()
+        ->andReturn(new ResumenDeSincronizacion(miradas: 3, importadas: 2, repetidas: 1));
+
+    $this->actingAs($this->usuario)
+        ->post(route('casilla.sincronizar', $cuenta))
+        ->assertSessionHas('exito', fn (string $m): bool => str_contains($m, '2 recetas nuevas'));
+});
+
+it('⚠️ si falla la importación NO muestra lo que dijo el servidor', function (): void {
+    /*
+     * El mensaje puede venir del servidor IMAP, en inglés y con partes del
+     * comando que lo provocó. Lo que sirve es mandar a la prueba de conexión,
+     * que lo traduce a algo que se entiende.
+     */
+    $cuenta = CuentaMail::factory()->for($this->usuario, 'usuario')->create();
+
+    $this->mock(SincronizadorDeRecetas::class)
+        ->shouldReceive('sincronizar')
+        ->andThrow(new RuntimeException('NO [AUTHENTICATIONFAILED] LOGIN secreto'));
+
+    $this->actingAs($this->usuario)
+        ->post(route('casilla.sincronizar', $cuenta))
+        ->assertSessionHas('error', fn (string $m): bool => str_contains($m, 'Probá la conexión')
+            && ! str_contains($m, 'AUTHENTICATIONFAILED')
+            && ! str_contains($m, 'secreto'));
+});
+
+it('no deja importar de la casilla de otro', function (): void {
+    $ajena = CuentaMail::factory()->create();
+
+    $this->actingAs($this->usuario)
+        ->post(route('casilla.sincronizar', $ajena))
+        ->assertForbidden();
+});
+
+it('la pantalla muestra la última importación y cuántas recetas hay', function (): void {
+    $cuenta = CuentaMail::factory()->for($this->usuario, 'usuario')->create([
+        'sincronizado_hasta' => '2026-10-10 15:00:00',
+    ]);
+    Receta::factory()->count(3)->create([
+        'usuario_id' => $this->usuario->id,
+        'cuenta_mail_id' => $cuenta->id,
+    ]);
+
+    $this->actingAs($this->usuario)
+        ->get(route('casilla.index'))
+        ->assertInertia(fn ($pagina) => $pagina->has('cuentas.0', fn ($c) => $c
+            ->where('recetasImportadas', 3)
+            // En la zona de la cuenta, no en UTC: una hora en UTC en pantalla no
+            // se puede comparar con nada.
+            ->where('sincronizadoHasta', '10/10/2026 12:00')
+            ->etc()));
 });
 
 /*

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Form, Head } from '@inertiajs/vue3';
-import { Inbox, Info, Plus, PlugZap, Trash2 } from '@lucide/vue';
+import { Download, Inbox, Info, PlugZap, Plus, Trash2 } from '@lucide/vue';
 import { ref } from 'vue';
 import CuentaMailController from '@/actions/App/Http/Controllers/CuentaMailController';
 import Heading from '@/components/Heading.vue';
@@ -47,6 +47,9 @@ type Casilla = {
     direccion: string;
     carpeta: string;
     filtros: string[];
+    /** Ya formateada por el servidor en la zona de la cuenta. */
+    sincronizadoHasta: string | null;
+    recetasImportadas: number;
 };
 
 defineProps<{ cuentas: Casilla[] }>();
@@ -140,9 +143,51 @@ const casillaABorrar = ref<Casilla | null>(null);
                                 {{ casilla.filtros.join(', ') }}
                             </template>
                         </p>
+                        <p class="text-sm text-muted-foreground">
+                            <template v-if="casilla.sincronizadoHasta === null">
+                                Todavía no se importó nada de esta casilla.
+                            </template>
+                            <template v-else>
+                                Última importación:
+                                {{ casilla.sincronizadoHasta }} ·
+                                {{ casilla.recetasImportadas }}
+                                {{
+                                    casilla.recetasImportadas === 1
+                                        ? 'receta'
+                                        : 'recetas'
+                                }}
+                            </template>
+                        </p>
                     </div>
 
                     <div class="flex flex-wrap gap-2">
+                        <Form
+                            v-bind="
+                                CuentaMailController.sincronizar.form({
+                                    cuenta: casilla.id,
+                                })
+                            "
+                            :options="{ preserveScroll: true }"
+                            v-slot="{ processing }"
+                        >
+                            <!--
+                                Puede tardar: abre la conexión y se baja los
+                                adjuntos. Sin el cambio de texto parece que no
+                                hizo nada y se lo toca de nuevo -y eso sí que
+                                importa acá, porque dos importaciones en paralelo
+                                bajan los mismos archivos dos veces antes de que
+                                la deduplicación las frene-.
+                            -->
+                            <Button type="submit" :disabled="processing">
+                                <Download />
+                                {{
+                                    processing
+                                        ? 'Importando…'
+                                        : 'Importar ahora'
+                                }}
+                            </Button>
+                        </Form>
+
                         <Form
                             v-bind="
                                 CuentaMailController.probar.form({
