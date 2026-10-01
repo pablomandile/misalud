@@ -2,6 +2,7 @@ import {
     Activity,
     Building2,
     LayoutGrid,
+    Mail,
     Pill,
     Settings,
     Stethoscope,
@@ -9,6 +10,7 @@ import {
     Users,
 } from '@lucide/vue';
 import CentroController from '@/actions/App/Http/Controllers/CentroController';
+import CuentaMailController from '@/actions/App/Http/Controllers/CuentaMailController';
 import MedicamentoController from '@/actions/App/Http/Controllers/MedicamentoController';
 import MedicoController from '@/actions/App/Http/Controllers/MedicoController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
@@ -78,8 +80,17 @@ export const destinosPrincipales: NavItem[] = [
 
 /**
  * Lo que va abajo de todo: ajustes y ayuda, no el uso diario.
+ *
+ * La casilla de correo va acá y no arriba a propósito: se configura una vez y
+ * después no se vuelve a tocar. Lo que sí es de uso diario es la bandeja de
+ * recetas que esa casilla alimenta, y esa entra arriba cuando exista (12.3).
  */
 export const destinosSecundarios: NavItem[] = [
+    {
+        title: 'Casilla de recetas',
+        href: CuentaMailController.index(),
+        icon: Mail,
+    },
     {
         title: 'Configuración',
         href: editarPerfil(),

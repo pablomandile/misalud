@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -86,6 +87,19 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
         return $this->belongsToMany(Paciente::class, 'paciente_usuario', 'usuario_id', 'paciente_id')
             ->withPivot('rol')
             ->withTimestamps();
+    }
+
+    /**
+     * Las casillas de correo de las que se importan recetas.
+     *
+     * Cuelgan del usuario y no de un paciente: es una sola casilla y de ahí
+     * salen las recetas de toda la familia que uno administra.
+     *
+     * @return HasMany<CuentaMail, $this>
+     */
+    public function cuentasMail(): HasMany
+    {
+        return $this->hasMany(CuentaMail::class, 'usuario_id');
     }
 
     /*

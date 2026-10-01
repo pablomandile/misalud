@@ -5,6 +5,7 @@ use App\Http\Controllers\AlergiaController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\CentroController;
 use App\Http\Controllers\CoberturaController;
+use App\Http\Controllers\CuentaMailController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EnfermedadController;
 use App\Http\Controllers\EstudioController;
@@ -255,6 +256,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::put('recordatorios/{recordatorio}', [RecordatorioController::class, 'update'])
         ->name('recordatorios.update');
+
+    /*
+     * La casilla de correo de la que se importan las recetas: es del USUARIO,
+     * como un catálogo, y no de un paciente.
+     *
+     * `probar` es un POST aunque no escriba nada nuestro: abre una sesión IMAP
+     * contra un servidor de verdad usando la contraseña guardada, que no es
+     * algo que pueda quedar colgado de un GET -repetible desde el historial,
+     * precargable por el navegador-.
+     */
+    Route::get('casilla', [CuentaMailController::class, 'index'])->name('casilla.index');
+    Route::post('casilla', [CuentaMailController::class, 'store'])->name('casilla.store');
+    Route::put('casilla/{cuenta}', [CuentaMailController::class, 'update'])->name('casilla.update');
+    Route::delete('casilla/{cuenta}', [CuentaMailController::class, 'destroy'])->name('casilla.destroy');
+    Route::post('casilla/{cuenta}/probar', [CuentaMailController::class, 'probar'])
+        ->name('casilla.probar');
 
     Route::get('pacientes', [PacienteController::class, 'index'])->name('pacientes.index');
     Route::post('pacientes', [PacienteController::class, 'store'])->name('pacientes.store');

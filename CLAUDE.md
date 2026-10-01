@@ -23,6 +23,8 @@ Auth por **Fortify** (2FA y passkeys ya cableados por el starter kit).
 Rutas tipadas con **Wayfinder**, no con Ziggy.
 Tests con **Pest 4** (PHPUnit 12 — no subir a Pest 5, que exige PHPUnit 13 y rompe el kit).
 PHPStan nivel 7 con Larastan.
+IMAP con **`webklex/laravel-imap`**, con su `config/imap.php` **sin publicar** a propósito
+(ver "Casilla de recetas"). No hace falta `ext-imap`: el paquete habla el protocolo por sockets.
 
 Sin Pinia ni Vue Router: el estado viaja en props de Inertia y las rutas las define Laravel.
 
@@ -1692,6 +1694,165 @@ stderr vacío —nada que diagnosticar—. Se resolvió pasando un `userDataDir`
 por proceso. Vale como default para todo script nuevo: no pelea por el lock de un perfil que
 otro proceso tenga abierto, y **no toca el Chrome del usuario**.
 
+## Casilla de recetas (IMAP)
+
+`cuentas_mail` es la casilla de la que se importan las recetas que llegan por mail. Cuelga
+del **usuario** como un catálogo —es una sola y de ahí salen las recetas de toda la familia
+que uno administra—, pero no es un catálogo: no tiene semillas y no puede tenerlas, porque una
+semilla compartida sería la contraseña de alguien en el listado de otro. Por eso tiene su
+`CuentaMailPolicy` propia en vez de colgarse de `CatalogoPolicy`, cuya mitad de reglas sobre
+semillas no significaría nada acá.
+
+### ⚠️ Sin soft deletes, y es una decisión de seguridad
+
+Es la primera tabla que se aparta de "soft deletes en las entidades principales". Acá vive una
+**contraseña**: con `deleted_at`, borrar la casilla la dejaría guardada para siempre, que es lo
+contrario de lo que espera quien la da de baja. **Borrar borra.** Las recetas ya importadas no
+se van con ella —son documentos de la persona— y por eso la FK del paso 12.2 va con
+`nullOnDelete`.
+
+### ⚠️ `direccion` y no `usuario`: un atributo tapa a una relación
+
+El plan llamaba `usuario` a la columna del login. No se puede: el modelo ya tiene una relación
+`usuario()` hacia su dueño —el nombre que usan los cinco catálogos para lo mismo— y en Eloquent
+**un atributo con el nombre de una relación la tapa**. `$cuenta->usuario` devolvería el string
+del login en vez del `User`, y sin ningún error. Renombrar la columna es más seguro que
+renombrar una convención que ya se repite cinco veces.
+
+`direccion` además es lo que la pantalla necesita decir, y se valida como mail: en Gmail,
+Outlook y cualquier casilla de hosting el usuario de IMAP **es** la dirección, así que exigirlo
+atrapa el tipeo en el campo en vez de en un login rechazado.
+
+### ⚠️ La contraseña es de SOLO ESCRITURA, y de ahí sale el resto del diseño
+
+No viaja al navegador: ni enmascarada, ni con su largo real. El único motivo para mandarla
+sería precargar el formulario de edición, y eso la pone en un HTML que queda en la caché del
+navegador. Tres consecuencias que si no, parecen arbitrarias:
+
+- **Al editar, el campo vacío significa "dejá la que está"** —lo valida el FormRequest
+  (`required` al crear, `nullable` al editar) y `update()` saca la clave del array—. Si fuera
+  obligatoria siempre, cambiar la carpeta obligaría a volver a tipear la contraseña de
+  aplicación.
+- **La prueba de conexión se hace sobre lo GUARDADO**, no sobre el formulario. Probar el
+  formulario sería más cómodo, pero el de edición no tiene la contraseña: probaría una casilla
+  sin credenciales. Y probar lo guardado es lo que sirve dentro de seis meses, cuando la
+  pregunta ya no es "¿lo escribí bien?" sino "¿sigue andando?".
+- El modelo lleva `$hidden = ['password']` como red por si alguna respuesta futura serializa el
+  modelo entero por descuido.
+
+### La encriptación sale del puerto, así que los puertos son dos
+
+993 es IMAP sobre TLS y 143 es STARTTLS: `CuentaMail::encriptacion()` lo deduce, y la
+validación acepta **solo esos dos** justamente para que la deducción no tenga casos raros. Un
+desplegable de "método de encriptación" es una pregunta que quien configura su casilla no puede
+contestar. No hay forma de pedir "sin encriptación", ni de desactivar `validate_cert`: por esa
+conexión viaja la contraseña.
+
+### Configuración sí, estado no
+
+La línea que separa el 12.1 del 12.2. `cuentas_mail` tiene los datos con los que **conectarse**;
+`sincronizado_hasta` —que es lo que el comando de sincronización produce— no se creó todavía,
+porque sería una columna que ninguna línea escribe y que la pantalla mostraría siempre en
+"nunca". Mismo criterio que `ordenes_estudio.estudio_id` en el 9.1.
+
+Lo mismo, por otro motivo, con el resultado de la prueba: **no se guarda en ninguna parte.** Un
+"última prueba: anduvo" envejece solo —una contraseña de aplicación se revoca— y la pantalla lo
+mostraría en verde justo cuando dejó de ser cierto.
+
+### El paquete: `webklex/laravel-imap`, sin publicar su config
+
+⚠️ **`ClientManager` NO se resuelve del contenedor.** El binding que registra el paquete hace
+`new ClientManager(config('imap'))`, y como este proyecto **no publica** `config/imap.php` eso
+pasa `null` a un parámetro que no lo acepta. `ProbadorDeCasilla` lo construye con un array
+vacío —ahí el paquete carga sus propios defaults— y manda explícito en `make()` todo lo que
+importa, al lado del comentario que explica cada elección. Es justo el tipo de cosa que alguien
+"limpia" convirtiéndola en inyección por constructor.
+
+`timeout` va en **10 segundos** y no en el default de 30: esto corre dentro de una petición web
+con alguien mirando la pantalla, y dos esperas de 30 (socket y login) se pasan del tope de
+ejecución de PHP — la persona vería un error del servidor en vez del resultado de la prueba.
+
+### ⚠️ Los tres fallos son tres cosas distintas: por eso `EstadoDeConexion` no es un booleano
+
+| Falló…     | Qué significa de verdad                   |
+| ---------- | ----------------------------------------- |
+| el socket  | el host, el puerto o la red del servidor  |
+| el login   | la dirección o la contraseña              |
+| la carpeta | todo anda, pero se va a importar **nada** |
+
+El tercero es el que más vale y el que un booleano no puede decir: **una carpeta mal escrita
+deja la sincronización en verde encontrando cero mensajes, para siempre y sin ningún síntoma.**
+Y es fácil de escribir mal, porque el separador lo elige cada servidor: la misma carpeta es
+`INBOX/Recetas` en uno y `INBOX.Recetas` en otro. Por eso ese caso lista **las carpetas que sí
+hay**, que es lo que resuelve el problema en un intento en vez de en cinco.
+
+Un "no se pudo conectar" genérico manda a revisar la contraseña cuando el problema es la
+carpeta, y ahí la persona cambia lo único que estaba bien.
+
+### ⚠️ La excepción de "contraseña equivocada" NO es `AuthFailedException`
+
+Medido contra `imap.gmail.com` con credenciales inventadas: lo que llega es
+**`ImapServerErrorException`** con el mensaje `NO [AUTHENTICATIONFAILED] Invalid credentials`.
+`AuthFailedException` es la que dice el nombre y la que uno atrapa por reflejo, pero el paquete
+solo la usa en un camino que un servidor real no toma. Atrapar únicamente la "obvia" dejaba un
+login rechazado cayendo en "error inesperado" —el peor lugar, porque ese mensaje no nombra la
+contraseña, que es justo lo que hay que arreglar—.
+
+Esto se encontró **probando contra un servidor real antes de escribir la pantalla**, no leyendo
+el `@throws` del paquete, que decía otra cosa.
+
+⚠️ **Y por eso `conectarYRevisar()` tiene DOS `try` separados, que no es prolijidad.**
+`ImapServerErrorException` la tira **cualquier** comando que el servidor conteste con `NO`. El
+mapeo "un `NO` es un rechazo de credenciales" solo es correcto en el primer bloque, donde el
+único comando que se manda después del saludo es el LOGIN. Con un solo `try` envolviendo todo,
+un `NO` al abrir la carpeta se leería como "contraseña equivocada".
+
+### ⚠️ La contraseña no puede terminar en un log ni en un toast
+
+Los mensajes de error de IMAP vienen del servidor y pueden traer partes del comando que los
+provocó —y el comando que nos interesa es `LOGIN`—. Todo texto que salga de una excepción pasa
+por `queDijoElServidor()`, que borra la contraseña **antes de que el string exista para
+cualquier otro uso**: la misma función alimenta el aviso en pantalla y el log, así que no hay un
+camino donde uno esté saneado y el otro no. Al log van además solo ids, nunca la dirección —
+misma regla que los errores de Socialite y de `misalud:enviar-recordatorios`.
+
+El caso de credenciales rechazadas va **sin detalle a propósito**: lo que contesta el servidor
+no agrega nada a "rechazó la dirección o la contraseña", viene en inglés, y es el mensaje con
+más chances de traer el LOGIN adentro.
+
+### Los filtros: una dirección o un dominio por línea
+
+Vacío significa **todo lo que haya en la carpeta**, y es una opción válida: quien ya armó una
+regla en su correo para que las recetas caigan en una carpeta propia filtró antes que nosotros.
+Se acepta un dominio suelto además de una dirección entera porque una obra social manda desde
+`noreply@` hoy y desde `avisos@` el mes que viene.
+
+Llegan de un `<textarea>` —un campo de a una línea es lo que una persona puede leer y corregir;
+un array de inputs con botoncitos de "+" y "−" es lo contrario de lo que esta app necesita— y el
+FormRequest los parte **antes** de validar, igual que `NormalizaDecimales` con la coma: si la
+regla `array` viera el string crudo, rechazaría algo perfectamente escrito. Se parte por líneas
+**y por comas**, y se normaliza a minúsculas.
+
+### ⚠️ Tres trampas de los scripts de verificación, encontradas acá
+
+Las tres hicieron que el script informara fallas que no existían, que es el modo de falla
+espejo del de `revisar-mobile.mjs` con la cookie (informar verde midiendo nada):
+
+- **Afirmar sobre "el toast" sin esperar a que el anterior DESAPAREZCA lee el mensaje viejo.**
+  Tocar la X no alcanza: sonner anima la salida y el nodo sigue en el DOM. Hay que esperar a que
+  no quede ninguno. Misma familia que esperar a que el sheet termine de entrar antes de medirlo.
+- **Un canario de un solo caracter no sirve.** El chequeo de "¿se filtró la contraseña?" usaba
+  `'x'` como clave y daba positivo… porque hay una `x` en el propio texto en español del enum.
+  La clave de prueba tiene que ser larga y distintiva.
+- **Un `fetch` con `X-Inertia` y una versión inventada no devuelve el JSON**: Inertia contesta
+  409 con la página entera, y el chequeo pasa midiendo un cuerpo que no es el que creía. Tampoco
+  sirve `#app[data-page]`, que se queda con la página inicial. Lo correcto es mirar el tráfico
+  real (`page.on('response')` filtrando por el header `x-inertia`).
+
+Y una cuarta, de método: **el script tiene que limpiar la base ANTES y no solo después.** Si una
+corrida muere a mitad, la casilla que quedó hace fallar el alta de la siguiente por dirección
+repetida, y de ahí en adelante todo mide cualquier cosa.
+
 ## Cobertura médica
 
 `coberturas` es tabla propia y no columnas en `pacientes`: mucha gente tiene obra social y
@@ -2254,7 +2415,45 @@ en la zona de la cuenta.
 ⚠️ **`MAIL_FROM_ADDRESS` sigue siendo el `hello@example.com` del starter kit.** Los avisos no
 van a salir de producción hasta configurar el mailer real; queda para el deploy (Etapa 15.3).
 
-Pendiente, en este orden: **el paso 11.3** (agenda y pendientes en el dashboard, Sonnet 5) ·
-casilla y recetas · contactos y envío ·
-compartir la ficha · dashboard y deploy. Queda también, sin fecha, la Etapa 16 (consultas y
-grabaciones), que el plan deja adelantable.
+**Etapa 11 completa.** El paso 11.3 del plan es "agenda y pendientes **en pantalla**", y eso
+quedó cubierto por la pantalla de turnos del 11.1: la sección "Avisos" son los pendientes y
+"Lo que viene"/"Ya pasaron" son la agenda. No hacía falta nada nuevo. Turnos y recordatorios **en
+el dashboard** es otra cosa y es de la Etapa 15.1 —lo dicen el plan y el propio comentario de
+`DashboardController`—.
+
+**Paso 12.1 hecho**: `cuentas_mail` con las credenciales cifradas, su pantalla y la prueba de
+conexión. Entra `webklex/laravel-imap`.
+
+La decisión que ordena el paso es que **la contraseña es de solo escritura**: no viaja al
+navegador, y de ahí se siguen el campo vacío que significa "dejá la que está" y que la prueba de
+conexión se haga sobre lo guardado y no sobre el formulario. La otra es que los tres fallos
+posibles son **tres cosas distintas** y no un booleano: la carpeta mal escrita es la que importa,
+porque deja la sincronización en verde encontrando cero mensajes para siempre.
+
+Dos hallazgos que salieron de probar contra servidores reales antes de escribir la pantalla, y
+que ningún test de Pest podía dar:
+
+- **La excepción de "contraseña equivocada" no es `AuthFailedException`** sino
+  `ImapServerErrorException` —medido contra Gmail con credenciales inventadas—. Atrapar la que
+  dice el nombre dejaba un login rechazado cayendo en "error inesperado", con un mensaje que no
+  nombra la contraseña.
+- **El binding de `ClientManager` del paquete está roto si no se publica su config**: hace
+  `new ClientManager(config('imap'))` y eso pasa `null` a un parámetro que no lo acepta.
+
+Verificado en Chrome real: la contraseña no aparece ni en el HTML ni en ninguna respuesta de
+Inertia (mirando el tráfico de verdad), el formulario de edición abre con ese campo vacío, el
+error de validación del host pegado con el puerto aparece **al lado del campo y no en un toast**,
+la prueba contra un host inexistente dice "no se pudo llegar" y contra Gmail dice "rechazó la
+dirección o la contraseña" nombrando la contraseña de aplicación, más las 18 combinaciones de
+desborde y las áreas táctiles del formulario. Y contra **MySQL real** —no solo sqlite—: el
+round-trip con eñes y acentos, que las tres columnas quedan ilegibles y el host no, que el
+índice ciego encuentra la fila ignorando mayúsculas, que el `UNIQUE(usuario_id, direccion_hash)`
+frena el duplicado y que el borrado no deja ninguna fila con la contraseña adentro.
+
+De paso, tres trampas de los scripts de verificación que informaban fallas inexistentes (toast
+viejo, canario de un caracter, `fetch` de Inertia con versión inventada) quedaron documentadas en
+la sección de la casilla.
+
+Pendiente, en este orden: **12.2** (`misalud:sincronizar-recetas`, Opus 5) y **12.3** (la bandeja,
+Sonnet 5) · contactos y envío · compartir la ficha · dashboard y deploy. Queda también, sin
+fecha, la Etapa 16 (consultas y grabaciones), que el plan deja adelantable.
