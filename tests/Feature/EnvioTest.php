@@ -278,6 +278,27 @@ it('el asunto va en una sola línea: es una cabecera del mail', function (): voi
     Mail::assertNothingSent();
 });
 
+it('⚠️ un documento BORRADO no se manda: no sale un mail vacío', function (): void {
+    /*
+     * `exists` va contra la tabla cruda y no sabe de soft deletes: el id de un
+     * documento en la papelera pasaba la validación, no se cargaba, y salía un mail
+     * sin ningún adjunto.
+     */
+    [, $papel] = ordenConPapel($this->paciente);
+    $papel->delete();
+
+    $this->actingAs($this->usuario)
+        ->post(route('envios.store'), [
+            'contacto_id' => $this->contacto->id,
+            'adjuntos' => [$papel->id],
+            'asunto' => 'Algo',
+        ])
+        ->assertSessionHasErrors('adjuntos.0');
+
+    Mail::assertNothingSent();
+    expect(Envio::count())->toBe(0);
+});
+
 it('un documento repetido no se manda dos veces', function (): void {
     [, $papel] = ordenConPapel($this->paciente);
 

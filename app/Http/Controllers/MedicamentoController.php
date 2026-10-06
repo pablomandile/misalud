@@ -8,9 +8,10 @@ use App\Contracts\EsCatalogo;
 use App\Enums\TipoAdjunto;
 use App\Http\Requests\MedicamentoGuardarRequest;
 use App\Models\Medicamento;
+use App\Models\Tratamiento;
+use App\Support\UsoDeCatalogo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Gate;
 
 /**
  * El catálogo de medicamentos, con su prospecto en PDF.
@@ -99,17 +100,24 @@ class MedicamentoController extends CatalogoBaseController
      * Mismo freno que ya tiene `TipoMedicionController::destroy()` con las
      * mediciones (ver esa clase).
      */
+    /**
+     * Un tratamiento sin su medicamento es "500 mg cada 8 horas" de nada: es la
+     * FK con `restrictOnDelete` del catálogo. Antes este controlador lo frenaba por
+     * su cuenta; ahora es el mismo freno que el de los otros cuatro.
+     */
+    public function usos(): array
+    {
+        return [
+            new UsoDeCatalogo('tratamiento', 'tratamientos', Tratamiento::class, 'medicamento_id'),
+        ];
+    }
+
+    /**
+     * Si se borra, se lleva su prospecto: archivo del disco y fila (ver
+     * `CatalogoBaseController::borrarDeVerdad()`).
+     */
     public function destroy(Medicamento $medicamento): RedirectResponse
     {
-        Gate::authorize('delete', $medicamento);
-
-        if ($medicamento->tratamientos()->exists()) {
-            return back()->with(
-                'error',
-                "No se puede eliminar {$medicamento->nombre_comercial}: ya tiene tratamientos cargados.",
-            );
-        }
-
         return $this->eliminar($medicamento);
     }
 

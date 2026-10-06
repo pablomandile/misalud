@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Contracts\EsCatalogo;
+use App\Contracts\TieneArchivos;
 use App\Models\User;
+use App\Services\ArchivoService;
 use App\Support\CatalogoVisible;
+use App\Support\UsoDeCatalogo;
 use Illuminate\Contracts\Database\Query\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
@@ -66,6 +69,24 @@ abstract class CatalogoBaseController extends Controller
      * @return array<string, mixed>
      */
     protected function propsExtra(): array
+    {
+        return [];
+    }
+
+    /**
+     * Dónde se usa un registro de este catálogo.
+     *
+     * Vacío por defecto. ⚠️ **Toda FK que apunte a este catálogo tiene que
+     * figurar acá**: es lo único que frena el borrado, y uno que no figure se
+     * borra igual —con la FK haciendo lo que diga la migración—. No queda librado
+     * a la memoria de nadie: `ReferenciasACatalogosTest` lee las FK reales del
+     * esquema y falla si alguna no está declarada.
+     *
+     * Pública para que esa guardia pueda leerla.
+     *
+     * @return list<UsoDeCatalogo>
+     */
+    public function usos(): array
     {
         return [];
     }
@@ -170,15 +191,111 @@ abstract class CatalogoBaseController extends Controller
         $registro->update($datos);
     }
 
-    /** @param TCatalogo $registro */
+    /**
+     * Borra un registro del catálogo, **solo si nada lo usa**, y de verdad.
+     *
+     * Las dos mitades se sostienen entre sí:
+     *
+     * - **Si algo lo usa, no se borra.** Un médico que figura en un estudio, en
+     *   un turno o en un tratamiento es parte de esa historia: borrarlo dejaría
+     *   esos registros sin médico. Mismo freno que ya tenían los medicamentos y
+     *   las variables, ahora para los cinco catálogos (decisión del usuario).
+     * - **Si nada lo usa, se borra sin papelera.** No hay nada que recuperar, y
+     *   mandarlo a la papelera lo dejaba ocupando su `nombre_hash`: volver a
+     *   cargar el mismo nombre pasaba la validación (que no mira la papelera) y
+     *   la base lo rechazaba con un 500.
+     *
+     * Autoriza **antes** de mirar los usos: al revés, la respuesta le contaría a
+     * un extraño —o a quien intenta borrar una semilla— si ese registro tiene
+     * datos cargados.
+     *
+     * @param  TCatalogo  $registro
+     */
     protected function eliminar(Model&EsCatalogo $registro): RedirectResponse
     {
         Gate::authorize('delete', $registro);
 
         $nombre = $registro->nombreVisible();
-        $registro->delete();
+        $id = (int) $registro->getKey();
+
+        $enUso = [];
+        $total = 0;
+        $hayEnPapelera = false;
+
+        foreach ($this->usos() as $uso) {
+            [$cuantos, $enPapelera] = $uso->contar($id);
+
+            if ($cuantos === 0) {
+                continue;
+            }
+
+            $total += $cuantos;
+            $hayEnPapelera = $hayEnPapelera || $enPapelera > 0;
+            $enUso[] = $cuantos === 1 ? "1 {$uso->singular}" : "{$cuantos} {$uso->plural}";
+        }
+
+        if ($enUso !== []) {
+            $mensaje = sprintf(
+                'No se puede eliminar %s: %s %s.',
+                $nombre,
+                $total === 1 ? 'lo usa' : 'lo usan',
+                $this->enumerar($enUso),
+            );
+
+            /*
+             * Sin esto, alguien que ve cero estudios en pantalla lee "lo usa 1
+             * estudio" y no entiende de dónde sale: lo que está en la papelera
+             * se puede restaurar, y por eso también cuenta.
+             */
+            if ($hayEnPapelera) {
+                $mensaje .= ' Se cuentan también registros que borraste, porque todavía se pueden recuperar.';
+            }
+
+            return back()->with('error', $mensaje);
+        }
+
+        $this->borrarDeVerdad($registro);
 
         return back()->with('exito', "Se eliminó a {$nombre}.");
+    }
+
+    /**
+     * El registro y, si tiene, sus archivos: **primero el disco, después las
+     * filas** (la regla de los adjuntos). Al revés, un archivo cifrado quedaría
+     * sin nada que lo referencie, invisible y para siempre.
+     *
+     * Con la papelera de los adjuntos incluida: un prospecto que se borró antes
+     * ya no tiene archivo, pero su fila sigue ahí apuntando a este registro.
+     *
+     * Las filas del pivote `centro_medico` se van solas: su FK es
+     * `cascadeOnDelete`, que con un borrado de verdad sí dispara. Que un médico
+     * atienda en un centro no frena el borrado: es configuración del catálogo,
+     * no un registro de la historia de nadie.
+     */
+    private function borrarDeVerdad(Model&EsCatalogo $registro): void
+    {
+        if ($registro instanceof TieneArchivos) {
+            $archivos = app(ArchivoService::class);
+
+            foreach ($registro->adjuntos()->withTrashed()->get() as $adjunto) {
+                $archivos->borrar($adjunto);
+                $adjunto->forceDelete();
+            }
+        }
+
+        $registro->forceDelete();
+    }
+
+    /**
+     * "2 estudios, 1 turno y 3 tratamientos".
+     *
+     * @param  list<string>  $partes
+     */
+    private function enumerar(array $partes): string
+    {
+        $ultima = array_pop($partes);
+
+        return $partes === [] ? $ultima : implode(', ', $partes).' y '.$ultima;
     }
 
     /**

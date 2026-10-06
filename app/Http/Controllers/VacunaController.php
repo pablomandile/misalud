@@ -43,6 +43,19 @@ class VacunaController extends CatalogoBaseController
         ];
     }
 
+    /**
+     * Hoy nada apunta a una vacuna del catálogo, así que siempre se puede borrar.
+     *
+     * ⚠️ Eso cambia con `aplicaciones_vacuna` (las dosis aplicadas, que todavía
+     * no existen): esa tabla va a tener `vacuna_id`, y tiene que declararse acá.
+     * No hace falta acordarse: `ReferenciasACatalogosTest` falla en cuanto
+     * aparezca una FK hacia `vacunas` que no figure en esta lista.
+     */
+    public function usos(): array
+    {
+        return [];
+    }
+
     public function store(VacunaGuardarRequest $peticion): RedirectResponse
     {
         $vacuna = $this->crear($peticion->validated());

@@ -279,7 +279,8 @@ it('NO deja borrar un medicamento con tratamientos cargados', function (): void 
 
     $respuesta = $this->actingAs($usuario)->delete(route('medicamentos.destroy', $medicamento));
 
-    expect($respuesta->getSession()->get('error'))->toContain('ya tiene tratamientos')
+    // El aviso es el mismo para los cinco catálogos (`CatalogoBaseController::eliminar()`).
+    expect($respuesta->getSession()->get('error'))->toContain('lo usa 1 tratamiento')
         ->and(Medicamento::find($medicamento->id))->not->toBeNull();
 });
 

@@ -59,4 +59,21 @@ interface EsCatalogo extends CifraDatos
      * @return BelongsTo<User, covariant \Illuminate\Database\Eloquent\Model>
      */
     public function usuario(): BelongsTo;
+
+    /**
+     * Borrar de verdad, sin papelera.
+     *
+     * Lo implementa `SoftDeletes`, que usan los cinco catálogos. Está declarado
+     * acá porque es **la única forma en que se borra un catálogo**: un registro
+     * se borra solo si nada lo usa (`CatalogoBaseController::eliminar()`), y uno
+     * que nada usa no tiene nada que recuperar. Mandarlo a la papelera, en
+     * cambio, lo dejaba ocupando su `nombre_hash` en el UNIQUE, y volver a cargar
+     * el mismo nombre daba un 500.
+     *
+     * Sin tipo de retorno nativo: el del trait no lo tiene, y la declaración
+     * tiene que ser compatible.
+     *
+     * @return bool|null
+     */
+    public function forceDelete();
 }

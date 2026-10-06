@@ -7,7 +7,11 @@ namespace App\Http\Controllers;
 use App\Contracts\EsCatalogo;
 use App\Http\Requests\CentroGuardarRequest;
 use App\Models\Centro;
+use App\Models\Estudio;
 use App\Models\Medico;
+use App\Models\PrescripcionOcular;
+use App\Models\Turno;
+use App\Support\UsoDeCatalogo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 
@@ -78,6 +82,20 @@ class CentroController extends CatalogoBaseController
                     'nombre' => $medico->nombre,
                 ])
                 ->all(),
+        ];
+    }
+
+    /**
+     * Mientras un centro figure en un estudio, una receta de anteojos o un
+     * turno, no se borra. Los médicos que atienden acá no lo frenan: es
+     * configuración del catálogo, y el pivote se va solo con el borrado.
+     */
+    public function usos(): array
+    {
+        return [
+            new UsoDeCatalogo('estudio', 'estudios', Estudio::class, 'centro_id'),
+            new UsoDeCatalogo('receta de anteojos', 'recetas de anteojos', PrescripcionOcular::class, 'centro_id'),
+            new UsoDeCatalogo('turno', 'turnos', Turno::class, 'centro_id'),
         ];
     }
 

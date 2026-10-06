@@ -17,8 +17,9 @@ use Illuminate\Support\Facades\Schema;
  *   contacto, el historial tiene que seguir diciendo a dónde salió de verdad.
  *   `contacto_id` queda solo como vínculo, con `nullOnDelete`.
  * - Los archivos van en `adjunto_envio` con su **nombre copiado**, por lo mismo:
- *   un adjunto se borra de verdad (no tiene soft deletes), y "se mandó la orden"
- *   no puede volverse "se mandó algo" el día que alguien borra el PDF.
+ *   borrar un documento elimina su archivo del disco (la fila queda en la
+ *   papelera, sin nada que abrir), y "se mandó la orden" no puede volverse "se
+ *   mandó algo" el día que alguien borra el PDF.
  *
  * **Sin soft deletes y sin ruta para borrar**: el historial es lo que se consulta
  * cuando la obra social dice "no nos llegó nada", y uno que se puede editar no
@@ -61,7 +62,8 @@ return new class extends Migration
             $tabla->id();
             $tabla->foreignId('envio_id')->constrained('envios')->cascadeOnDelete();
 
-            // `nullOnDelete`: borrar el archivo no borra que se mandó.
+            // `nullOnDelete`: borrar el archivo de verdad (un medicamento que se
+            // borra se lleva su prospecto) no borra que se mandó.
             $tabla->foreignId('adjunto_id')->nullable()
                 ->constrained('adjuntos')->nullOnDelete();
 

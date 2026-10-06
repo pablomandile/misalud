@@ -280,14 +280,14 @@ it('duplicar una semilla NO copia sus médicos vinculados', function (): void {
     expect($copia->medicos()->count())->toBe(0);
 });
 
-it('borrar (soft) un centro NO toca sus vínculos', function (): void {
+it('borrar un centro se lo lleva de verdad, junto con sus vínculos con médicos', function (): void {
     /*
-     * `cascadeOnDelete()` es una restricción de MySQL, y solo dispara con un
-     * DELETE real. `destroy()` hace un soft delete -pone `deleted_at`-, así
-     * que la fila de `centros` sigue ahí y el vínculo con ella también:
-     * es lo correcto, porque un soft delete es recuperable y perder los
-     * médicos vinculados en el camino sería una pérdida silenciosa de datos
-     * que nadie borró a propósito.
+     * Antes `destroy()` hacía un soft delete y el vínculo quedaba, porque un
+     * registro en la papelera se puede restaurar. Ahora un catálogo se borra solo
+     * si nada lo usa, y entonces de verdad (ver
+     * `CatalogoBaseController::eliminar()`): no hay nada que recuperar, y la
+     * cascada de `centro_medico` dispara. Que un médico atienda en un centro no
+     * frena el borrado: es configuración del catálogo.
      */
     $usuario = User::factory()->create();
     $medico = Medico::factory()->for($usuario, 'usuario')->create();
@@ -296,8 +296,10 @@ it('borrar (soft) un centro NO toca sus vínculos', function (): void {
 
     $this->actingAs($usuario)->delete(route('centros.destroy', $centro));
 
-    expect($centro->fresh()->deleted_at)->not->toBeNull()
-        ->and(DB::table('centro_medico')->where('centro_id', $centro->id)->count())->toBe(1);
+    expect(Centro::withTrashed()->find($centro->id))->toBeNull()
+        ->and(DB::table('centro_medico')->where('centro_id', $centro->id)->count())->toBe(0)
+        // El médico no se toca: solo se va el vínculo.
+        ->and($medico->fresh())->not->toBeNull();
 });
 
 it('el forceDelete SÍ borra los vínculos en cascada', function (): void {

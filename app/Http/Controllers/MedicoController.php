@@ -6,7 +6,14 @@ namespace App\Http\Controllers;
 
 use App\Contracts\EsCatalogo;
 use App\Http\Requests\MedicoGuardarRequest;
+use App\Models\Enfermedad;
+use App\Models\Estudio;
 use App\Models\Medico;
+use App\Models\OrdenEstudio;
+use App\Models\PrescripcionOcular;
+use App\Models\Tratamiento;
+use App\Models\Turno;
+use App\Support\UsoDeCatalogo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 
@@ -57,6 +64,25 @@ class MedicoController extends CatalogoBaseController
              * lo vuelve a chequear igual del lado del servidor.
              */
             'esSemilla' => $registro->esSemilla(),
+        ];
+    }
+
+    /**
+     * Un médico figura en seis lugares de la historia clínica. Mientras esté en
+     * alguno, no se borra (ver `CatalogoBaseController::eliminar()`).
+     *
+     * El pivote `centro_medico` no está, a propósito: que atienda en un centro
+     * es configuración del catálogo, y se va solo con el borrado.
+     */
+    public function usos(): array
+    {
+        return [
+            new UsoDeCatalogo('enfermedad', 'enfermedades', Enfermedad::class, 'medico_id'),
+            new UsoDeCatalogo('tratamiento', 'tratamientos', Tratamiento::class, 'medico_id'),
+            new UsoDeCatalogo('orden de estudio', 'órdenes de estudio', OrdenEstudio::class, 'medico_id'),
+            new UsoDeCatalogo('estudio', 'estudios', Estudio::class, 'medico_id'),
+            new UsoDeCatalogo('receta de anteojos', 'recetas de anteojos', PrescripcionOcular::class, 'medico_id'),
+            new UsoDeCatalogo('turno', 'turnos', Turno::class, 'medico_id'),
         ];
     }
 

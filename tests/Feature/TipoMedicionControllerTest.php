@@ -219,7 +219,8 @@ it('NO deja borrar un tipo con mediciones cargadas', function (): void {
 
     $respuesta = $this->actingAs($usuario)->delete(route('tipos-medicion.destroy', $tipo));
 
-    expect($respuesta->getSession()->get('error'))->toContain('ya tiene mediciones')
+    // El aviso es el mismo para los cinco catálogos (`CatalogoBaseController::eliminar()`).
+    expect($respuesta->getSession()->get('error'))->toContain('lo usa 1 medición')
         ->and(TipoMedicion::find($tipo->id))->not->toBeNull();
 });
 

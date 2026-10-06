@@ -6,17 +6,19 @@ namespace App\Http\Controllers;
 
 use App\Contracts\EsCatalogo;
 use App\Http\Requests\TipoMedicionGuardarRequest;
+use App\Models\Medicion;
 use App\Models\TipoMedicion;
+use App\Support\UsoDeCatalogo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Gate;
 
 /**
  * El catálogo de variables que se pueden medir. Quinto catálogo, copiado
  * del patrón (ver `MedicoController`).
  *
- * Lo único propio es `destroy()`: es el primer catálogo del que cuelgan
- * registros clínicos, así que borrarlo no puede ser gratis.
+ * Fue el primer catálogo del que colgaron registros clínicos, y el primero en
+ * frenar su borrado si tenía datos. Ese freno hoy es el mismo para los cinco
+ * (`CatalogoBaseController::eliminar()`); acá solo se declara dónde se usa.
  *
  * @extends CatalogoBaseController<TipoMedicion>
  */
@@ -79,20 +81,20 @@ class TipoMedicionController extends CatalogoBaseController
      * tiene que ser este, con un mensaje que explique la salida real:
      * editar el tipo, que es lo que casi siempre se quería hacer.
      */
+    /**
+     * Una medición sin su variable es un número sin nombre ni unidad. Antes este
+     * controlador lo frenaba por su cuenta; ahora es el mismo freno que el de los
+     * otros cuatro, que además autoriza antes de mirar si hay datos.
+     */
+    public function usos(): array
+    {
+        return [
+            new UsoDeCatalogo('medición', 'mediciones', Medicion::class, 'tipo_medicion_id'),
+        ];
+    }
+
     public function destroy(TipoMedicion $tipo_medicion): RedirectResponse
     {
-        // Autorizar ANTES de mirar si tiene mediciones: al revés, la
-        // respuesta le contaría a un extraño -o a quien intenta borrar una
-        // semilla- si esa variable tiene datos cargados o no.
-        Gate::authorize('delete', $tipo_medicion);
-
-        if ($tipo_medicion->mediciones()->exists()) {
-            return back()->with(
-                'error',
-                "No se puede eliminar {$tipo_medicion->nombre}: ya tiene mediciones cargadas. Podés editarlo.",
-            );
-        }
-
         return $this->eliminar($tipo_medicion);
     }
 

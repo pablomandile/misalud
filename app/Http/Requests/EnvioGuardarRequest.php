@@ -71,7 +71,19 @@ class EnvioGuardarRequest extends FormRequest
             ],
 
             'adjuntos' => ['required', 'array', 'min:1', 'max:10'],
-            'adjuntos.*' => ['integer', 'distinct', 'exists:adjuntos,id'],
+
+            /*
+             * ⚠️ Con `whereNull('deleted_at')` a mano: `exists` va contra la tabla
+             * cruda y no sabe de soft deletes (la trampa ya documentada para
+             * `Rule::exists`). Sin esto, el id de un documento borrado pasaba la
+             * validación, no se cargaba -Eloquent sí filtra la papelera-, y salía un
+             * mail sin ningún adjunto.
+             */
+            'adjuntos.*' => [
+                'integer',
+                'distinct',
+                Rule::exists('adjuntos', 'id')->whereNull('deleted_at'),
+            ],
 
             /*
              * Sin saltos de línea: el asunto va a una cabecera del mail, y un salto

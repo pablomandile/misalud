@@ -707,13 +707,60 @@ cada catálogo que lo necesite, en vez de agregar un método de tres líneas.
 - **`replicate()` no copia relaciones.** Duplicar una semilla de centro no arrastra sus
   médicos vinculados, y es lo correcto: esos médicos son del catálogo de quien publicó la
   semilla, no del catálogo de quien duplica.
-- ⚠️ **`cascadeOnDelete()` no dispara con un soft delete.** Es una restricción de MySQL, y
-  solo actúa sobre un `DELETE` real. `destroy()` de un catálogo hace un soft delete —pone
-  `deleted_at`—, así que la fila de `centros` sigue existiendo y el vínculo con ella
-  también: es lo correcto, porque un soft delete es recuperable, y perder los médicos
-  vinculados en el camino sería una pérdida de datos que nadie borró a propósito. La
-  cascada real solo se ve con `forceDelete()`. Medido con un test: sin él, hubiera quedado
-  como un "debería andar" sin comprobar.
+- ⚠️ **`cascadeOnDelete()` no dispara con un soft delete**: es una restricción de MySQL y
+  solo actúa sobre un `DELETE` real. Hoy eso ya no pesa acá, porque un catálogo se borra
+  **de verdad** (ver la sección siguiente): al borrar un centro o un médico, sus filas de
+  `centro_medico` se van con la cascada. Que un médico atienda en un centro **no frena** el
+  borrado: es configuración del catálogo, no un registro de la historia de nadie.
+
+### Borrar un catálogo: si algo lo usa no se borra; si nada lo usa, de verdad
+
+Es la regla de los cinco catálogos, **decidida por el usuario**, y arregla un 500 medido: borrar
+"Dr. Pérez" y volver a cargarlo reventaba, porque el borrado lo dejaba en la papelera ocupando su
+`nombre_hash` en el UNIQUE, `IndiceCiegoUnico` (que consulta sin la papelera) no lo veía, y la base
+lo rechazaba. Las dos mitades se sostienen entre sí:
+
+- **Si algo lo usa, no se borra**, y el aviso dice dónde: "No se puede eliminar Dr. Pérez: lo
+  usan 2 estudios y 1 turno". Un médico que figura en la historia es parte de ella. Es el freno
+  que ya tenían medicamentos y variables, ahora para los cinco y en un solo lugar
+  (`CatalogoBaseController::eliminar()`).
+- **Si nada lo usa, se borra sin papelera** (`forceDelete`, declarado en `EsCatalogo`). No hay
+  nada que recuperar, y el nombre queda libre para volver a cargarlo.
+
+Dónde se usa cada catálogo lo declara su controlador en `usos()`, una lista de
+`App\Support\UsoDeCatalogo` ("los estudios, por su `medico_id`"):
+
+| Catálogo     | Lo frenan                                                                   |
+| ------------ | --------------------------------------------------------------------------- |
+| Médicos      | enfermedades, tratamientos, órdenes, estudios, recetas de anteojos y turnos |
+| Centros      | estudios, recetas de anteojos y turnos                                      |
+| Medicamentos | tratamientos                                                                |
+| Variables    | mediciones                                                                  |
+| Vacunas      | nada, todavía (ver abajo)                                                   |
+
+⚠️ **La papelera cuenta.** Un estudio borrado se puede restaurar, y volvería sin su médico; y
+donde la FK es `restrictOnDelete` (un tratamiento con su medicamento) la base rechazaría el borrado
+por una fila que nadie ve: sin contarla, borrar daba un 500. Por eso `UsoDeCatalogo` cuenta sin el
+scope de soft deletes, y el aviso lo explica ("se cuentan también registros que borraste, porque
+todavía se pueden recuperar"): sin esa frase, alguien que ve cero estudios en pantalla lee "lo usa
+1 estudio" y no entiende de dónde sale.
+
+⚠️ **`ReferenciasACatalogosTest` lee las FK reales del esquema** y falla si alguna que apunte a un
+catálogo no figura en sus `usos()` —o si un uso declarado apunta a una columna que no existe, que
+contaría siempre cero y no frenaría nunca—. El caso anunciado es **`aplicaciones_vacuna`**: cuando
+exista, su `vacuna_id` tiene que declararse en `VacunaController::usos()`, y el test lo va a exigir.
+
+Borrar de verdad un catálogo con archivos —un medicamento con su prospecto— **se lleva los
+archivos**: primero el disco, después las filas, incluidas las de prospectos que ya estaban en la
+papelera. Es la primera vez que se resuelve el hueco de los adjuntos huérfanos (ver "Estado").
+
+**Autoriza antes de mirar los usos**: al revés, la respuesta le contaría a un extraño —o a quien
+intenta borrar una semilla— si ese registro tiene datos cargados.
+
+⚠️ **Esto cambia la regla de la sección "Cuándo bloquear el borrado"** (Enfermedades): ahí las
+FK que son metadato (`medico_id`, `centro_id`) se dejaban ir con `nullOnDelete`. Desde la pantalla
+**ya no se dejan ir**: frenan el borrado. Las FK siguen con `nullOnDelete` en la base como última
+red, pero la app no llega a usarla.
 
 ### Medicamentos y vacunas: el tercero y el cuarto, sin decisiones nuevas
 
@@ -974,6 +1021,11 @@ mediciones—.
 
 ### Cuándo bloquear el borrado de un catálogo y cuándo dejarlo ir
 
+> ⚠️ **Superado:** desde que se decidió que un catálogo usado no se borra (ver "Borrar un
+> catálogo" en la sección Catálogos), **toda** referencia frena el borrado desde la pantalla,
+> también las de metadato. Lo de abajo sigue valiendo para elegir el `onDelete` de una FK nueva
+> en la migración —que es la red de la base—, no para decidir si la pantalla deja borrar.
+
 Es la segunda FK del proyecto que apunta a un catálogo, y va distinto que la primera. La regla
 que queda, para las que vengan:
 
@@ -1077,9 +1129,10 @@ FK a un catálogo y sigue la misma regla que ya quedó escrita en la sección de
 > ir cuando es metadato.
 
 Un tratamiento sin su medicamento es "500mg cada 8 horas" de nada: imprescindible, así que
-va con `restrictOnDelete` y `MedicamentoController::destroy()` lo frena antes con un mensaje
-—mismo freno que ya tiene `TipoMedicionController::destroy()` con las mediciones—.
-`medico_id` y `enfermedad_id` son metadato: `nullOnDelete`, sobreviven sin ellos.
+va con `restrictOnDelete`, y la pantalla lo frena antes con un mensaje (hoy con el freno común a
+los cinco catálogos, `CatalogoBaseController::eliminar()`).
+`medico_id` y `enfermedad_id` son metadato: `nullOnDelete` en la base, aunque desde la pantalla un
+médico que figura en un tratamiento tampoco se puede borrar.
 
 - **`activo` es un booleano, no un enum de estados.** Con dos estados reales -lo toma o no lo
   toma- un enum sería una capa sin necesidad. Sigue el mismo patrón del checkbox `"on"` que
@@ -2190,8 +2243,8 @@ antes; la validación lo vuelve a revisar.
 
 `envios` guarda la dirección y el nombre del destinatario **como estaban al mandar**, y
 `adjunto_envio` el nombre y el tamaño de cada archivo. Si mañana se corrige el mail del contacto
-o se borra el PDF (los adjuntos se borran de verdad), el historial tiene que seguir diciendo a
-dónde salió y qué. `contacto_id` y `adjunto_id` quedan como vínculos con `nullOnDelete`.
+o se borra el PDF (borrar un documento elimina su archivo del disco, aunque la fila quede en la
+papelera), el historial tiene que seguir diciendo a dónde salió y qué. `contacto_id` y `adjunto_id` quedan como vínculos con `nullOnDelete`.
 
 - **No hay rutas para editar ni borrar un envío.** El historial es lo que se consulta cuando la
   obra social dice "no nos llegó nada", y uno que se puede corregir no prueba nada.
@@ -2776,6 +2829,9 @@ a `forceDelete()` -solo hay soft deletes, y ahí los adjuntos deben quedarse par
 funcione-, pero `adjuntos` es polimórfica y no tiene FK, así que un `forceDelete` del dueño
 deja la fila **y su archivo cifrado en disco** para siempre. Se vuelve alcanzable cuando la
 Etapa 14 exponga el `forceDelete` del propietario; hay que resolverlo ahí.
+**Ya resuelto para los catálogos**, que desde la decisión de "si nada lo usa, se borra de
+verdad" hacen `forceDelete`: `CatalogoBaseController::borrarDeVerdad()` se lleva antes los
+archivos (disco y filas). Sigue abierto para el resto de los dueños.
 
 **Paso 11.2 hecho**: `misalud:enviar-recordatorios`, cada hora por el scheduler, con su mail.
 
@@ -2912,16 +2968,28 @@ adjuntos, decodificados del base64, son byte a byte los PDF originales** (SHA-25
 de otra cuenta da **403** al armar el envío y al forzar el id en el formulario, sin que salga
 ningún mail. Más 36 combinaciones de desborde, áreas táctiles, `revisar:mobile` y `revisar:visor`.
 
-⚠️ **Bug encontrado en etapas anteriores, NO arreglado (es de otro alcance): recrear algo
-borrado da un 500.** Medido: crear "Dr. Pérez", borrarlo y volver a crearlo con el mismo nombre
-devuelve un **500**. El registro borrado queda en la papelera ocupando su hash en el UNIQUE
-(`unique(usuario_id, nombre_hash)`), `IndiceCiegoUnico` consulta sin la papelera y no lo ve, y la
-base lo rechaza. Afecta a **los cinco catálogos, a las coberturas y a las alergias** —todo lo que
-tiene soft deletes y un UNIQUE sobre un índice ciego—. Los contactos se diseñaron para no
-repetirlo (sin soft deletes). Las salidas posibles, a decidir: que borrar libere el hash, que
-volver a cargarlo **restaure** el registro de la papelera, o un UNIQUE que ignore las filas
-borradas (con una columna generada). Ojo: **las recetas tienen el comportamiento opuesto a
-propósito** —ahí la papelera _tiene_ que ocupar el hash, para que lo borrado no se reimporte—.
+⚠️ **Bug encontrado en etapas anteriores: recrear algo borrado daba un 500.** Medido: crear
+"Dr. Pérez", borrarlo y volver a crearlo con el mismo nombre devolvía un **500**. El registro
+borrado quedaba en la papelera ocupando su hash en el UNIQUE, `IndiceCiegoUnico` consulta sin la
+papelera y no lo veía, y la base lo rechazaba.
+
+**Arreglado para los cinco catálogos**, con la regla que decidió el usuario: si algo lo usa no se
+borra, y si nada lo usa se borra de verdad (ver "Borrar un catálogo"). Verificado que borrar y
+volver a cargar un médico, un centro y una vacuna ya no revienta, y protegido por
+`ReferenciasACatalogosTest`, que lee las FK reales del esquema.
+
+**Sigue abierto en las coberturas y las alergias**, que tienen el mismo patrón (soft deletes y un
+UNIQUE sobre un índice ciego). No entraron en la decisión porque son registros clínicos de un
+paciente, no catálogos: borrarlos de verdad pierde historia, y conviene decidirlo junto con la
+papelera de la Etapa 14. Ojo: **las recetas tienen el comportamiento opuesto a propósito** —ahí
+la papelera _tiene_ que ocupar el hash, para que lo borrado no se reimporte—.
+
+De paso apareció **un bug de la propia Etapa 13**, ya arreglado: `exists:adjuntos,id` consultaba
+la tabla cruda, que incluye la papelera de los adjuntos, así que el id de un documento borrado
+pasaba la validación y salía **un mail sin ningún adjunto**. Era exactamente la trampa de
+`Rule::exists` ya documentada; ahora lleva su `whereNull('deleted_at')`. Y una afirmación falsa de
+esa etapa, corregida: los adjuntos **sí** tienen soft deletes (borrar un documento elimina su
+archivo del disco, pero la fila queda en la papelera).
 
 ⚠️ Para revisar en la **Etapa 14**: hoy **mandar un documento pide lo mismo que verlo**, también
 para un `Lector`. Pedir más no protege nada (quien puede abrir el PDF lo puede reenviar desde su
@@ -2929,4 +2997,5 @@ correo), pero es una decisión de roles y va con el resto.
 
 Pendiente, en este orden: compartir la ficha · dashboard y deploy. Queda también, sin fecha, la
 Etapa 16 (consultas y grabaciones), que el plan deja adelantable. Y sin etapa asignada: las
-vacunas aplicadas, y el bug de la papelera de arriba.
+vacunas aplicadas, y el 500 de la papelera en coberturas y alergias (los catálogos ya están
+arreglados).
