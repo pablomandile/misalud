@@ -1,6 +1,7 @@
 import {
     Activity,
     Building2,
+    FileText,
     LayoutGrid,
     Mail,
     Pill,
@@ -14,6 +15,7 @@ import CuentaMailController from '@/actions/App/Http/Controllers/CuentaMailContr
 import MedicamentoController from '@/actions/App/Http/Controllers/MedicamentoController';
 import MedicoController from '@/actions/App/Http/Controllers/MedicoController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
+import RecetaController from '@/actions/App/Http/Controllers/RecetaController';
 import TipoMedicionController from '@/actions/App/Http/Controllers/TipoMedicionController';
 import VacunaController from '@/actions/App/Http/Controllers/VacunaController';
 import { dashboard } from '@/routes';
@@ -43,6 +45,16 @@ export const destinosPrincipales: NavItem[] = [
         title: 'Pacientes',
         href: PacienteController.index(),
         icon: Users,
+    },
+    /*
+     * La bandeja de recetas va arriba, al lado de Pacientes: se abre en el
+     * mostrador de la farmacia. La casilla que la alimenta va abajo, con los
+     * ajustes, porque se configura una vez.
+     */
+    {
+        title: 'Recetas',
+        href: RecetaController.index(),
+        icon: FileText,
     },
     /*
      * Los catálogos son del USUARIO, no de un paciente: por eso van al mismo
@@ -83,7 +95,7 @@ export const destinosPrincipales: NavItem[] = [
  *
  * La casilla de correo va acá y no arriba a propósito: se configura una vez y
  * después no se vuelve a tocar. Lo que sí es de uso diario es la bandeja de
- * recetas que esa casilla alimenta, y esa entra arriba cuando exista (12.3).
+ * recetas que esa casilla alimenta, y esa va arriba.
  */
 export const destinosSecundarios: NavItem[] = [
     {

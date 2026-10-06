@@ -39,6 +39,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property CarbonImmutable $fecha_recepcion
  * @property int $vigencia_dias
  * @property EstadoReceta $estado
+ * @property CarbonImmutable|null $fecha_uso
  */
 #[UsePolicy(RecetaPolicy::class)]
 class Receta extends Model implements CifraDatos, TieneArchivos
@@ -82,6 +83,7 @@ class Receta extends Model implements CifraDatos, TieneArchivos
             'fecha_recepcion' => 'immutable_datetime',
             'vigencia_dias' => 'integer',
             'estado' => EstadoReceta::class,
+            'fecha_uso' => 'immutable_datetime',
         ];
     }
 
@@ -137,5 +139,32 @@ class Receta extends Model implements CifraDatos, TieneArchivos
     public function estaDisponible(): bool
     {
         return $this->estado === EstadoReceta::Disponible && ! $this->estaVencida();
+    }
+
+    /**
+     * Ya se presentó en la farmacia.
+     *
+     * `fecha_uso` no es fillable a propósito: solo la escriben este método y
+     * `volverADisponible()`, así que el estado y la fecha no pueden quedar
+     * desparejos -una receta "usada" sin fecha, o "disponible" con una-.
+     */
+    public function marcarUsada(): void
+    {
+        $this->setAttribute('estado', EstadoReceta::Usada);
+        $this->setAttribute('fecha_uso', CarbonImmutable::now());
+        $this->save();
+    }
+
+    /**
+     * Para el "la marqué sin querer".
+     *
+     * No le devuelve la vigencia: si ya venció, sigue vencida. Lo que se deshace
+     * es la marca de uso, no el paso del tiempo.
+     */
+    public function volverADisponible(): void
+    {
+        $this->setAttribute('estado', EstadoReceta::Disponible);
+        $this->setAttribute('fecha_uso', null);
+        $this->save();
     }
 }

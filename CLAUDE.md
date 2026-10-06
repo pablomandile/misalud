@@ -2001,6 +2001,57 @@ explícitas en `LectorDeCasilla`: **`FT_PEEK`** (traer el mensaje sin ponerle la
 algún día cambia, el síntoma sería que la app le marca como leídos los mails a alguien, y eso no
 lo descubre ningún test.
 
+### La bandeja de recetas (paso 12.3)
+
+`/recetas` contesta **una sola pregunta: ¿qué receta puedo usar hoy?** Va arriba en el menú, al
+lado de Pacientes —se abre en el mostrador de la farmacia—, y la casilla que la alimenta queda
+abajo, con los ajustes.
+
+- **Las disponibles van arriba, de la que vence primero a la que vence último.** Es una cuenta
+  regresiva: una receta que vence pasado mañana no puede quedar debajo de una que vale todo el
+  mes. Es el segundo listado que ordena al revés que el resto de la app, después de la agenda de
+  turnos, y por el mismo motivo.
+- **La separación entre disponibles e historial la hace el servidor**, no un `computed()`:
+  "vencida" depende de la hora, y con el reloj del celular corrido una receta vencida aparecería
+  como usable justo en el mostrador. La pantalla recibe las dos listas ya separadas.
+- **El vencimiento se dice con palabras** ("vence mañana", "venció el 3/10") **y nunca con un
+  color de alarma**: es un dato, no un juicio (regla 1).
+- **"Vence mañana" cuenta días de calendario de la persona**, medianoche contra medianoche en su
+  zona, no horas divididas por 24: faltando diecinueve horas, "mañana" tiene que querer decir
+  mañana para quien lo lee.
+
+⚠️ **El contador del mes cuenta en el mes de la persona, no en el de UTC.** `fecha_recepcion` es
+un instante: una receta que llegó el 31 a las 22:00 en Argentina ya es día 1 en UTC, y contando
+en UTC aparecería en el mes siguiente. Cuenta también las usadas —la pregunta es cuántas
+**llegaron**, no cuántas quedan— y es una vista sobre lo importado, no el criterio con el que se
+importa.
+
+**Marcar usada es su propia ruta y su propio FormRequest** (`PUT /recetas/{receta}/uso`), no un
+campo de la edición: es lo que se toca en el mostrador, muchas veces, y la vigencia casi nunca.
+Mezclarlos obligaría a mandar la vigencia cada vez que se marca una receta. `fecha_uso` llegó recién
+acá, con la única acción que la escribe, y **no es fillable**: solo la tocan `marcarUsada()` y
+`volverADisponible()`, así que el estado y la fecha no pueden quedar desparejos.
+
+- **Deshacer el uso no le devuelve la vigencia.** Lo que se deshace es la marca, no el paso del
+  tiempo: si ya venció, sigue vencida.
+- **Ampliar la vigencia sí revive una receta vencida**, y es el caso real que lo motiva: una
+  receta de crónico que vale 90 días entra con el default de 30. Se valida de 1 a 365 días —se
+  rechaza lo que no puede existir, el mismo criterio que la validación ocular—.
+- Lo que **no** se edita es remitente, asunto y fecha de llegada: son lo que dice el mail, y
+  cambiarlos sería reescribir de dónde salió el documento.
+
+⚠️ **Borrar una receta impide que vuelva a entrar.** Va a la papelera, y como la papelera sigue
+ocupando su `message_id_hash` (y la deduplicación la mira a propósito), la próxima importación la
+cuenta como repetida. Es justo lo que se quiere al borrar algo que entró y no era una receta —el
+PDF de una promoción—: si volviera en la próxima corrida, borrarlo no serviría de nada.
+Verificado de punta a punta, no solo con un test: borrarla en la pantalla y volver a importar los
+mismos tres mails dejó "3 repetidas" y la receta sin volver.
+
+⚠️ **El recordatorio de "receta por vencer" NO se puede hacer todavía**, aunque `vence()` exista.
+`recordatorios.paciente_id` es obligatorio —de él cuelga la autorización de los avisos— y una
+receta no tiene paciente. Queda trabado por la misma decisión que la asignación de recetas a
+pacientes.
+
 ### ⚠️ Tres trampas de los scripts de verificación, encontradas acá
 
 Las tres hicieron que el script informara fallas que no existían, que es el modo de falla
@@ -2670,6 +2721,27 @@ completa, de los bytes del mail al navegador.
 con credenciales de verdad. Es la única pieza sin cobertura, y es justamente por eso que no decide
 nada. Se prueba configurando una casilla real y tocando "Importar ahora".
 
-Pendiente, en este orden: **12.3** (la bandeja: contador del mes, visor, marcar usada, Sonnet 5) ·
-contactos y envío · compartir la ficha · dashboard y deploy. Queda también, sin fecha, la Etapa 16
-(consultas y grabaciones), que el plan deja adelantable.
+**Etapa 12 completa** con el paso 12.3: la bandeja de recetas en `/recetas`, con las disponibles
+arriba ordenadas por la que vence primero, el contador del mes en la zona de la cuenta, el visor,
+marcar usada (y deshacerlo) y la vigencia editable.
+
+Verificado en Chrome real con tres recetas importadas por el servicio de verdad, cada una con su
+PDF: el orden es el de vencimiento, la vencida cae al historial sin que nadie la marque, el visor
+**dibuja** el PDF importado (60000 píxeles), marcar usada mueve la tarjeta **sin refrescar** y
+deshacerlo la devuelve a su lugar, el error de vigencia va al lado del campo y no en un toast,
+ampliar la vigencia revive una vencida, y borrar una receta y volver a importar los mismos mails
+**no la trae de vuelta**. Más las 18 combinaciones de desborde, las áreas táctiles y el estado
+vacío sin casilla.
+
+⚠️ **Corrección a algo que se había dado por resuelto:** el recordatorio de "receta por vencer"
+no se puede hacer todavía, porque `recordatorios.paciente_id` es obligatorio y una receta no tiene
+paciente. Queda atado a la decisión de asignar recetas a pacientes.
+
+⚠️ **Hueco encontrado, sin etapa asignada: las vacunas APLICADAS no existen.** Hay catálogo de
+vacunas, pero `aplicaciones_vacuna` —que está en el modelo de datos del plan, de la que según este
+mismo archivo cuelga el comprobante de una dosis, y de la que sale el recordatorio de próxima
+dosis— nunca se construyó: ningún paso del plan la tiene asignada. `TipoAdjunto::Vacuna` es un
+caso que nada usa. Conviene hacerla antes de la Etapa 15.
+
+Pendiente, en este orden: contactos y envío · compartir la ficha · dashboard y deploy. Queda
+también, sin fecha, la Etapa 16 (consultas y grabaciones), que el plan deja adelantable.

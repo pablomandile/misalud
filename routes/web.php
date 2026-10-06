@@ -16,6 +16,7 @@ use App\Http\Controllers\OrdenEstudioController;
 use App\Http\Controllers\PacienteActivoController;
 use App\Http\Controllers\PacienteController;
 use App\Http\Controllers\PrescripcionOcularController;
+use App\Http\Controllers\RecetaController;
 use App\Http\Controllers\RecordatorioController;
 use App\Http\Controllers\RegistroEnfermedadController;
 use App\Http\Controllers\ResultadoEstudioController;
@@ -280,6 +281,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
      */
     Route::post('casilla/{cuenta}/sincronizar', [CuentaMailController::class, 'sincronizar'])
         ->name('casilla.sincronizar');
+
+    /*
+     * La bandeja de recetas. Sin `store`: entran solo por importación
+     * (`RecetaPolicy::create()` devuelve `false` a propósito). Marcar usada es
+     * su propia ruta y no un campo de la edición: es lo que se toca en el
+     * mostrador de la farmacia, y no tiene por qué mandar la vigencia.
+     */
+    Route::get('recetas', [RecetaController::class, 'index'])->name('recetas.index');
+    Route::put('recetas/{receta}', [RecetaController::class, 'update'])->name('recetas.update');
+    Route::put('recetas/{receta}/uso', [RecetaController::class, 'uso'])->name('recetas.uso');
+    Route::delete('recetas/{receta}', [RecetaController::class, 'destroy'])->name('recetas.destroy');
 
     Route::get('pacientes', [PacienteController::class, 'index'])->name('pacientes.index');
     Route::post('pacientes', [PacienteController::class, 'store'])->name('pacientes.store');
