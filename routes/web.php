@@ -5,9 +5,11 @@ use App\Http\Controllers\AlergiaController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\CentroController;
 use App\Http\Controllers\CoberturaController;
+use App\Http\Controllers\ContactoController;
 use App\Http\Controllers\CuentaMailController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EnfermedadController;
+use App\Http\Controllers\EnvioController;
 use App\Http\Controllers\EstudioController;
 use App\Http\Controllers\MedicamentoController;
 use App\Http\Controllers\MedicionController;
@@ -292,6 +294,27 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('recetas/{receta}', [RecetaController::class, 'update'])->name('recetas.update');
     Route::put('recetas/{receta}/uso', [RecetaController::class, 'uso'])->name('recetas.uso');
     Route::delete('recetas/{receta}', [RecetaController::class, 'destroy'])->name('recetas.destroy');
+
+    /*
+     * La libreta de contactos y, en la misma pantalla, el historial de envíos.
+     * Los envíos no tienen rutas para editar ni para borrar: el historial es lo
+     * que se consulta cuando alguien dice "no nos llegó nada".
+     */
+    Route::get('contactos', [ContactoController::class, 'index'])->name('contactos.index');
+    Route::post('contactos', [ContactoController::class, 'store'])->name('contactos.store');
+    Route::put('contactos/{contacto}', [ContactoController::class, 'update'])->name('contactos.update');
+    Route::delete('contactos/{contacto}', [ContactoController::class, 'destroy'])->name('contactos.destroy');
+
+    Route::get('envios/nuevo', [EnvioController::class, 'create'])->name('envios.create');
+
+    /*
+     * Con límite de frecuencia: cada envío saca documentos clínicos de la app
+     * hacia afuera, y una cuenta tomada por otro no puede convertirse en un cañón
+     * de mails. Diez por minuto sobra para una persona mandando lo suyo.
+     */
+    Route::post('envios', [EnvioController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('envios.store');
 
     Route::get('pacientes', [PacienteController::class, 'index'])->name('pacientes.index');
     Route::post('pacientes', [PacienteController::class, 'store'])->name('pacientes.store');

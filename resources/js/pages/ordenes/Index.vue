@@ -1,8 +1,16 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
-import { ArrowLeft, ClipboardList, FileText, Plus, Trash2 } from '@lucide/vue';
+import { Form, Head, Link } from '@inertiajs/vue3';
+import {
+    ArrowLeft,
+    ClipboardList,
+    FileText,
+    Plus,
+    Send,
+    Trash2,
+} from '@lucide/vue';
 import { computed, ref } from 'vue';
 import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
+import EnvioController from '@/actions/App/Http/Controllers/EnvioController';
 import OrdenEstudioController from '@/actions/App/Http/Controllers/OrdenEstudioController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
 import Heading from '@/components/Heading.vue';
@@ -223,6 +231,33 @@ function pesoLegible(bytes: number): string {
                                                 </span>
                                             </span>
                                         </button>
+
+                                        <!--
+                                            Para cualquiera que pueda VER el documento: mandarlo no pide más
+                                            que abrirlo, porque quien lo abre ya lo puede reenviar desde su
+                                            propio correo. Los roles de quien comparte se revisan en la
+                                            Etapa 14.
+                                        -->
+                                        <Button
+                                            as-child
+                                            variant="ghost"
+                                            size="icon-sm"
+                                        >
+                                            <Link
+                                                :href="
+                                                    EnvioController.create({
+                                                        query: {
+                                                            adjuntos: [
+                                                                documento.id,
+                                                            ],
+                                                        },
+                                                    })
+                                                "
+                                                :aria-label="`Enviar ${documento.nombre}`"
+                                            >
+                                                <Send class="size-4" />
+                                            </Link>
+                                        </Button>
 
                                         <Form
                                             v-if="paciente.puedeEditar"

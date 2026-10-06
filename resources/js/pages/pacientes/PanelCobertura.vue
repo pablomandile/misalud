@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { Form } from '@inertiajs/vue3';
-import { CreditCard, FileText, Pencil, Trash2, X } from '@lucide/vue';
+import { Form, Link } from '@inertiajs/vue3';
+import { BookUser, CreditCard, FileText, Pencil, Trash2, X } from '@lucide/vue';
 import { ref } from 'vue';
 import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
 import CoberturaController from '@/actions/App/Http/Controllers/CoberturaController';
+import ContactoController from '@/actions/App/Http/Controllers/ContactoController';
 import InputError from '@/components/InputError.vue';
 import SubirArchivo from '@/components/SubirArchivo.vue';
 import type { DocumentoVisible } from '@/components/VisorDocumento.vue';
@@ -158,6 +159,24 @@ function alBorrarCobertura(): void {
                                     Urgencias
                                     {{ cobertura.telefono_urgencias }}
                                 </p>
+                                <!--
+                                    "Los contactos pueden salir de una cobertura"
+                                    (plan, paso 13.1). Sale el nombre y el tipo;
+                                    el mail lo pone la persona, porque una
+                                    cobertura no lo tiene y adivinarlo sería
+                                    mandar documentos a cualquier lado.
+                                -->
+                                <Link
+                                    :href="
+                                        ContactoController.index({
+                                            query: { cobertura: cobertura.id },
+                                        })
+                                    "
+                                    class="inline-flex min-h-11 items-center gap-2 text-sm underline underline-offset-4"
+                                >
+                                    <BookUser class="size-4" />
+                                    Guardar como contacto
+                                </Link>
                             </div>
 
                             <div

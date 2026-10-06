@@ -116,6 +116,26 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
         return $this->hasMany(Receta::class, 'usuario_id');
     }
 
+    /**
+     * La libreta de a quién se le manda documentación.
+     *
+     * @return HasMany<Contacto, $this>
+     */
+    public function contactos(): HasMany
+    {
+        return $this->hasMany(Contacto::class, 'usuario_id');
+    }
+
+    /**
+     * Lo que esta persona mandó, con su foto del momento.
+     *
+     * @return HasMany<Envio, $this>
+     */
+    public function envios(): HasMany
+    {
+        return $this->hasMany(Envio::class, 'usuario_id');
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Zona horaria

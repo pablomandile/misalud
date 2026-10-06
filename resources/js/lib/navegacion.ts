@@ -1,5 +1,6 @@
 import {
     Activity,
+    BookUser,
     Building2,
     FileText,
     LayoutGrid,
@@ -11,6 +12,7 @@ import {
     Users,
 } from '@lucide/vue';
 import CentroController from '@/actions/App/Http/Controllers/CentroController';
+import ContactoController from '@/actions/App/Http/Controllers/ContactoController';
 import CuentaMailController from '@/actions/App/Http/Controllers/CuentaMailController';
 import MedicamentoController from '@/actions/App/Http/Controllers/MedicamentoController';
 import MedicoController from '@/actions/App/Http/Controllers/MedicoController';
@@ -55,6 +57,16 @@ export const destinosPrincipales: NavItem[] = [
         title: 'Recetas',
         href: RecetaController.index(),
         icon: FileText,
+    },
+    /*
+     * La libreta y, en la misma pantalla, lo que se le mandó a cada uno. Un
+     * envío no arranca desde acá sino desde un documento ("Enviar" al lado de
+     * una receta o una orden): esta es la pantalla de "¿qué le mandé a OSDE?".
+     */
+    {
+        title: 'Contactos',
+        href: ContactoController.index(),
+        icon: BookUser,
     },
     /*
      * Los catálogos son del USUARIO, no de un paciente: por eso van al mismo

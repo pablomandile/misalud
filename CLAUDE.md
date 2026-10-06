@@ -2085,6 +2085,156 @@ Dos más que aparecieron verificando el 12.2:
   sobrevive a que se mate al `artisan serve` padre: hay que buscar quién escucha el puerto, no el
   comando.
 
+## Contactos y envío de documentación
+
+Mandarle la receta a la farmacia, la orden a la obra social para autorizar, la receta de
+anteojos a la óptica. Es **el único lugar de la app que saca documentos clínicos hacia afuera**,
+y eso ordena todas las decisiones de la etapa.
+
+| Pieza                    | Qué hace                                                    |
+| ------------------------ | ----------------------------------------------------------- |
+| `Contacto`               | La libreta: a quién se le manda                             |
+| `DocumentosEnviables`    | Qué se ofrece para sumar a un envío (el **ámbito**)         |
+| `EnvioGuardarRequest`    | **Autoriza cada archivo** contra su dueño, antes de validar |
+| `EnviadorDeDocumentos`   | Descifra, manda **síncrono** y registra el resultado        |
+| `EnvioDeDocumentos`      | El mailable: `From` la app, `Reply-To` la persona           |
+| `Envio`/`ArchivoEnviado` | El historial, con **fotos del momento** y no referencias    |
+
+### ⚠️ El destino es SIEMPRE un contacto de la libreta
+
+Nunca una dirección tipeada en el momento. Un tipeo en una dirección escrita apurada manda una
+historia clínica a un desconocido, sin forma de deshacerlo. En la libreta la dirección se
+escribió una vez, con calma, y en el envío se elige por nombre — con la dirección completa a la
+vista, para revisarla. **El destinatario no viene elegido** ni siquiera cuando hay uno solo, y el
+botón final dice a quién y cuántos ("Mandar 2 documentos a OSDE"), para que se lea antes de
+tocarlo.
+
+### Los contactos: del usuario, pero no un catálogo, y sin soft deletes
+
+Se parecen a un catálogo —son del usuario, sirven para toda la familia— pero el patrón de
+catálogos indexa el **nombre**, y la identidad de un contacto es su **dirección**: "Farmacia
+Central" puede tener dos sucursales con dos mails. El UNIQUE va por `email_hash` y no hay
+semillas. `ContactoPolicy` es la cuarta Policy con la forma "¿es tuyo?" (casilla, receta,
+contacto, envío); se dejó repetida porque cada una tiene algo propio, y si aparece una quinta
+sin nada propio, ese es el momento de juntarlas.
+
+⚠️ **Sin soft deletes, por un bug medido en el resto del proyecto** (ver "Estado"): un registro
+en la papelera sigue ocupando su hash en el UNIQUE, la validación no lo ve, y volver a cargarlo
+da un 500. Nada necesita un contacto borrado —el historial guarda su propia foto de la
+dirección—, así que borrar borra y la dirección queda libre.
+
+"Pueden salir de una cobertura", como pide el plan: el panel de la cobertura tiene "Guardar como
+contacto", que abre el alta con el nombre de la entidad y el tipo. **El mail lo pone la
+persona**: una cobertura no lo tiene, y adivinarlo sería mandar documentos a cualquier lado. Una
+cobertura que esa persona no puede ver se ignora **en silencio**, sin 403, para no confirmar que
+el id existe en otra ficha.
+
+### ⚠️ El envío arranca desde un documento, y ofrece solo los de la MISMA ficha
+
+El botón "Enviar" está al lado de cada documento —receta, orden, estudio, receta de anteojos—, no
+en una pantalla en blanco. Así se sabe de qué paciente se trata, y `DocumentosEnviables` ofrece
+para sumar **solo lo de esa misma ficha** (la credencial junto con la orden, que es lo que pide
+una obra social para autorizar). **Nunca los de otro familiar**: mezclar fichas en un mismo mail
+—la receta de uno en la obra social de otro— es el error más caro de este módulo. Una receta
+importada ofrece las otras recetas de la casilla.
+
+Los candidatos salen de las **relaciones** del paciente y no de un `where paciente_id`, así lo que
+está en la papelera queda afuera solo. Y **cada candidato pasa igual por `AdjuntoPolicy`**: la
+consulta decide qué es pertinente, la Policy quién puede verlo.
+
+### ⚠️ Cada archivo se autoriza AL MANDAR, contra su dueño
+
+La lista que mostró el armado del envío es una comodidad, no una autorización. Un id ajeno puesto
+a mano en el formulario —de la ficha de otra persona, mandado a la propia casilla— es la forma
+de filtrar datos con este módulo, y por eso `EnvioGuardarRequest::authorize()` pasa **cada**
+archivo por `AdjuntoPolicy`, igual que si se lo intentara abrir. Y lo hace **antes de validar**:
+al revés, un id ajeno con otro campo inválido contestaría con un error de campo y confirmaría que
+el archivo existe. Verificado en Chrome, no solo con un test: armar un envío con el archivo de
+otra cuenta da 403, forzarlo en el formulario da 403, y no sale ningún mail.
+
+⚠️ **Mandar pide lo mismo que ver**, también para un `Lector`. Pedir más no protegería nada:
+quien puede abrir el PDF ya lo puede reenviar desde su propio correo. Es una decisión a revisar
+en la **Etapa 14**, que es donde se diseñan los roles de quien comparte una ficha.
+
+### ⚠️ Síncrono y sin `ShouldQueue`, y acá el motivo es de seguridad
+
+En los avisos (11.2) el motivo era no depender de un worker que en hosting compartido se cae en
+silencio. Acá hay otro más grave: **un mailable encolado se serializa entero en la tabla `jobs`,
+y este lleva los archivos ya descifrados.** Encolarlo dejaría las recetas y los estudios de
+alguien en claro en una tabla de la base, que es justo lo que todo el cifrado existe para evitar.
+Así que el envío es síncrono, con la pantalla esperando ("Mandando…") — que además es lo que
+necesita quien está por llamar a la obra social: saber **ahora** si salió.
+
+### Lo que dice el mail, y desde dónde sale
+
+- **`From` es la app, `Reply-To` es la persona.** No se puede mandar _desde_ el mail de la
+  persona —el servidor de su dominio no nos autoriza (SPF, DMARC) y caería en spam—, pero si la
+  farmacia contesta, le contesta a ella y no a una casilla que nadie lee.
+- **Acá el contenido clínico SÍ va en el mail**, al revés que en los avisos. Un aviso sale solo y
+  por eso dice "cuándo" y no "qué"; este lo arma una persona eligiendo a quién y qué mandar, y el
+  contenido es el propósito. Lo único que agrega el sistema es de parte de quién viene.
+- **El asunto no admite saltos de línea**: va a una cabecera, y un salto de línea en una cabecera
+  es la forma clásica de inyectar otras (un `Bcc`). El mailer de Symfony ya lo frenaría, pero acá
+  el error aparece al lado del campo en vez de como un envío fallido.
+
+### ⚠️ El tope son 15 MB, no los 25 de Gmail
+
+Un adjunto viaja en base64, que pesa un 37% más que el archivo: 15 MB de PDFs son ~20,5 MB de
+mail, y con el cuerpo y las cabeceras todavía entran debajo de los 25 MB que cortan Gmail y
+Outlook. Un tope de 25 "porque es lo que dice Gmail" dejaría pasar envíos que el destino rebota
+horas después, a una casilla que nadie mira. Y como todo se descifra en memoria antes de mandar,
+este número también cuida el `memory_limit` del hosting. La pantalla suma el peso en vivo y avisa
+antes; la validación lo vuelve a revisar.
+
+### El historial: fotos del momento, sin editar ni borrar
+
+`envios` guarda la dirección y el nombre del destinatario **como estaban al mandar**, y
+`adjunto_envio` el nombre y el tamaño de cada archivo. Si mañana se corrige el mail del contacto
+o se borra el PDF (los adjuntos se borran de verdad), el historial tiene que seguir diciendo a
+dónde salió y qué. `contacto_id` y `adjunto_id` quedan como vínculos con `nullOnDelete`.
+
+- **No hay rutas para editar ni borrar un envío.** El historial es lo que se consulta cuando la
+  obra social dice "no nos llegó nada", y uno que se puede corregir no prueba nada.
+- **Se registra también el que falló**: "lo intenté el martes y no salió" es una respuesta tan
+  útil como "salió el martes".
+- **Se registra DESPUÉS de intentar**, con el resultado ya sabido: una fila "pendiente" escrita
+  antes podría quedar así para siempre si el proceso se cae en el medio.
+- Al log de un fallo van ids y la clase de la excepción. El mensaje de un error de SMTP suele
+  traer la dirección del destinatario —el mail de un tercero—.
+- La fecha del envío es `created_at`: se escribe en el mismo instante en que se intenta, y una
+  columna `fecha` aparte —como ponía el plan— solo podría diferir de ella por un error.
+- El historial vive **en la pantalla de contactos**, debajo de la libreta: la pregunta que trae a
+  alguien ahí ("¿qué le mandé a OSDE?") siempre arranca por el contacto.
+
+El `POST` del envío lleva `throttle:10,1`: una cuenta tomada por otro no puede convertirse en un
+cañón de mails con documentos ajenos adjuntos.
+
+### El armado del envío en pantalla
+
+- ⚠️ **Todos los campos con `v-model`**, no solo la lista de documentos que lo necesita para
+  sumar el peso en vivo. Es la regla que dejó la Etapa 10: con un solo campo con estado local,
+  cada cambio vuelve a renderizar y pisa los `:value` de los hermanos —el asunto o el mensaje ya
+  tipeados volverían a lo que vino del servidor—.
+- **Agregar un contacto sin salir del envío**, con `preserveState`: el alta vuelve a la misma
+  URL, y sin eso la pantalla se remontaría perdiendo los documentos tildados y el mensaje. El
+  contacto recién cargado queda elegido (se lo reconoce porque su id no estaba antes).
+- El botón "Ver" de cada documento va **fuera** del `<label>` de su checkbox: adentro, tocarlo
+  tildaría o destildaría el documento en vez de abrirlo.
+
+Verificado en Chrome real **con el mail de verdad**: el mailer local es `log`, así que el mail
+sale entero en MIME al `laravel.log`, y el script lo lee, decodifica los adjuntos del base64 y los
+compara por SHA-256 con los PDF originales. Ver "Estado".
+
+### ⚠️ Dos trampas más de los scripts de verificación
+
+- **El triple clic + Backspace no vacía un input de forma confiable.** El paso que verificaba el
+  error de "asunto vacío" mandó el envío igual, con el asunto sugerido: el campo nunca se había
+  vaciado. Lo determinístico es fijar `value` y disparar el evento `input`, que es lo que escucha
+  `v-model`.
+- **Un `<label for="…">` no es un área táctil**: es el rótulo de texto de un campo, y el área es
+  el campo. Medirlo da "18 px" en algo que está bien. Los que **envuelven** un radio o un
+  checkbox sí son la fila que se toca, y esos se miden con `label:not([for])`.
+
 ## Cobertura médica
 
 `coberturas` es tabla propia y no columnas en `pacientes`: mucha gente tiene obra social y
@@ -2743,5 +2893,40 @@ mismo archivo cuelga el comprobante de una dosis, y de la que sale el recordator
 dosis— nunca se construyó: ningún paso del plan la tiene asignada. `TipoAdjunto::Vacuna` es un
 caso que nada usa. Conviene hacerla antes de la Etapa 15.
 
-Pendiente, en este orden: contactos y envío · compartir la ficha · dashboard y deploy. Queda
-también, sin fecha, la Etapa 16 (consultas y grabaciones), que el plan deja adelantable.
+**Etapa 13 completa**: la libreta de contactos, el envío de documentación por mail desde cada
+documento (receta, orden, estudio, receta de anteojos) y el historial de lo que se mandó.
+
+Las decisiones que ordenan la etapa, porque es el único lugar que saca documentos clínicos de la
+app: el destino es **siempre un contacto de la libreta**, nunca una dirección tipeada; lo que se
+ofrece para sumar es **solo de la misma ficha**, nunca de otro familiar; **cada archivo se
+autoriza al mandar** contra su dueño, antes de validar; y el envío es **síncrono y sin
+`ShouldQueue`**, porque encolado dejaría los archivos descifrados en la tabla `jobs`.
+
+Verificado en Chrome real y **contra el mail de verdad** (el mailer `log` deja el MIME entero en
+el log): la cobertura precarga el contacto; desde una orden, la credencial de la misma ficha se
+ofrece y **la orden del otro familiar no**; el destinatario no viene elegido y el botón queda
+deshabilitado hasta elegirlo; agregar un contacto sin salir del envío no pierde lo tildado ni lo
+escrito y deja elegido al nuevo; un asunto vacío da el error al lado del campo sin borrar nada;
+el mail sale con `To`, `Reply-To` a la persona y el asunto con tilde bien codificado, y **los dos
+adjuntos, decodificados del base64, son byte a byte los PDF originales** (SHA-256). Y el archivo
+de otra cuenta da **403** al armar el envío y al forzar el id en el formulario, sin que salga
+ningún mail. Más 36 combinaciones de desborde, áreas táctiles, `revisar:mobile` y `revisar:visor`.
+
+⚠️ **Bug encontrado en etapas anteriores, NO arreglado (es de otro alcance): recrear algo
+borrado da un 500.** Medido: crear "Dr. Pérez", borrarlo y volver a crearlo con el mismo nombre
+devuelve un **500**. El registro borrado queda en la papelera ocupando su hash en el UNIQUE
+(`unique(usuario_id, nombre_hash)`), `IndiceCiegoUnico` consulta sin la papelera y no lo ve, y la
+base lo rechaza. Afecta a **los cinco catálogos, a las coberturas y a las alergias** —todo lo que
+tiene soft deletes y un UNIQUE sobre un índice ciego—. Los contactos se diseñaron para no
+repetirlo (sin soft deletes). Las salidas posibles, a decidir: que borrar libere el hash, que
+volver a cargarlo **restaure** el registro de la papelera, o un UNIQUE que ignore las filas
+borradas (con una columna generada). Ojo: **las recetas tienen el comportamiento opuesto a
+propósito** —ahí la papelera _tiene_ que ocupar el hash, para que lo borrado no se reimporte—.
+
+⚠️ Para revisar en la **Etapa 14**: hoy **mandar un documento pide lo mismo que verlo**, también
+para un `Lector`. Pedir más no protege nada (quien puede abrir el PDF lo puede reenviar desde su
+correo), pero es una decisión de roles y va con el resto.
+
+Pendiente, en este orden: compartir la ficha · dashboard y deploy. Queda también, sin fecha, la
+Etapa 16 (consultas y grabaciones), que el plan deja adelantable. Y sin etapa asignada: las
+vacunas aplicadas, y el bug de la papelera de arriba.

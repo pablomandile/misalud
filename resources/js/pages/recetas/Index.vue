@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { Form, Head, Link } from '@inertiajs/vue3';
-import { FileText, Inbox, Trash2 } from '@lucide/vue';
+import { FileText, Inbox, Send, Trash2 } from '@lucide/vue';
 import { ref } from 'vue';
 import CuentaMailController from '@/actions/App/Http/Controllers/CuentaMailController';
+import EnvioController from '@/actions/App/Http/Controllers/EnvioController';
 import RecetaController from '@/actions/App/Http/Controllers/RecetaController';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
@@ -268,6 +269,28 @@ function pesoLegible(bytes: number): string {
                                     }}
                                 </Button>
                             </Form>
+
+                            <!-- Mandársela a la farmacia: el uso que motiva la etapa 13. -->
+                            <Button
+                                v-if="receta.adjuntos.length > 0"
+                                as-child
+                                variant="secondary"
+                            >
+                                <Link
+                                    :href="
+                                        EnvioController.create({
+                                            query: {
+                                                adjuntos: receta.adjuntos.map(
+                                                    (d) => d.id,
+                                                ),
+                                            },
+                                        })
+                                    "
+                                >
+                                    <Send />
+                                    Enviar
+                                </Link>
+                            </Button>
 
                             <Button
                                 variant="ghost"
