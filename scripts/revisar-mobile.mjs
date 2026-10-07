@@ -89,6 +89,8 @@ const RUTAS_DE_FICHA = [
     'salud-ocular',
     'turnos',
     'vacunas',
+    'consultas',
+    'grabaciones',
 ];
 
 async function rutasDeLaPrimeraFicha() {

@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\CentroController;
 use App\Http\Controllers\CoberturaController;
 use App\Http\Controllers\CompartirController;
+use App\Http\Controllers\ConsultaController;
 use App\Http\Controllers\ContactoController;
 use App\Http\Controllers\CuentaMailController;
 use App\Http\Controllers\DashboardController;
@@ -215,6 +216,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
      * existe para una sola pregunta -qué falta hacerse-, y el archivo de la
      * orden cuelga de ella como cualquier otro adjunto.
      */
+    /*
+     * Consultas: la visita al médico y lo que se dijo, con su grabación. Las
+     * grabaciones tienen ruta y FormRequest propios: se guardan SIN cifrar
+     * (ver TipoAdjunto::seGuardaCifrado()).
+     */
+    Route::get('pacientes/{paciente}/consultas', [ConsultaController::class, 'index'])
+        ->name('pacientes.consultas.index');
+    Route::get('pacientes/{paciente}/grabaciones', [ConsultaController::class, 'grabaciones'])
+        ->name('pacientes.grabaciones.index');
+    Route::post('pacientes/{paciente}/consultas', [ConsultaController::class, 'store'])
+        ->name('pacientes.consultas.store');
+    Route::put('consultas/{consulta}', [ConsultaController::class, 'update'])->name('consultas.update');
+    Route::delete('consultas/{consulta}', [ConsultaController::class, 'destroy'])->name('consultas.destroy');
+    Route::post('consultas/{consulta}/audios', [AdjuntoController::class, 'storeAudioParaConsulta'])
+        ->name('consultas.audios.store');
+
     /*
      * El carnet de vacunación: las dosis aplicadas, con su comprobante.
      */

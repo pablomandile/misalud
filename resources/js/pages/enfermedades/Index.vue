@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
+import { Form, Head, Link } from '@inertiajs/vue3';
 import {
     ArrowLeft,
     HeartPulse,
@@ -9,6 +9,7 @@ import {
 } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import AlergiaController from '@/actions/App/Http/Controllers/AlergiaController';
+import ConsultaController from '@/actions/App/Http/Controllers/ConsultaController';
 import EnfermedadController from '@/actions/App/Http/Controllers/EnfermedadController';
 import RegistroEnfermedadController from '@/actions/App/Http/Controllers/RegistroEnfermedadController';
 import GraficoEvolucion from '@/components/GraficoEvolucion.vue';
@@ -99,6 +100,12 @@ type Enfermedad = {
     medicoNombre: string | null;
     notas: string | null;
     registros: Registro[];
+    consultas: Array<{
+        id: number;
+        fechaVisible: string;
+        medicoNombre: string | null;
+        motivo: string | null;
+    }>;
     series: Serie[];
 };
 
@@ -396,6 +403,55 @@ function valorDe(punto: Punto, serie: Serie): string {
                                         {{ punto.fechaVisible }}
                                     </li>
                                 </ul>
+                            </div>
+
+                            <!--
+                                Las consultas por esta enfermedad: cuándo y con
+                                quién. El detalle y la grabación, en Consultas.
+                            -->
+                            <div
+                                v-if="enfermedad.consultas.length > 0"
+                                class="space-y-2 border-t pt-3"
+                            >
+                                <p class="text-sm text-muted-foreground">
+                                    Consultas
+                                </p>
+                                <ul class="grid gap-1">
+                                    <li
+                                        v-for="consulta in enfermedad.consultas"
+                                        :key="consulta.id"
+                                        class="text-sm"
+                                    >
+                                        {{ consulta.fechaVisible }}
+                                        <template
+                                            v-if="
+                                                consulta.medicoNombre ||
+                                                consulta.motivo
+                                            "
+                                        >
+                                            ·
+                                            {{
+                                                [
+                                                    consulta.medicoNombre,
+                                                    consulta.motivo,
+                                                ]
+                                                    .filter(Boolean)
+                                                    .join(' · ')
+                                            }}
+                                        </template>
+                                    </li>
+                                </ul>
+                                <Button variant="ghost" size="sm" as-child>
+                                    <Link
+                                        :href="
+                                            ConsultaController.index({
+                                                paciente: paciente.id,
+                                            })
+                                        "
+                                    >
+                                        Ver las consultas
+                                    </Link>
+                                </Button>
                             </div>
 
                             <!-- Bitácora -->

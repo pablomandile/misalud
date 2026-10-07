@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\EnfermedadGuardarRequest;
 use App\Models\Alergia;
+use App\Models\Consulta;
 use App\Models\Enfermedad;
 use App\Models\Medico;
 use App\Models\Paciente;
@@ -42,7 +43,7 @@ class EnfermedadController extends Controller
         $enfermedades = $paciente->enfermedades()
             // Explícito: sin esto es una consulta por cada fila, y tres por
             // cada enfermedad con bitácora y mediciones.
-            ->with(['medico', 'registros', 'mediciones.tipo'])
+            ->with(['medico', 'registros', 'mediciones.tipo', 'consultas.medico'])
             ->get()
             /*
              * Primero lo vigente y, dentro de cada grupo, lo más reciente.
@@ -175,6 +176,22 @@ class EnfermedadController extends Controller
                     'fecha' => $registro->fecha->format('Y-m-d'),
                     'fechaVisible' => $registro->fecha->format('d/m/Y'),
                     'nota' => $registro->nota,
+                ])
+                ->all(),
+
+            /*
+             * Las consultas por esta enfermedad, la más reciente primero. Solo
+             * cuándo y con quién: el detalle —y la grabación— está en la
+             * pantalla de consultas, adonde lleva el enlace.
+             */
+            'consultas' => $enfermedad->consultas
+                ->sortByDesc(fn (Consulta $c): int => $c->fecha_hora->getTimestamp())
+                ->values()
+                ->map(fn (Consulta $c): array => [
+                    'id' => $c->id,
+                    'fechaVisible' => (auth()->user()?->enSuZona($c->fecha_hora) ?? $c->fecha_hora)->format('d/m/Y'),
+                    'medicoNombre' => $c->medico?->nombre,
+                    'motivo' => $c->motivo,
                 ])
                 ->all(),
 

@@ -41,8 +41,33 @@ enum TipoAdjunto: string
     /** Certificado o comprobante de una vacuna. */
     case Vacuna = 'vacuna';
 
+    /**
+     * La grabación de una consulta. El ÚNICO tipo que se guarda sin cifrar:
+     * ver `seGuardaCifrado()`.
+     */
+    case AudioConsulta = 'audio_consulta';
+
     /** Lo que no entra en ninguna de las anteriores. */
     case Otro = 'otro';
+
+    /**
+     * Si el contenido del archivo va cifrado en el disco.
+     *
+     * ⚠️ **El audio no, y es una decisión del usuario** (opción A de la Etapa
+     * 16). El cifrado de `ArchivoService` no es *seekable*: obliga a servir el
+     * archivo entero, y **iOS Safari no reproduce un `<audio>` sin `Range`**
+     * —el botón queda muerto, sin ningún error—. Tampoco se podría adelantar,
+     * y una consulta de 40 minutos se descifraría entera en memoria en cada
+     * pedido.
+     *
+     * Lo protege lo mismo que a cualquier adjunto servido por controlador:
+     * autorización y un nombre aleatorio. El nombre original y la descripción
+     * del adjunto **siguen cifrados** en la base.
+     */
+    public function seGuardaCifrado(): bool
+    {
+        return $this !== self::AudioConsulta;
+    }
 
     public function etiqueta(): string
     {
@@ -55,6 +80,7 @@ enum TipoAdjunto: string
             self::Prospecto => 'Prospecto',
             self::PrescripcionOcular => 'Receta de anteojos',
             self::Vacuna => 'Comprobante de vacuna',
+            self::AudioConsulta => 'Grabación de la consulta',
             self::Otro => 'Documento',
         };
     }

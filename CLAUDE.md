@@ -539,8 +539,8 @@ del archivo **original**, no el del cifrado, que es el número que la persona re
 
 - **No hay _range requests_.** El archivo se sirve entero, siempre. Para un PDF de
   consultorio es irrelevante. Para **audio o video no**: no se puede adelantar, y iOS
-  Safari exige `Range` para `<audio>` —sin él puede no reproducir y no avisar—. Si algún
-  día entra audio, se resuelve ahí y no acá.
+  Safari exige `Range` para `<audio>` —sin él puede no reproducir y no avisar—. Por eso
+  **el audio de las consultas se guarda sin cifrar**: ver "Consultas y grabaciones".
 - **Se desencripta entero en memoria.** Entre leer, descifrar y responder se usan varias
   veces el tamaño del archivo, así que `ArchivoService::MAXIMO_BYTES` (12 MB) no es una
   formalidad: es lo que evita que un PDF grande tumbe el proceso en hosting compartido.
@@ -2434,6 +2434,100 @@ Los paneles que quedan abiertos mientras se trabaja (documentos, coberturas, com
 un **id** y buscan el paciente en las props con un `computed`. Es la misma lección que el
 `const` de la Etapa 8, en otra forma. Los sheets que se cierran en `@success` no la necesitan.
 
+## Consultas y grabaciones
+
+Una **consulta** es la visita al médico: cuándo, con quién, por qué y **qué se dijo**. Completa el
+circuito que faltaba —el turno es lo que se agenda antes, el estudio el resultado de después— y
+es donde queda lo que el médico explicó, que es justo lo que se olvida saliendo del consultorio.
+Pantalla por paciente en `/pacientes/{paciente}/consultas`.
+
+- **`fecha_hora` es el tercer `datetime` que carga una persona**: `aUtc()` al guardar (en
+  `ConsultaGuardarRequest::fechaHoraEnUtc()`), `enSuZona()` al mostrar, precarga desde el
+  servidor. **No puede ser futura**, con los cinco minutos de gracia de una medición: lo que
+  todavía no pasó es un turno, y el error lo dice.
+- Las cuatro FK (médico, centro, enfermedad, turno) son metadato: `nullOnDelete`. Médico y centro
+  están en los `usos()` de su catálogo, así que no se pueden borrar si una consulta los usa.
+  Enfermedad y turno tienen que ser **de la misma ficha**.
+- `cobertura_id`, que traía el plan, no se creó: nada lo usaba.
+- La ficha de cada enfermedad muestra las consultas que se hicieron por ella (cuándo y con
+  quién), con el enlace a la pantalla de consultas.
+
+### ⚠️ El audio se guarda SIN cifrar, y es una decisión del usuario
+
+Es la **única excepción** a "todo el contenido clínico cifrado", y la declara un solo lugar:
+`TipoAdjunto::seGuardaCifrado()`, falso solo para `audio_consulta`. El motivo es iOS: el cifrado
+de `ArchivoService` no es _seekable_, obliga a servir el archivo entero, y **iOS Safari no
+reproduce un `<audio>` sin `Range`** —el play queda muerto, sin error—. Además no se podría
+adelantar, y 40 minutos se descifrarían enteros en memoria en cada pedido. Las otras dos salidas
+del plan (cifrar por bloques con `206` a mano, o reproducir sin adelantar) se descartaron.
+
+- Lo protege lo mismo que a cualquier adjunto servido por controlador: **autorización y un
+  nombre aleatorio**. `nombre_original` y `descripcion` **siguen cifrados** en la base.
+- Se sirve con `BinaryFileResponse` (`AdjuntoController::respuestaDeAudio()`), que contesta
+  `206 Partial Content` cuando llega un `Range`, sin escribirlo a mano. Mismos cerrojos que el
+  resto: `nosniff`, `CSP: sandbox`, `no-store`.
+- Se guarda **por stream** (`putFileAs`), sin leerlo a memoria: es la otra mitad de no cifrarlo.
+- ⚠️ **`ArchivoService::contenido()` rechaza un audio y `rutaSinCifrar()` rechaza lo cifrado.**
+  Confundirlos serviría el ciphertext como si fuera el archivo, o intentaría descifrar un m4a.
+- ⚠️ **La subida genérica de documentos NO acepta `audio_consulta`** (`Rule::enum()->except`): ese
+  camino cifra, y un PDF subido con ese tipo quedaría cifrado y marcado como claro. Las
+  grabaciones tienen ruta y FormRequest propios (`AudioStoreRequest`).
+- **Borrar la consulta borra sus grabaciones del disco**, aunque la consulta vaya a la papelera:
+  un audio en claro que queda después de que alguien lo "borró" es justo lo que no espera.
+
+### Qué audio se acepta
+
+Se exigen **la extensión y el contenido** (finfo), las dos: la extensión decide el
+`Content-Type` con el que se sirve, y el contenido no lo elige quien sube. Medido con archivos
+reales generados con ffmpeg:
+
+| Extensión | finfo dice                                     | Se sirve como |
+| --------- | ---------------------------------------------- | ------------- |
+| `m4a`     | `audio/x-m4a`, o `video/mp4` según el grabador | `audio/mp4`   |
+| `mp3`     | `audio/mpeg`                                   | `audio/mpeg`  |
+| `aac`     | `audio/x-hx-aac-adts`                          | `audio/aac`   |
+| `wav`     | `audio/x-wav`                                  | `audio/wav`   |
+
+Ni ogg ni webm: en un iPhone viejo no suenan y no avisan. **Hasta 64 MB**, dicho en pantalla
+**antes** de subir. ⚠️ En producción mandan también `upload_max_filesize` y `post_max_size` del
+hosting: si son más chicos, cortan la subida antes de la validación. Revisarlos en el deploy.
+
+**La duración la mide el navegador** antes de subir (`loadedmetadata` sobre el archivo elegido) y
+viaja en `duracion_segundos`: en el hosting no hay `ffprobe`, y es un dato solo para mostrar. Si
+no se puede leer, la grabación se guarda igual, sin duración.
+
+**Una grabación no se ofrece para mandar por mail**: 40 minutos superan el tope de 15 MB del
+envío. Las consultas no están en `DocumentosEnviables`.
+
+### El reproductor: uno solo, en el layout
+
+`useReproductor` (estado **en el módulo**, con un solo elemento `Audio`) y `Reproductor.vue`
+montado en `AppSidebarLayout`, no en una página: la navegación reemplaza la página pero no el
+layout, así que **la grabación sigue sonando al cambiar de pantalla**.
+
+- **`sticky bottom-0` al final de la columna del contenido, no `fixed`** sobre toda la pantalla:
+  en escritorio no tapa el pie de la barra lateral (el menú de la cuenta), y como ocupa su propio
+  lugar, el final de cada página queda arriba de ella. `mt-auto` la baja al fondo en una página
+  corta.
+- **Los avisos suben cuando está abierto**: publica su alto en `--alto-reproductor` y el
+  `mobile-offset` del Toaster lo suma. En el celular los avisos salen abajo, donde está la barra.
+- Controles a 44 px reales; atrasar y adelantar 15 s; velocidad 0,75 / 1 / 1,25 / 1,5.
+- **Media Session**: título en la pantalla bloqueada y control desde los auriculares; una
+  consulta de 40 minutos no se escucha con la pantalla prendida.
+- Borrar lo que está sonando **cierra el reproductor**: si no, sonaría algo que ya no existe.
+
+⚠️ **El formulario de la consulta va entero con `v-model`.** El reproductor cambia de estado
+mientras suena, y cada cambio redibuja la pantalla: con `:value`, eso pisa lo tipeado. Y el caso
+de uso es justamente escuchar la grabación mientras se escriben las notas. Es la regla de la
+Etapa 10, con un "campo con estado" que esta vez no es un campo. Lo cuida la verificación en
+Chrome: tipear, pausar, y que el texto siga ahí.
+
+**"Grabaciones"** (`/pacientes/{paciente}/grabaciones`) es una vista sobre los adjuntos de audio
+de las consultas, no una tabla: duplicarla dejaría el mismo archivo listado en dos lados.
+
+⚠️ **Lo que no está verificado: un iPhone real** (paso 16.0 del plan). Chrome confirma el `206`
+y que suena, pero que iOS Safari reproduzca y adelante solo se ve en el aparato.
+
 ## Cobertura médica
 
 `coberturas` es tabla propia y no columnas en `pacientes`: mucha gente tiene obra social y
@@ -3220,8 +3314,14 @@ combinaciones sin desborde, 44 px en todo, menú que se cierra al navegar.
 había borrado daba un 500. Verificado contra MySQL y en Chrome —cargar OSDE, borrarla y volver a
 cargarla; lo mismo con "Penicilina"—, sin ningún 500. Ver "Borrar borra" en Cobertura médica.
 
-**Decidido para la Etapa 16:** el audio de las consultas se guarda **sin cifrar** en disco
-(opción A del plan), servido igual por controlador con `Range`. Es la única que anda en iOS sin
-trabajo extra; queda probarlo en un iPhone real (paso 16.0).
+**Etapa 16 hecha**: consultas con su grabación, el reproductor global y "Grabaciones". El audio
+se guarda **sin cifrar** (decisión del usuario) y se sirve por partes. Verificado en Chrome
+contra MySQL: el alta con la hora tal cual se cargó, la duración medida antes de subir, el
+reproductor que suena, adelanta pidiendo un `Range` que el servidor contesta `206`, cambia de
+velocidad, **sigue sonando al pasar a otra pantalla**, informa a Media Session, no borra lo
+tipeado en las notas al pausar, deja los avisos arriba de la barra y se cierra al borrar lo que
+suena; más 44 px y sin desborde a 320 px con la barra abierta, y `revisar:mobile` con las dos
+pantallas nuevas.
 
-Pendiente: deploy (15.3, necesita credenciales del mailer y confirmación) y la Etapa 16.
+Pendiente: deploy (15.3, necesita credenciales del mailer y confirmación) y **probar la
+grabación en un iPhone real** (16.0), que solo se puede con la app desplegada.

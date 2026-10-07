@@ -128,6 +128,16 @@ class Enfermedad extends Model implements CifraDatos, PerteneceAPaciente
         return $this->hasMany(Medicion::class);
     }
 
+    /**
+     * Las consultas que se hicieron por esta enfermedad (Etapa 16).
+     *
+     * @return HasMany<Consulta, $this>
+     */
+    public function consultas(): HasMany
+    {
+        return $this->hasMany(Consulta::class);
+    }
+
     public function pacienteDelRegistro(): ?Paciente
     {
         return $this->paciente;

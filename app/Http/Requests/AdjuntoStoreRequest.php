@@ -54,7 +54,13 @@ class AdjuntoStoreRequest extends FormRequest
                 'mimetypes:'.implode(',', ArchivoService::MIMES_ACEPTADOS),
             ],
 
-            'tipo' => ['required', Rule::enum(TipoAdjunto::class)],
+            /*
+             * ⚠️ Una grabación NO entra por acá: este camino cifra el archivo, y
+             * `audio_consulta` dice "sin cifrar". Un PDF subido con ese tipo
+             * quedaría cifrado y marcado como claro, y al servirlo saldría el
+             * ciphertext. Las grabaciones tienen su ruta y su FormRequest.
+             */
+            'tipo' => ['required', Rule::enum(TipoAdjunto::class)->except([TipoAdjunto::AudioConsulta])],
             'descripcion' => ['nullable', 'string', 'max:500'],
         ];
     }

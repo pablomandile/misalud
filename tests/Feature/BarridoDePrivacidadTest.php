@@ -8,6 +8,7 @@ use App\Models\Alergia;
 use App\Models\AplicacionVacuna;
 use App\Models\Centro;
 use App\Models\Cobertura;
+use App\Models\Consulta;
 use App\Models\Contacto;
 use App\Models\CuentaMail;
 use App\Models\Enfermedad;
@@ -109,6 +110,7 @@ function fichaParaBarrer(User $duenio, User $cuidador): array
         'estudio' => $estudio,
         'resultado' => ResultadoEstudio::factory()->for($estudio)->create(),
         'prescripcion' => PrescripcionOcular::factory()->for($paciente)->create(),
+        'consulta' => Consulta::factory()->for($paciente)->create(),
         'aplicacion' => AplicacionVacuna::factory()->for($paciente)->create([
             'vacuna_id' => Vacuna::factory()->for($duenio, 'usuario')->create()->id,
         ]),
@@ -135,7 +137,7 @@ function parametrosDeLaFicha(): array
 {
     return [
         'paciente', 'cobertura', 'enfermedad', 'registro', 'alergia', 'medicion',
-        'tratamiento', 'orden', 'estudio', 'resultado', 'prescripcion', 'aplicacion', 'turno',
+        'tratamiento', 'orden', 'estudio', 'resultado', 'prescripcion', 'aplicacion', 'consulta', 'turno',
         'recordatorio', 'adjunto', 'usuario',
     ];
 }

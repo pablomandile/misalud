@@ -191,6 +191,14 @@ class Paciente extends Model implements CifraDatos, TieneArchivos
     }
 
     /**
+     * @return HasMany<Consulta, $this>
+     */
+    public function consultas(): HasMany
+    {
+        return $this->hasMany(Consulta::class);
+    }
+
+    /**
      * @return HasMany<Turno, $this>
      */
     public function turnos(): HasMany

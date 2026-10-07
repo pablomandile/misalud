@@ -7,9 +7,11 @@ namespace App\Http\Controllers;
 use App\Contracts\TieneArchivos;
 use App\Enums\TipoAdjunto;
 use App\Http\Requests\AdjuntoStoreRequest;
+use App\Http\Requests\AudioStoreRequest;
 use App\Models\Adjunto;
 use App\Models\AplicacionVacuna;
 use App\Models\Cobertura;
+use App\Models\Consulta;
 use App\Models\Estudio;
 use App\Models\Medicamento;
 use App\Models\OrdenEstudio;
@@ -19,6 +21,7 @@ use App\Services\ArchivoService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -161,7 +164,57 @@ class AdjuntoController extends Controller
     {
         Gate::authorize('view', $adjunto);
 
-        return $this->respuestaDelArchivo($adjunto);
+        return $adjunto->tipo->seGuardaCifrado()
+            ? $this->respuestaDelArchivo($adjunto)
+            : $this->respuestaDeAudio($adjunto);
+    }
+
+    /**
+     * La grabación de una consulta, por partes.
+     *
+     * `BinaryFileResponse` contesta `206 Partial Content` cuando el navegador
+     * pide un `Range`, que es **lo que exige iOS Safari para reproducir un
+     * `<audio>`** —sin eso el botón de play queda muerto y no da ningún
+     * error— y lo que permite adelantar sin bajar el archivo entero. Es el
+     * motivo por el que el audio se guarda sin cifrar (ver
+     * `TipoAdjunto::seGuardaCifrado()`).
+     *
+     * Los cerrojos son los mismos que los de cualquier adjunto.
+     */
+    private function respuestaDeAudio(Adjunto $adjunto): BinaryFileResponse
+    {
+        $ruta = $this->archivos->rutaSinCifrar($adjunto);
+
+        abort_unless(is_file($ruta), 404);
+
+        return response()->file($ruta, [
+            'Content-Type' => $adjunto->mime,
+            'Content-Disposition' => 'inline; filename="'.$adjunto->nombre_original.'"',
+            'X-Content-Type-Options' => 'nosniff',
+            'Content-Security-Policy' => "sandbox; default-src 'none'",
+            'Cache-Control' => 'no-store, private',
+        ]);
+    }
+
+    /**
+     * La grabación de una consulta: un archivo por vez, SIN cifrar.
+     *
+     * No pasa por `guardarEn()` porque el audio va por otro camino del servicio
+     * (por stream y sin cifrar) y trae su duración, medida por el navegador.
+     */
+    public function storeAudioParaConsulta(AudioStoreRequest $peticion, Consulta $consulta): RedirectResponse
+    {
+        Gate::authorize('update', $consulta);
+
+        $datos = $this->archivos->guardarAudio($peticion->audio(), $consulta->carpetaDeArchivos());
+
+        $consulta->adjuntos()->create($datos + [
+            'tipo' => TipoAdjunto::AudioConsulta,
+            'descripcion' => $peticion->input('descripcion'),
+            'duracion_segundos' => $peticion->duracion(),
+        ]);
+
+        return back()->with('exito', 'Se guardó la grabación.');
     }
 
     /**

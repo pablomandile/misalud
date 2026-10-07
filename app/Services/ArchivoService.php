@@ -205,6 +205,11 @@ class ArchivoService
      */
     public function contenido(Adjunto $adjunto): string
     {
+        if (! $adjunto->tipo->seGuardaCifrado()) {
+            // Una grabación no se lee entera a memoria: se sirve por `rutaSinCifrar()`.
+            throw new RuntimeException('Ese archivo no está cifrado: se sirve desde el disco.');
+        }
+
         $disco = $this->disco();
 
         if (! $disco->exists($adjunto->ruta)) {
@@ -230,6 +235,121 @@ class ArchivoService
     public function borrar(Adjunto $adjunto): bool
     {
         return $this->disco()->delete($adjunto->ruta);
+    }
+
+    /**
+     * Techo de una grabación. Una consulta de 40 minutos en m4a pesa 20–40 MB;
+     * con 64 entra con margen.
+     *
+     * ⚠️ En producción manda también `upload_max_filesize` y `post_max_size`
+     * del hosting: si son más chicos, la subida muere ANTES de llegar a la
+     * validación, con un error que no dice nada. Hay que revisarlos al hacer el
+     * deploy.
+     */
+    public const MAXIMO_AUDIO_BYTES = 64 * 1024 * 1024;
+
+    /**
+     * Los formatos de audio aceptados: extensión => lo que puede contestar
+     * finfo mirando el contenido. Se exigen LAS DOS cosas.
+     *
+     * - La extensión, porque el `Content-Type` con el que se sirve sale de
+     *   ella (`TIPOS_DE_AUDIO`), y un tipo que no corresponde puede hacer que
+     *   el navegador no reproduzca.
+     * - El contenido, porque la extensión la elige quien sube.
+     *
+     * Medido con archivos reales: un m4a da `audio/x-m4a` o `video/mp4` según
+     * la marca del contenedor que escribió el grabador del celular, y un aac
+     * suelto da `audio/x-hx-aac-adts`. Solo formatos que reproduce Safari: ni
+     * ogg ni webm, que en un iPhone viejo no suenan y no avisan.
+     *
+     * @var array<string, list<string>>
+     */
+    public const AUDIO_ACEPTADO = [
+        'm4a' => ['audio/x-m4a', 'audio/mp4', 'video/mp4'],
+        'mp3' => ['audio/mpeg', 'audio/mp3'],
+        'aac' => ['audio/x-hx-aac-adts', 'audio/aac'],
+        'wav' => ['audio/x-wav', 'audio/wav', 'audio/vnd.wave'],
+    ];
+
+    /** @var array<string, string> */
+    private const TIPOS_DE_AUDIO = [
+        'm4a' => 'audio/mp4',
+        'mp3' => 'audio/mpeg',
+        'aac' => 'audio/aac',
+        'wav' => 'audio/wav',
+    ];
+
+    /**
+     * Guarda una grabación **sin cifrar** (ver `TipoAdjunto::seGuardaCifrado()`).
+     *
+     * Se copia por stream, sin leerla a memoria: es la otra mitad de no
+     * cifrarla. El nombre en disco sigue siendo aleatorio y no dice nada de
+     * nadie; la extensión real va al final porque acá el archivo SÍ es lo que
+     * dice ser (al revés que un `.cif`).
+     *
+     * @return array{ruta: string, nombre_original: string, mime: string, tamanio_bytes: int}
+     */
+    public function guardarAudio(UploadedFile $archivo, string $carpeta): array
+    {
+        $bytes = $archivo->getSize();
+
+        if ($bytes === false || $bytes === 0 || $bytes > self::MAXIMO_AUDIO_BYTES) {
+            throw new RuntimeException('La grabación supera el tamaño máximo permitido.');
+        }
+
+        $extension = $this->extensionDeAudio($archivo);
+
+        if ($extension === null) {
+            throw new RuntimeException('Formato de audio no permitido.');
+        }
+
+        $ruta = $this->disco()->putFileAs(
+            trim($carpeta, '/'),
+            $archivo,
+            Str::ulid()->toString().'.'.$extension,
+        );
+
+        if ($ruta === false) {
+            throw new RuntimeException('No se pudo guardar la grabación.');
+        }
+
+        return [
+            'ruta' => $ruta,
+            'nombre_original' => $this->nombreLimpio($archivo->getClientOriginalName()),
+            'mime' => self::TIPOS_DE_AUDIO[$extension],
+            'tamanio_bytes' => $bytes,
+        ];
+    }
+
+    /**
+     * La extensión normalizada si el archivo es un audio aceptado —la extensión
+     * Y el contenido coinciden—, o `null`.
+     */
+    public function extensionDeAudio(UploadedFile $archivo): ?string
+    {
+        $extension = mb_strtolower($archivo->getClientOriginalExtension());
+        $permitidos = self::AUDIO_ACEPTADO[$extension] ?? null;
+
+        // `getMimeType()` mira el contenido (finfo); `getClientMimeType()` es lo
+        // que declaró el navegador, y no se usa.
+        return $permitidos !== null && in_array($archivo->getMimeType(), $permitidos, true)
+            ? $extension
+            : null;
+    }
+
+    /**
+     * Dónde está una grabación en el disco, para servirla con `Range`.
+     *
+     * Solo para lo que se guarda sin cifrar: devolver la ruta de un `.cif`
+     * serviría el ciphertext como si fuera el archivo.
+     */
+    public function rutaSinCifrar(Adjunto $adjunto): string
+    {
+        if ($adjunto->tipo->seGuardaCifrado()) {
+            throw new RuntimeException('Ese archivo está cifrado: se sirve descifrándolo.');
+        }
+
+        return $this->disco()->path($adjunto->ruta);
     }
 
     /**

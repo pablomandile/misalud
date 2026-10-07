@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Contracts\EsCatalogo;
 use App\Http\Requests\MedicoGuardarRequest;
+use App\Models\Consulta;
 use App\Models\Enfermedad;
 use App\Models\Estudio;
 use App\Models\Medico;
@@ -77,6 +78,7 @@ class MedicoController extends CatalogoBaseController
     public function usos(): array
     {
         return [
+            new UsoDeCatalogo('consulta', 'consultas', Consulta::class, 'medico_id'),
             new UsoDeCatalogo('enfermedad', 'enfermedades', Enfermedad::class, 'medico_id'),
             new UsoDeCatalogo('tratamiento', 'tratamientos', Tratamiento::class, 'medico_id'),
             new UsoDeCatalogo('orden de estudio', 'órdenes de estudio', OrdenEstudio::class, 'medico_id'),

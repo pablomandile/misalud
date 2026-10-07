@@ -8,6 +8,7 @@ use App\Contracts\EsCatalogo;
 use App\Http\Requests\CentroGuardarRequest;
 use App\Models\AplicacionVacuna;
 use App\Models\Centro;
+use App\Models\Consulta;
 use App\Models\Estudio;
 use App\Models\Medico;
 use App\Models\PrescripcionOcular;
@@ -94,6 +95,7 @@ class CentroController extends CatalogoBaseController
     public function usos(): array
     {
         return [
+            new UsoDeCatalogo('consulta', 'consultas', Consulta::class, 'centro_id'),
             new UsoDeCatalogo('dosis de vacuna', 'dosis de vacuna', AplicacionVacuna::class, 'centro_id'),
             new UsoDeCatalogo('estudio', 'estudios', Estudio::class, 'centro_id'),
             new UsoDeCatalogo('receta de anteojos', 'recetas de anteojos', PrescripcionOcular::class, 'centro_id'),

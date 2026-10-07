@@ -58,7 +58,8 @@ it('devuelve el contenido original al descifrar', function (): void {
     $servicio = app(ArchivoService::class);
     $datos = $servicio->guardar(pdfDePrueba(), 'adjuntos');
 
-    $adjunto = new Adjunto($datos);
+    // Con su tipo, como toda fila real: la columna es obligatoria.
+    $adjunto = new Adjunto($datos + ['tipo' => TipoAdjunto::InformeEstudio]);
 
     expect($servicio->contenido($adjunto))->toContain('%PDF-1.4');
 });
