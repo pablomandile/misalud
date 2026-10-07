@@ -2460,15 +2460,27 @@ fricción porque resuelven cosas distintas—.
 
 `DashboardController` resuelve el **paciente activo**: `session('paciente_activo_id')` si
 hay uno válido y accesible, si no el primero por nombre —mismo orden que
-`PacienteController::index`—. Por ahora el único contenido es el acceso rápido a la
-credencial (paso 4.2); el resto (recetas, tratamientos, turnos, órdenes, mediciones) llega
-en la Etapa 15, cuando esos módulos existan.
+`PacienteController::index`—. Con más de una ficha, **el selector va arriba de todo**: botones
+con `aria-pressed` y no un desplegable, porque se ven todas las opciones de un vistazo y se elige
+con un toque. La elección vive en la sesión (`PUT /paciente-activo/{paciente}`, que autoriza
+`view`), así que sobrevive a recargar.
 
-⚠️ **No hay todavía un selector de paciente activo en pantalla.** La ruta
-`paciente-activo.update` y el prop `pacienteActivoId` están armados desde la Etapa 2.1, pero
-ningún componente los usa: quien tiene más de un paciente no tiene cómo elegir cuál ver en
-el dashboard más que por el fallback (el primero por nombre). Falta construir ese selector
-—candidato natural: la Etapa 15, junto con el resto del dashboard—.
+Las tarjetas van **en el orden de la urgencia con la que se buscan**: credencial (se muestra en
+un mostrador con alguien esperando), próximos turnos, recetas sin usar, tratamientos activos,
+estudios por hacer, próximas vacunas y últimas mediciones. Cada una trae **pocas filas y el
+total** ("y 2 más") con su enlace a la pantalla: el panel orienta, no reemplaza. Sin datos dice
+"Sin datos" (regla 2), y ningún valor lleva color ni juicio (regla 1).
+
+- **Las recetas son la única tarjeta que no es de la ficha**: cuelgan de la casilla del usuario
+  (ver "Lo que queda afuera del 12.2"), así que la tarjeta lo dice y no cambia al elegir otra
+  ficha. Sin casilla ni recetas, no aparece: una cuenta que nunca usó el módulo no necesita un
+  "sin datos" de algo que no configuró.
+- **Los criterios son los de cada pantalla, no copias parecidas**: la próxima vacuna es la de la
+  **última** dosis de cada vacuna (como el observer del aviso), y la última medición sale por
+  `SeriesDeMediciones::serializar()`, así "72,5" se ve igual acá que en su pantalla.
+- `proxima_dosis` es fecha de calendario: se compara contra `hoyCalendario()`, no `hoy()`.
+- **Las relaciones se cargan solo para la ficha elegida.** Antes se traían las coberturas y los
+  tratamientos de todos los pacientes para mostrar los de uno.
 
 ## Visor de documentos
 
@@ -3162,6 +3174,14 @@ De paso apareció un bug de la Etapa 11: **el mail de un tratamiento que termina
 anterior a las 21:00** (ver "Turnos y recordatorios"). Arreglado para todo recordatorio de
 fecha de calendario.
 
-Pendiente, en este orden: dashboard y pasada mobile · deploy. Queda también, sin fecha, la Etapa 16 (consultas y grabaciones), que necesita decidir
-cómo servir el audio. Y sin etapa: el 500 de la papelera en coberturas y alergias (los catálogos
-ya están arreglados).
+**Paso 15.1 hecho**: el panel completo y, por fin, el selector de ficha —la ruta existía desde la
+Etapa 2.1 y ninguna pantalla la usaba—. Verificado en Chrome contra MySQL con dos fichas: el
+selector cambia sin recargar y sobrevive a la recarga, cada tarjeta muestra lo suyo (el turno en
+la zona de la cuenta, la medición con coma decimal), la ficha vacía dice "Sin datos" en cada
+tarjeta sin arrastrar nada de la anterior, 21 combinaciones de desborde (con escritorio a dos
+columnas) y 44 px en todo.
+
+Pendiente, en este orden: pasada mobile (15.2) · deploy (15.3, necesita credenciales del mailer
+y confirmación). Queda también, sin fecha, la Etapa 16 (consultas y grabaciones), que necesita
+decidir cómo servir el audio. Y sin etapa: el 500 de la papelera en coberturas y alergias (los
+catálogos ya están arreglados).
