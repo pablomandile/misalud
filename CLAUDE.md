@@ -2641,7 +2641,7 @@ php artisan test          # Pest
 npm run check:fix         # formato + lint del front
 npm run types:check       # vue-tsc
 npm run dev               # Vite
-npm run revisar:mobile    # desborde en 54 combinaciones + menú al navegar (Chrome real)
+npm run revisar:mobile    # desborde y 44 px en 21 pantallas (8 por ficha) + menú al navegar
 npm run revisar:pwa       # el veredicto de instalabilidad de Chrome, no "se ve el botón"
 npm run revisar:visor     # sube un PDF y verifica que pdf.js lo dibuje de verdad
 npm run generar:iconos    # regenera el set de íconos desde resources/marca/
@@ -2809,11 +2809,9 @@ componente dibuja un enlace de verdad -con un solo nivel, el último tramo es
 texto-. Arreglado en la primitiva, con el mismo criterio que el checkbox:
 área de 44 px sin cambiar el tamaño del texto.
 
-⚠️ **Las pantallas por paciente no entran en `npm run revisar:mobile`**:
-mediciones y enfermedades necesitan el id de un paciente en la ruta y el
-script recorre rutas fijas. Las dos se verificaron con un script aparte —18
-combinaciones de ancho × tamaño de letra × orientación cada una, sin
-desborde—; si se las toca, hay que repetirlo a mano.
+Las pantallas por paciente quedaron fuera de `npm run revisar:mobile` hasta el paso 15.2 —llevan
+el id en la ruta y el script recorría rutas fijas—. Desde ahí entran: el script toma el id de la
+primera ficha de los enlaces de `/pacientes`, sin tocar la base (ver "Estado").
 
 **Etapa 7 hecha**: enfermedades con su bitácora, la curva de las mediciones
 que las siguen, y alergias. Todo en una pantalla por paciente, con las
@@ -3181,7 +3179,16 @@ la zona de la cuenta, la medición con coma decimal), la ficha vacía dice "Sin 
 tarjeta sin arrastrar nada de la anterior, 21 combinaciones de desborde (con escritorio a dos
 columnas) y 44 px en todo.
 
-Pendiente, en este orden: pasada mobile (15.2) · deploy (15.3, necesita credenciales del mailer
-y confirmación). Queda también, sin fecha, la Etapa 16 (consultas y grabaciones), que necesita
+**Paso 15.2 hecho**: la pasada mobile completa. `revisar:mobile` no veía ocho pantallas: las de
+una ficha (mediciones, enfermedades, tratamientos, órdenes, estudios, salud ocular, turnos y
+vacunas), porque llevan el id del paciente en la ruta, y tampoco las tres fijas que llegaron
+después (recetas, casilla, contactos). Cada una se había medido una vez, con un script aparte, al
+hacerla, y ninguna volvía a medirse cuando se tocaba una primitiva que las cambia a todas. Ahora
+entran las once: el id sale de los enlaces de `/pacientes`, como lo encontraría una persona, sin
+tocar la base —el script sigue andando contra cualquier servidor— y si la cuenta no tiene ninguna
+ficha **lo marca como falla**, en vez de informar verde midiendo menos. Resultado: 342
+combinaciones sin desborde, 44 px en todo, menú que se cierra al navegar.
+
+Pendiente: deploy (15.3, necesita credenciales del mailer y confirmación). Queda también, sin fecha, la Etapa 16 (consultas y grabaciones), que necesita
 decidir cómo servir el audio. Y sin etapa: el 500 de la papelera en coberturas y alergias (los
 catálogos ya están arreglados).

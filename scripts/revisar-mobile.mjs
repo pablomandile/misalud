@@ -64,8 +64,59 @@ const RUTAS = [
     '/medicamentos',
     '/vacunas',
     '/tipos-medicion',
+    '/recetas',
+    '/casilla',
+    '/contactos',
     '/settings/appearance',
 ];
+
+/*
+ * Las pantallas de UNA FICHA llevan el id del paciente en la ruta, y por eso
+ * durante ocho etapas quedaron afuera de esta revisión: cada una se midió con un
+ * script aparte al hacerla, y ninguna volvía a medirse cuando se tocaba una
+ * primitiva que las cambiaba a todas.
+ *
+ * El id se saca de los enlaces de /pacientes, como lo haría una persona, sin
+ * tocar la base: así el script sigue andando contra cualquier servidor. Mide la
+ * primera ficha de la cuenta, con lo que tenga cargado.
+ */
+const RUTAS_DE_FICHA = [
+    'mediciones',
+    'enfermedades',
+    'tratamientos',
+    'ordenes',
+    'estudios',
+    'salud-ocular',
+    'turnos',
+    'vacunas',
+];
+
+async function rutasDeLaPrimeraFicha() {
+    await pagina.goto(`${BASE}/pacientes`, { waitUntil: 'networkidle0' });
+
+    const id = await pagina.evaluate(() => {
+        for (const a of document.querySelectorAll('a[href]')) {
+            const m = new URL(a.href).pathname.match(/^\/pacientes\/(\d+)\//);
+
+            if (m) {
+                return m[1];
+            }
+        }
+
+        return null;
+    });
+
+    if (id === null) {
+        console.log(
+            '   ✗ la cuenta no tiene ninguna ficha: las pantallas por paciente no se revisan\n',
+        );
+        problemas++;
+
+        return [];
+    }
+
+    return RUTAS_DE_FICHA.map((r) => `/pacientes/${id}/${r}`);
+}
 const ANCHOS = [320, 360, 414];
 const TAMANIOS = ['normal', 'grande', 'muy-grande'];
 const MINIMO = 44;
@@ -465,8 +516,9 @@ async function revisarMenu() {
 await revisarDesborde(RUTAS_INVITADO, 'sin sesión', false);
 await revisarAreasTactiles(RUTAS_INVITADO, 'sin sesión', false);
 await iniciarSesion();
-await revisarDesborde(RUTAS, 'con sesión', true);
-await revisarAreasTactiles(RUTAS, 'con sesión', true);
+const rutasConSesion = [...RUTAS, ...(await rutasDeLaPrimeraFicha())];
+await revisarDesborde(rutasConSesion, 'con sesión', true);
+await revisarAreasTactiles(rutasConSesion, 'con sesión', true);
 
 /*
  * Volver al tamaño por defecto antes del último chequeo. Los bucles de arriba
