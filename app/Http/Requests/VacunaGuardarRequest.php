@@ -4,12 +4,25 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Concerns\AutorizaSobreLaRuta;
 use App\Models\Vacuna;
 use App\Rules\IndiceCiegoUnico;
 use Illuminate\Foundation\Http\FormRequest;
 
 class VacunaGuardarRequest extends FormRequest
 {
+    use AutorizaSobreLaRuta;
+
+    /**
+     * Autorizar ANTES de validar: sin esto, a un extraño le contestaba la
+     * validación y le confirmaba que el registro existe. Ver
+     * `AutorizaSobreLaRuta` y `BarridoDePrivacidadTest`.
+     */
+    public function authorize(): bool
+    {
+        return $this->puedeGuardar('vacuna', Vacuna::class);
+    }
+
     /**
      * @return array<string, array<int, mixed>>
      */

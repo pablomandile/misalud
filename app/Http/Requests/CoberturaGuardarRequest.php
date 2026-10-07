@@ -9,10 +9,31 @@ use App\Models\Cobertura;
 use App\Models\Paciente;
 use App\Rules\IndiceCiegoUnico;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
 class CoberturaGuardarRequest extends FormRequest
 {
+    /**
+     * Autorizar ANTES de validar (ver `BarridoDePrivacidadTest`): las mismas dos
+     * reglas que el controlador, pero antes de que la validación le conteste a
+     * cualquiera. Editar una cobertura pide editarla; cargar una nueva pide poder
+     * cargar en esa ficha (`crearEn`, que un lector no tiene).
+     */
+    public function authorize(): bool
+    {
+        $cobertura = $this->coberturaDeLaRuta();
+
+        if ($cobertura !== null) {
+            return Gate::allows('update', $cobertura);
+        }
+
+        $paciente = $this->route('paciente');
+
+        return $paciente instanceof Paciente
+            && Gate::allows('crearEn', [Cobertura::class, $paciente]);
+    }
+
     /**
      * Normaliza el checkbox ANTES de validar.
      *

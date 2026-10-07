@@ -213,3 +213,23 @@ html[data-texto='muy-grande'] {
         @apply bg-background text-foreground;
     }
 }
+
+/*
+ * La X de un aviso (toast): 20 px de caja, que es lo que dibuja vue-sonner, y
+ * 48 px de área táctil. Mismo patrón que la X de Sheet/Dialog y que el checkbox:
+ * un pseudo-elemento agranda lo que responde al toque sin agrandar el ícono.
+ *
+ * Importa más que en otros lados: los avisos de ERROR no se cierran solos (ver
+ * useAvisos), así que esta X es la única forma de sacarlos de encima. Estuvo en
+ * 20 px desde siempre, sin que nadie lo midiera: los avisos que llegaban con la
+ * primera carga de una pantalla se perdían (bug de useAvisos, ya arreglado), y
+ * por eso `revisar:mobile` nunca tenía uno en pantalla para medir.
+ *
+ * Va por el atributo `data-close-button` porque el botón lo dibuja la librería:
+ * no hay componente propio donde ponerle una clase.
+ */
+[data-sonner-toast] [data-close-button]::before {
+    content: '';
+    position: absolute;
+    inset: -14px;
+}

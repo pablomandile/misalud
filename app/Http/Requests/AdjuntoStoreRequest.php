@@ -6,11 +6,30 @@ namespace App\Http\Requests;
 
 use App\Enums\TipoAdjunto;
 use App\Services\ArchivoService;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
 class AdjuntoStoreRequest extends FormRequest
 {
+    /**
+     * Subir un archivo a X es editar X —la regla de `AdjuntoController::guardarEn()`—,
+     * pero preguntada ANTES de validar (ver `BarridoDePrivacidadTest`).
+     *
+     * El dueño es el único modelo de la ruta, se llame como se llame el parámetro
+     * (`paciente`, `cobertura`, `orden`, `estudio`, `prescripcion`,
+     * `medicamento`): este FormRequest lo usan las seis rutas de subida, y así el
+     * séptimo dueño no tiene que acordarse de nada acá.
+     */
+    public function authorize(): bool
+    {
+        $duenio = collect($this->route()?->parameters() ?? [])
+            ->first(fn (mixed $valor): bool => $valor instanceof Model);
+
+        return $duenio instanceof Model && Gate::allows('update', $duenio);
+    }
+
     /**
      * @return array<string, mixed>
      */

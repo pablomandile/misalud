@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Concerns\AutorizaSobreLaRuta;
 use App\Enums\TipoContacto;
 use App\Models\Contacto;
 use App\Rules\IndiceCiegoUnico;
@@ -12,6 +13,18 @@ use Illuminate\Validation\Rule;
 
 class ContactoGuardarRequest extends FormRequest
 {
+    use AutorizaSobreLaRuta;
+
+    /**
+     * Autorizar ANTES de validar: sin esto, a un extraño le contestaba la
+     * validación y le confirmaba que el registro existe. Ver
+     * `AutorizaSobreLaRuta` y `BarridoDePrivacidadTest`.
+     */
+    public function authorize(): bool
+    {
+        return $this->puedeGuardar('contacto', Contacto::class);
+    }
+
     /**
      * La dirección sin espacios y en minúscula, ANTES de validar.
      *

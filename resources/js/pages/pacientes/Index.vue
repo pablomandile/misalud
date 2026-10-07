@@ -13,8 +13,9 @@ import {
     Plus,
     Trash2,
     UserRound,
+    Users,
 } from '@lucide/vue';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
 import EnfermedadController from '@/actions/App/Http/Controllers/EnfermedadController';
 import EstudioController from '@/actions/App/Http/Controllers/EstudioController';
@@ -26,6 +27,7 @@ import TurnoController from '@/actions/App/Http/Controllers/TurnoController';
 import TratamientoController from '@/actions/App/Http/Controllers/TratamientoController';
 import Heading from '@/components/Heading.vue';
 import PanelCobertura from '@/pages/pacientes/PanelCobertura.vue';
+import PanelCompartir from '@/pages/pacientes/PanelCompartir.vue';
 import SubirArchivo from '@/components/SubirArchivo.vue';
 import type { DocumentoVisible } from '@/components/VisorDocumento.vue';
 import VisorDocumento from '@/components/VisorDocumento.vue';
@@ -75,6 +77,16 @@ export type CoberturaMedica = {
     adjuntos: DocumentoDePaciente[];
 };
 
+export type Acceso = {
+    id: number;
+    nombre: string;
+    /** Solo llega si quien mira es el propietario, o si es su propia fila. */
+    email: string | null;
+    rol: string;
+    rolEtiqueta: string;
+    esVos: boolean;
+};
+
 export type Paciente = {
     id: number;
     nombre: string;
@@ -85,11 +97,15 @@ export type Paciente = {
     notas: string | null;
     puedeEditar: boolean;
     esPropietario: boolean;
+    accesos: Acceso[];
     adjuntos: DocumentoDePaciente[];
     coberturas: CoberturaMedica[];
 };
 
-defineProps<{ pacientes: Paciente[] }>();
+const props = defineProps<{
+    pacientes: Paciente[];
+    rolesInvitables: Array<{ valor: string; etiqueta: string }>;
+}>();
 
 defineOptions({
     layout: {
@@ -117,8 +133,36 @@ const campoTexto = `${campoBase} min-h-24`;
 const sheetCrearAbierto = ref(false);
 const pacienteAEditar = ref<Paciente | null>(null);
 const pacienteABorrar = ref<Paciente | null>(null);
-const pacienteDeDocumentos = ref<Paciente | null>(null);
-const pacienteDeCoberturas = ref<Paciente | null>(null);
+/*
+ * ⚠️ Los paneles que QUEDAN ABIERTOS mientras se trabaja adentro (documentos,
+ * coberturas, compartir) se guardan por ID y se buscan en las props con un
+ * `computed`, nunca como una copia del objeto. Subir un documento o agregar una
+ * cobertura termina en un redirect a esta misma pantalla, Inertia trae props
+ * nuevas, y una copia guardada en un `ref` seguía mostrando lo de antes: la
+ * cobertura recién agregada no aparecía hasta cerrar y volver a abrir el panel.
+ * Medido en Chrome; estaba así desde la Etapa 4. Es la lección del `const` de la
+ * Etapa 8, en otra forma. Los sheets de editar y de borrar no la necesitan: se
+ * cierran al guardar.
+ */
+const idDeDocumentos = ref<number | null>(null);
+const pacienteDeDocumentos = computed(
+    () => props.pacientes.find((p) => p.id === idDeDocumentos.value) ?? null,
+);
+const idDeCoberturas = ref<number | null>(null);
+const pacienteDeCoberturas = computed(
+    () => props.pacientes.find((p) => p.id === idDeCoberturas.value) ?? null,
+);
+
+/*
+ * ⚠️ El panel de compartir se guarda por ID y se busca en las props con un
+ * `computed`, no como una copia del objeto. Invitar, cambiar un permiso o sacar
+ * a alguien terminan en un redirect a esta misma pantalla, Inertia trae props
+ * nuevas, y una copia guardada seguiría mostrando la lista de antes.
+ */
+const idDeCompartir = ref<number | null>(null);
+const pacienteDeCompartir = computed(
+    () => props.pacientes.find((p) => p.id === idDeCompartir.value) ?? null,
+);
 
 /*
  * UN SOLO documento abierto para toda la pantalla, y un solo <VisorDocumento>
@@ -201,7 +245,7 @@ function edadTexto(p: Paciente): string {
                         <Button
                             variant="ghost"
                             size="sm"
-                            @click="pacienteDeCoberturas = paciente"
+                            @click="idDeCoberturas = paciente.id"
                         >
                             <CreditCard />
                             {{ paciente.coberturas.length || '' }}
@@ -212,7 +256,7 @@ function edadTexto(p: Paciente): string {
                         <Button
                             variant="ghost"
                             size="sm"
-                            @click="pacienteDeDocumentos = paciente"
+                            @click="idDeDocumentos = paciente.id"
                         >
                             <FileText />
                             {{ paciente.adjuntos.length || '' }}
@@ -323,6 +367,26 @@ function edadTexto(p: Paciente): string {
                                     Turnos de {{ paciente.nombre }}
                                 </span>
                             </Link>
+                        </Button>
+                        <!--
+                            Para todos los que tienen acceso: saber con quién se
+                            comparte una historia es parte de verla. Lo que
+                            cambia según el rol es qué se puede hacer adentro.
+                        -->
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            @click="idDeCompartir = paciente.id"
+                        >
+                            <Users />
+                            {{
+                                paciente.accesos.length > 1
+                                    ? paciente.accesos.length
+                                    : ''
+                            }}
+                            <span class="sr-only">
+                                Quién ve la ficha de {{ paciente.nombre }}
+                            </span>
                         </Button>
                         <Button
                             v-if="paciente.puedeEditar"
@@ -561,7 +625,7 @@ function edadTexto(p: Paciente): string {
             :open="!!pacienteDeDocumentos"
             @update:open="
                 (v) => {
-                    if (!v) pacienteDeDocumentos = null;
+                    if (!v) idDeDocumentos = null;
                 }
             "
         >
@@ -745,9 +809,15 @@ function edadTexto(p: Paciente): string {
         </Dialog>
 
         <!-- Cobertura médica: panel propio, se abre y cierra igual que Documentos. -->
+        <PanelCompartir
+            :paciente="pacienteDeCompartir"
+            :roles-invitables="rolesInvitables"
+            @cerrar="idDeCompartir = null"
+        />
+
         <PanelCobertura
             :paciente="pacienteDeCoberturas"
-            @cerrar="pacienteDeCoberturas = null"
+            @cerrar="idDeCoberturas = null"
             @ver-documento="documentoAbierto = $event"
         />
 

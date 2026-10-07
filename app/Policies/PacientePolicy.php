@@ -50,6 +50,39 @@ class PacientePolicy
         return $this->rol($usuario, $paciente)?->puedeEditar() ?? false;
     }
 
+    /**
+     * Invitar a alguien o cambiarle el permiso: **solo el propietario**.
+     *
+     * Un cuidador puede cargar y corregir todo lo clínico, pero decidir quién
+     * más ve la historia de una persona no es cargar un dato: es una decisión
+     * sobre la ficha entera, y es de quien la creó.
+     */
+    public function compartir(User $usuario, Paciente $paciente): bool
+    {
+        return $this->rol($usuario, $paciente) === RolPaciente::Propietario;
+    }
+
+    /**
+     * Sacarle el acceso a alguien, o irse uno mismo.
+     *
+     * - El propietario puede sacar a cualquiera **menos a sí mismo**: se quedaría
+     *   sin su propia ficha, y con ella sin nadie que pueda compartirla ni darla
+     *   de baja.
+     * - Cualquier otro solo puede sacarse **a sí mismo** ("dejar de ver esta
+     *   ficha"). Sin esto, quien recibió una invitación que no quería quedaría
+     *   pegado a ella hasta que el dueño se acuerde de sacarlo.
+     */
+    public function revocarAcceso(User $usuario, Paciente $paciente, User $otro): bool
+    {
+        $rolDelOtro = $this->rol($otro, $paciente);
+
+        if ($rolDelOtro === null || $rolDelOtro === RolPaciente::Propietario) {
+            return false;
+        }
+
+        return $usuario->is($otro) || $this->compartir($usuario, $paciente);
+    }
+
     private function rol(User $usuario, Paciente $paciente): ?RolPaciente
     {
         return $paciente->rolDe($usuario);

@@ -4,10 +4,24 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Concerns\AutorizaSobreLaRuta;
+use App\Models\Paciente;
 use Illuminate\Foundation\Http\FormRequest;
 
 class PacienteGuardarRequest extends FormRequest
 {
+    use AutorizaSobreLaRuta;
+
+    /**
+     * Autorizar ANTES de validar: sin esto, a un extraño le contestaba la
+     * validación y le confirmaba que el registro existe. Ver
+     * `AutorizaSobreLaRuta` y `BarridoDePrivacidadTest`.
+     */
+    public function authorize(): bool
+    {
+        return $this->puedeGuardar('paciente', Paciente::class);
+    }
+
     /**
      * @return array<string, array<int, mixed>>
      */

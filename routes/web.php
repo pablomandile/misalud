@@ -5,12 +5,14 @@ use App\Http\Controllers\AlergiaController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\CentroController;
 use App\Http\Controllers\CoberturaController;
+use App\Http\Controllers\CompartirController;
 use App\Http\Controllers\ContactoController;
 use App\Http\Controllers\CuentaMailController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EnfermedadController;
 use App\Http\Controllers\EnvioController;
 use App\Http\Controllers\EstudioController;
+use App\Http\Controllers\InvitacionController;
 use App\Http\Controllers\MedicamentoController;
 use App\Http\Controllers\MedicionController;
 use App\Http\Controllers\MedicoController;
@@ -58,8 +60,34 @@ Route::middleware('guest')->group(function () {
         ->name('google.callback');
 });
 
+/*
+ * Aceptar una invitación a una ficha. Fuera de `auth` porque el invitado puede no
+ * tener cuenta todavía. Sin el middleware `signed` a propósito: la firma la revisa
+ * el controlador, para distinguir un enlace vencido (y decir a quién pedirle otro)
+ * de uno roto. La misma URI para GET y POST, porque la firma cubre la URL y no el
+ * verbo.
+ */
+Route::get('invitaciones/{paciente}', [InvitacionController::class, 'mostrar'])
+    ->name('invitaciones.mostrar');
+Route::post('invitaciones/{paciente}', [InvitacionController::class, 'aceptar'])
+    ->name('invitaciones.aceptar');
+
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    /*
+     * Compartir la ficha. Es del propietario (`PacientePolicy::compartir`), con una
+     * excepción: cualquiera se puede ir solo. El límite de frecuencia no cuida la
+     * ficha sino la casilla ajena: el destinatario lo elige la persona, y sin tope
+     * la cuenta sería un cañón de mails.
+     */
+    Route::post('pacientes/{paciente}/invitaciones', [CompartirController::class, 'invitar'])
+        ->middleware('throttle:10,60')
+        ->name('pacientes.invitaciones.store');
+    Route::patch('pacientes/{paciente}/accesos/{usuario}', [CompartirController::class, 'cambiarAcceso'])
+        ->name('pacientes.accesos.update');
+    Route::delete('pacientes/{paciente}/accesos/{usuario}', [CompartirController::class, 'revocarAcceso'])
+        ->name('pacientes.accesos.destroy');
 
     Route::put('paciente-activo/{paciente}', [PacienteActivoController::class, 'update'])
         ->name('paciente-activo.update');

@@ -13,7 +13,10 @@ void createInertiaApp({
         switch (true) {
             case name === 'Welcome':
                 return null;
+            // Las invitaciones se abren muchas veces SIN sesión: el layout con
+            // menú no tiene sentido para alguien que todavía no entró.
             case name.startsWith('auth/'):
+            case name.startsWith('invitaciones/'):
                 return AuthLayout;
             case name.startsWith('settings/'):
                 return [AppLayout, SettingsLayout];

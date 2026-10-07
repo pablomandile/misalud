@@ -353,6 +353,15 @@ y rojos incrustados arriba del formulario.
   `!important` y quedaría atada a la estructura interna de la librería.
 - `closeButtonAriaLabel` va dentro de `toast-options`, **no** como prop del Toaster: como
   prop suelta se acepta sin error y no hace nada (queda en inglés).
+- ⚠️ **El aviso que llega con el PRIMER montaje del layout va por `onMounted` + `nextTick`, no
+  por un `watch` con `immediate: true`.** El `immediate` corría durante el setup del layout,
+  antes de que su `<Toaster>` hijo estuviera montado: el toast se pedía y se perdía sin ningún
+  error. Pasaba cada vez que se entraba al layout con menú trayendo un aviso —por ejemplo, al
+  aceptar una invitación, que viene del layout de ingreso—. Medido en Chrome (Etapa 14): flash
+  en las props, Toaster presente, cero toasts.
+- **La X de un toast mide 20 px de caja y 48 de área** por un `::before` en `app.css` (el botón
+  lo dibuja la librería, no hay componente donde ponerle clase). Estuvo en 20 desde siempre y
+  nadie lo midió: por el bug de arriba, `revisar:mobile` nunca tenía un toast en pantalla.
 - Detalle completo en la skill `overlays-al-navegar`.
 
 ## Accesibilidad — requisito, no pulido
@@ -2288,6 +2297,98 @@ compara por SHA-256 con los PDF originales. Ver "Estado".
   el campo. Medirlo da "18 px" en algo que está bien. Los que **envuelven** un radio o un
   checkbox sí son la fila que se toca, y esos se miden con `label:not([for])`.
 
+## Compartir la ficha
+
+Un propietario invita a otra persona a ver (`Lector`) o a cargar datos (`Cuidador`) en una
+ficha. Como toda la autorización ya pasaba por el pivote `paciente_usuario`, compartir **no
+tocó ninguna Policy del dominio**: es escribir una fila en ese pivote. Es la etapa donde un
+error no rompe nada visible —simplemente filtra—, y de ahí el barrido de privacidad.
+
+| Pieza                         | Qué hace                                                        |
+| ----------------------------- | --------------------------------------------------------------- |
+| `CompartirController`         | Invitar, cambiar el rol, revocar. Solo el propietario           |
+| `InvitacionController`        | Mostrar y aceptar el link. **Fuera** del middleware `auth`      |
+| `PacientePolicy::compartir()` | Propietario y nadie más                                         |
+| `revocarAcceso()`             | El propietario saca a otro, **o cualquiera se saca a sí mismo** |
+| `PanelCompartir.vue`          | Quién ve la ficha, con qué rol, e invitar                       |
+| `BarridoDePrivacidadTest`     | Recorre TODAS las rutas: lector y desconocido → 403             |
+
+### La invitación no tiene tabla: es una URL firmada
+
+`URL::temporarySignedRoute` con `paciente`, `email` y `rol` **adentro de la firma**, vence en
+7 días (al final del día, en la zona de quien invita). Cambiar cualquiera de los tres
+—subirse de lector a cuidador editando el link— invalida la firma. No hay tabla porque no hay
+nada que guardar que la firma no garantice ya.
+
+- **`Propietario` no se concede nunca, ni con la firma correcta.** El rol se lee contra una
+  lista blanca de dos casos (`RolPaciente::invitables()`), no `cases()` menos uno: un caso nuevo
+  del enum nace no-invitable. Y un rol desconocido cae a `Lector`, no a un error. Hay un test que
+  firma a mano un link con `rol=propietario` —como si se filtrara la `APP_KEY`— y fija que igual
+  no lo concede.
+- ⚠️ **Al aceptar va `attach`, nunca `syncWithoutDetaching`.** Si el propietario abre su propia
+  invitación, `syncWithoutDetaching` le **pisaría el rol** con el del link y quedaría de lector
+  de su propio paciente. Antes de `attach` se pregunta si ya tiene un rol: si lo tiene, no se
+  toca nada ("Ya tenés acceso").
+- **La firma se valida a mano** (`hasCorrectSignature` + `signatureHasNotExpired`) y no con el
+  middleware `signed`: el middleware contesta un 403 pelado, y una invitación vencida tiene que
+  decir **"pedile otra a X"**, que es lo único útil. Una firma inválida, en cambio, no muestra
+  nada de la ficha: no se le cuenta a quien manipuló el link de quién era.
+- **El link se abre sin sesión.** Guarda `url.intended` y ofrece ingresar o crear cuenta; de
+  vuelta, cae en la misma pantalla. Exige **el email verificado** y **la misma dirección** a la
+  que se mandó: si estás con otra cuenta, te ofrece salir y no acepta. Sin eso, un mail
+  reenviado le daría la ficha a quien lo reciba.
+- Las páginas `invitaciones/*` usan `AuthLayout` (`app.ts`): las ve gente sin sesión.
+- `throttle:10,60` en invitar: cada invitación es un mail que sale con nuestro dominio.
+
+### Qué ve cada uno del resto
+
+- **Los mails de los demás los ve solo el propietario** (y cada uno el suyo). Un cuidador o un
+  lector ve **nombres y roles**, no direcciones: la ficha se comparte, la agenda del dueño no.
+- El propietario no aparece con controles de rol ni de baja: **la ficha no se queda nunca sin
+  dueño**. Dar de baja la ficha entera sigue siendo otra acción.
+- **Mandar un documento pide lo mismo que verlo**, también para un `Lector` (la pregunta que
+  dejaba abierta la Etapa 13). Se dejó así: quien puede abrir el PDF lo puede reenviar desde su
+  propio correo, así que pedir más no protegería nada y solo obligaría a hacerlo por fuera.
+
+### El barrido de privacidad, y lo que encontró
+
+`BarridoDePrivacidadTest` arma la lista de rutas **desde el router**, no a mano: una ruta nueva
+entra sola al barrido. Dos pasadas —un lector contra toda ruta de escritura, un desconocido
+contra toda ruta con parámetro— y un control con un cuidador para que el barrido no "pase"
+porque todo da 403. Lo que queda afuera está en `rutasFueraDelBarrido()`, cada una con su motivo.
+
+⚠️ **Encontró diez FormRequests que validaban antes de autorizar**: a alguien sin permiso le
+contestaba un 302 con errores de validación en vez de un 403 —y de paso le confirmaba que el
+registro existía—. Es la regla "autorizar va antes de validar" de las mediciones, que no se
+había copiado en catálogos, pacientes, casilla, contactos, coberturas ni adjuntos. Lo resuelve
+el trait `AutorizaSobreLaRuta::puedeGuardar()` (update sobre el modelo de la ruta, o create
+sobre la clase), con `authorize()` propio donde el dueño es otro (cobertura, adjunto).
+
+### ⚠️ Un mail de TEXTO no puede usar `{{ }}`
+
+`{{ }}` escapa para HTML, y en un mail `text/plain` nadie des-escapa: el `&` de la URL firmada
+llegaba como **`&amp;`**, la firma dejaba de coincidir, y **toda invitación real llegaba
+rota**. Los tests de Pest pasaban porque armaban la URL por su lado; lo encontró la verificación
+siguiendo el link **tal cual salió en el mail**. Las tres vistas de mail van con `{!! !!}` —no
+hay HTML que inyectar en un texto plano— y `MailsDeTextoTest` falla si vuelve a aparecer un `{{`.
+El mismo bug ya estaba en los recordatorios y los envíos, con un apóstrofo (`O'Brien` →
+`O&#039;Brien`).
+
+⚠️ Para scripts: el mailer `log` **ya decodifica** el quoted-printable al escribir el log.
+Decodificarlo otra vez corrompe la URL (`=17…` se lee como un byte) y la verificación informa
+una firma inválida que no existe.
+
+### ⚠️ Un panel que queda abierto se guarda por ID, no como objeto
+
+Encontrado verificando esta etapa, y estaba así **desde la Etapa 4**: en `pacientes/Index.vue`
+el panel de coberturas guardaba en un `ref` una **copia** del paciente. Agregar una cobertura
+redirige a la misma pantalla y llegan props nuevas, pero el panel seguía mostrando la copia
+vieja: la cobertura recién agregada no aparecía hasta cerrarlo y reabrirlo. Medido en Chrome.
+
+Los paneles que quedan abiertos mientras se trabaja (documentos, coberturas, compartir) guardan
+un **id** y buscan el paciente en las props con un `computed`. Es la misma lección que el
+`const` de la Etapa 8, en otra forma. Los sheets que se cierran en `@success` no la necesitan.
+
 ## Cobertura médica
 
 `coberturas` es tabla propia y no columnas en `pacientes`: mucha gente tiene obra social y
@@ -2991,11 +3092,25 @@ pasaba la validación y salía **un mail sin ningún adjunto**. Era exactamente 
 esa etapa, corregida: los adjuntos **sí** tienen soft deletes (borrar un documento elimina su
 archivo del disco, pero la fila queda en la papelera).
 
-⚠️ Para revisar en la **Etapa 14**: hoy **mandar un documento pide lo mismo que verlo**, también
-para un `Lector`. Pedir más no protege nada (quien puede abrir el PDF lo puede reenviar desde su
-correo), pero es una decisión de roles y va con el resto.
+Se decidió en la Etapa 14: **mandar un documento sigue pidiendo lo mismo que verlo**, también
+para un `Lector` (ver "Compartir la ficha").
 
-Pendiente, en este orden: compartir la ficha · dashboard y deploy. Queda también, sin fecha, la
-Etapa 16 (consultas y grabaciones), que el plan deja adelantable. Y sin etapa asignada: las
-vacunas aplicadas, y el 500 de la papelera en coberturas y alergias (los catálogos ya están
-arreglados).
+**Etapa 14 hecha**: invitación por URL firmada sin tabla, roles `Lector`/`Cuidador` cambiables
+desde `PanelCompartir.vue`, salir de una ficha ajena, y el barrido de privacidad sobre todas las
+rutas. Detalle en la sección "Compartir la ficha".
+
+Verificado en Chrome con **dos navegadores a la vez**: el propietario invita, el link se toma
+**del mail que quedó en el log**, el invitado lo abre sin sesión, se registra, verifica el mail,
+acepta y ve la ficha; el propietario le cambia el rol y el panel lo muestra sin recargar; el
+lector no ve el mail del dueño ni el botón de editar; sale de la ficha; y un link manipulado no
+muestra nada. Más `revisar:mobile` entero en verde.
+
+Cinco bugs que aparecieron en el camino, tres de ellos anteriores a esta etapa: el `&amp;` de los
+mails de texto (rompía toda invitación), el toast perdido en el primer montaje del layout, la X
+del toast en 20 px, el panel de coberturas desactualizado desde la Etapa 4, y diez FormRequests
+que validaban antes de autorizar.
+
+Pendiente, en este orden: vacunas aplicadas (sin etapa asignada) · dashboard y pasada mobile ·
+deploy. Queda también, sin fecha, la Etapa 16 (consultas y grabaciones), que necesita decidir
+cómo servir el audio. Y sin etapa: el 500 de la papelera en coberturas y alergias (los catálogos
+ya están arreglados).

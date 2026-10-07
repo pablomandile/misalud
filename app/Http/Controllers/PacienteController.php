@@ -10,6 +10,7 @@ use App\Http\Requests\PacienteGuardarRequest;
 use App\Models\Adjunto;
 use App\Models\Cobertura;
 use App\Models\Paciente;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -26,8 +27,10 @@ class PacienteController extends Controller
     public function index(): Response
     {
         $pacientes = auth()->user()->pacientes()
-            // Explicito: sin esto es una consulta por cada paciente y cada cobertura.
-            ->with(['adjuntos', 'coberturas.adjuntos'])
+            // Explícito: sin esto es una consulta por cada paciente y cada cobertura.
+            // `cuidadores` además es lo que lee `rolDe()`: sin cargarlo, una
+            // consulta más por paciente para saber el rol.
+            ->with(['adjuntos', 'coberturas.adjuntos', 'cuidadores'])
             ->get()
             ->sortBy(fn (Paciente $paciente): string => $paciente->nombre)
             ->values()
@@ -36,6 +39,12 @@ class PacienteController extends Controller
 
         return Inertia::render('pacientes/Index', [
             'pacientes' => $pacientes,
+            // Los permisos que se pueden dar: los dos de la lista blanca, nunca
+            // propietario. Del servidor, para que el rótulo viva en un solo lugar.
+            'rolesInvitables' => array_map(
+                fn (RolPaciente $rol): array => ['valor' => $rol->value, 'etiqueta' => $rol->etiqueta()],
+                RolPaciente::invitables(),
+            ),
         ]);
     }
 
@@ -74,6 +83,33 @@ class PacienteController extends Controller
     }
 
     /**
+     * Quién tiene acceso, del propietario para abajo.
+     *
+     * @return list<array{id: int, nombre: string, email: string|null, rol: string, rolEtiqueta: string, esVos: bool}>
+     */
+    private function accesos(Paciente $paciente, bool $esPropietario): array
+    {
+        $orden = [RolPaciente::Propietario, RolPaciente::Cuidador, RolPaciente::Lector];
+
+        return array_values($paciente->cuidadores
+            ->map(function (User $usuario) use ($paciente, $esPropietario): array {
+                $rol = $paciente->rolDe($usuario) ?? RolPaciente::Lector;
+                $esVos = $usuario->is(auth()->user());
+
+                return [
+                    'id' => $usuario->id,
+                    'nombre' => $usuario->name,
+                    'email' => $esPropietario || $esVos ? $usuario->email : null,
+                    'rol' => $rol->value,
+                    'rolEtiqueta' => $rol->etiqueta(),
+                    'esVos' => $esVos,
+                ];
+            })
+            ->sortBy(fn (array $a): string => array_search(RolPaciente::from($a['rol']), $orden, true).mb_strtolower($a['nombre']))
+            ->all());
+    }
+
+    /**
      * @return array{id: int, nombre: string, fecha_nacimiento: string|null, edad: int|null, sexo: string|null, grupo_sanguineo: string|null, notas: string|null, puedeEditar: bool, esPropietario: bool}
      */
     private function serializar(Paciente $paciente): array
@@ -90,6 +126,14 @@ class PacienteController extends Controller
             'notas' => $paciente->notas,
             'puedeEditar' => $rol?->puedeEditar() ?? false,
             'esPropietario' => $rol === RolPaciente::Propietario,
+
+            /*
+             * Quién más ve esta ficha. Lo ve cualquiera con acceso -saber con
+             * quién se comparte la historia de alguien es parte de verla-, pero
+             * ⚠️ las DIRECCIONES de los demás las ve solo el propietario: un
+             * cuidador no tiene por qué llevarse el mail de un tercero.
+             */
+            'accesos' => $this->accesos($paciente, $rol === RolPaciente::Propietario),
 
             /*
              * Los documentos van con la URL del CONTROLADOR, nunca una del
