@@ -123,6 +123,23 @@ class Recordatorio extends Model implements PerteneceAPaciente
     }
 
     /**
+     * Cuándo es el evento, como lo tiene que leer `$quien`: "15/03/2026" para
+     * un día del calendario, "15/03/2026 a las 15:30" en su zona para un
+     * instante. Lo usan el mail y la pantalla, así que no pueden contradecirse.
+     */
+    public function cuandoEsElEvento(?User $quien): string
+    {
+        $evento = $this->instanteDelEvento();
+
+        if ($this->tipo->esDeCalendario()) {
+            // En UTC, que es donde vive la medianoche que guardó la columna `date`.
+            return $evento->format('d/m/Y');
+        }
+
+        return ($quien?->enSuZona($evento) ?? $evento)->format('d/m/Y \a \l\a\s H:i');
+    }
+
+    /**
      * Marcarlo hecho. Es **lo único** que una persona puede cambiarle.
      */
     public function completar(): void

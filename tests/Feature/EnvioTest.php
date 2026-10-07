@@ -8,6 +8,7 @@ use App\Enums\RolPaciente;
 use App\Enums\TipoAdjunto;
 use App\Mail\EnvioDeDocumentos;
 use App\Models\Adjunto;
+use App\Models\AplicacionVacuna;
 use App\Models\Cobertura;
 use App\Models\Contacto;
 use App\Models\Envio;
@@ -15,7 +16,9 @@ use App\Models\OrdenEstudio;
 use App\Models\Paciente;
 use App\Models\Receta;
 use App\Models\User;
+use App\Models\Vacuna;
 use App\Services\ArchivoService;
+use App\Services\DocumentosEnviables;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -402,4 +405,21 @@ it('limita la frecuencia de envíos', function (): void {
     $this->actingAs($this->usuario)
         ->post(route('envios.store'), $datos)
         ->assertTooManyRequests();
+});
+
+it('el comprobante de una vacuna se ofrece para mandar, con el nombre de la vacuna', function (): void {
+    $vacuna = Vacuna::factory()->for($this->usuario, 'usuario')->create(['nombre' => 'Antitetánica']);
+    $dosis = AplicacionVacuna::factory()->for($this->paciente)->create([
+        'vacuna_id' => $vacuna->id,
+        'fecha' => '2026-09-15',
+    ]);
+    $orden = OrdenEstudio::factory()->for($this->paciente)->create();
+    $papel = archivoPara($orden, 'orden.pdf', TipoAdjunto::OrdenEstudio, pdfParaEnviar('orden'));
+    $comprobante = archivoPara($dosis, 'carnet.pdf', TipoAdjunto::Vacuna, pdfParaEnviar('carnet'));
+
+    $documentos = app(DocumentosEnviables::class);
+
+    // Armando un envío desde la orden, el comprobante de la misma ficha está a mano.
+    expect($documentos->junto($this->usuario, $papel)->pluck('id'))->toContain($comprobante->id)
+        ->and($documentos->describir($comprobante))->toBe('Comprobante de vacuna · Antitetánica del 15/09/2026');
 });

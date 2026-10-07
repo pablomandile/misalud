@@ -157,6 +157,14 @@ class Paciente extends Model implements CifraDatos, TieneArchivos
     }
 
     /**
+     * @return HasMany<AplicacionVacuna, $this>
+     */
+    public function aplicacionesVacuna(): HasMany
+    {
+        return $this->hasMany(AplicacionVacuna::class);
+    }
+
+    /**
      * @return HasMany<OrdenEstudio, $this>
      */
     public function ordenesEstudio(): HasMany

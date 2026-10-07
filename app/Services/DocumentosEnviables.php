@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Contracts\PerteneceAPaciente;
 use App\Models\Adjunto;
+use App\Models\AplicacionVacuna;
 use App\Models\Cobertura;
 use App\Models\Estudio;
 use App\Models\OrdenEstudio;
@@ -90,6 +91,7 @@ class DocumentosEnviables
             $duenio instanceof Estudio => $duenio->tipo,
             $duenio instanceof PrescripcionOcular => 'del '.$duenio->fecha->format('d/m/Y'),
             $duenio instanceof Receta => $duenio->asunto,
+            $duenio instanceof AplicacionVacuna => $duenio->vacuna->nombre.' del '.$duenio->fecha->format('d/m/Y'),
             default => null,
         };
 
@@ -117,6 +119,7 @@ class DocumentosEnviables
             (new OrdenEstudio)->getMorphClass() => $paciente->ordenesEstudio()->getQuery()->select('id'),
             (new Estudio)->getMorphClass() => $paciente->estudios()->getQuery()->select('id'),
             (new PrescripcionOcular)->getMorphClass() => $paciente->prescripcionesOculares()->getQuery()->select('id'),
+            (new AplicacionVacuna)->getMorphClass() => $paciente->aplicacionesVacuna()->getQuery()->select('id'),
         ];
 
         return Adjunto::query()

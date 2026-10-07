@@ -70,9 +70,10 @@ class AvisoDeRecordatorio extends Mailable
     {
         /*
          * La hora del EVENTO —no la del aviso— y en la zona de **este**
-         * destinatario. Es lo que obliga a un mail por persona.
+         * destinatario. Es lo que obliga a un mail por persona. Una fecha de
+         * calendario va sin hora ni zona: ver `TipoRecordatorio::esDeCalendario()`.
          */
-        $cuando = $this->destinatario->enSuZona($this->recordatorio->instanteDelEvento());
+        $cuando = $this->recordatorio->cuandoEsElEvento($this->destinatario);
 
         return new Content(
             text: 'mail.aviso-recordatorio',
@@ -80,7 +81,7 @@ class AvisoDeRecordatorio extends Mailable
                 'saludo' => $this->destinatario->name,
                 'aviso' => $this->recordatorio->tipo->etiqueta(),
                 'paciente' => $this->recordatorio->paciente?->nombre,
-                'cuando' => $cuando?->format('d/m/Y \a \l\a\s H:i'),
+                'cuando' => $cuando,
                 'enlace' => route('dashboard'),
             ],
         );

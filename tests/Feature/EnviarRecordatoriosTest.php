@@ -7,6 +7,7 @@ use App\Enums\RolPaciente;
 use App\Mail\AvisoDeRecordatorio;
 use App\Models\Paciente;
 use App\Models\Recordatorio;
+use App\Models\Tratamiento;
 use App\Models\Turno;
 use App\Models\User;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -218,6 +219,29 @@ it('el cuerpo dice CUÁNDO y el nombre, pero no el motivo', function (): void {
         // zona de ESTE destinatario.
         ->and($cuerpo)->toContain('11/10/2026 a las 12:00')
         ->and($cuerpo)->not->toContain('Reservadisimo');
+});
+
+it('una fecha de CALENDARIO se muestra como el día que es, sin correrse ni inventar hora', function (): void {
+    /*
+     * `tratamientos.fin` es un `date`: Carbon lo lee a medianoche UTC, que en
+     * Buenos Aires son las 21:00 del día ANTERIOR. Antes el mail decía "el
+     * 14/10/2026 a las 21:00" para un tratamiento que terminaba el 15.
+     */
+    $usuario = User::factory()->create([
+        'zona_horaria' => 'America/Argentina/Buenos_Aires',
+        'email_verified_at' => now(),
+    ]);
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+    $tratamiento = Tratamiento::factory()->for($paciente)->create([
+        'activo' => true,
+        'fin' => '2026-10-15',
+    ]);
+
+    $cuerpo = (new AvisoDeRecordatorio($tratamiento->recordatorios()->sole(), $usuario))->render();
+
+    expect($cuerpo)->toContain('el 15/10/2026.')
+        ->and($cuerpo)->not->toContain('14/10/2026')
+        ->and($cuerpo)->not->toContain('a las');
 });
 
 it('cada destinatario ve la hora en SU zona', function (): void {

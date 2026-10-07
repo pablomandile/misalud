@@ -83,6 +83,7 @@ type RecordatorioAbierto = {
     estado: string;
     estadoEtiqueta: string;
     fechaVisible: string;
+    eventoVisible: string;
     yaCorresponde: boolean;
 };
 
@@ -152,13 +153,14 @@ const turnoABorrar = ref<Turno | null>(null);
                         />
                         <div class="min-w-0 space-y-1">
                             <p class="font-medium">{{ aviso.tipoEtiqueta }}</p>
+                            <!--
+                                El día del EVENTO, no la hora interna del aviso: el
+                                fin de un tratamiento o una próxima dosis son un
+                                día del calendario, y su aviso "a las 21:00" era
+                                una hora que salía de la aritmética, no de nadie.
+                            -->
                             <p class="text-sm text-muted-foreground">
-                                {{
-                                    aviso.yaCorresponde
-                                        ? 'Desde el'
-                                        : 'Avisa el'
-                                }}
-                                {{ aviso.fechaVisible }} ·
+                                Para el {{ aviso.eventoVisible }} ·
                                 {{ aviso.estadoEtiqueta }}
                             </p>
                         </div>

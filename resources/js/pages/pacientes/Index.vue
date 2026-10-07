@@ -11,6 +11,7 @@ import {
     HeartPulse,
     Pill,
     Plus,
+    Syringe,
     Trash2,
     UserRound,
     Users,
@@ -24,6 +25,7 @@ import OrdenEstudioController from '@/actions/App/Http/Controllers/OrdenEstudioC
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
 import PrescripcionOcularController from '@/actions/App/Http/Controllers/PrescripcionOcularController';
 import TurnoController from '@/actions/App/Http/Controllers/TurnoController';
+import AplicacionVacunaController from '@/actions/App/Http/Controllers/AplicacionVacunaController';
 import TratamientoController from '@/actions/App/Http/Controllers/TratamientoController';
 import Heading from '@/components/Heading.vue';
 import PanelCobertura from '@/pages/pacientes/PanelCobertura.vue';
@@ -309,6 +311,20 @@ function edadTexto(p: Paciente): string {
                                 <Pill />
                                 <span class="sr-only">
                                     Tratamientos de {{ paciente.nombre }}
+                                </span>
+                            </Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" as-child>
+                            <Link
+                                :href="
+                                    AplicacionVacunaController.index({
+                                        paciente: paciente.id,
+                                    })
+                                "
+                            >
+                                <Syringe />
+                                <span class="sr-only">
+                                    Vacunas de {{ paciente.nombre }}
                                 </span>
                             </Link>
                         </Button>

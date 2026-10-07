@@ -138,6 +138,7 @@ class TurnoController extends Controller
                     'estado' => $recordatorio->estado->value,
                     'estadoEtiqueta' => $recordatorio->estado->etiqueta(),
                     'fechaVisible' => $enSuZona->format('d/m/Y H:i'),
+                    'eventoVisible' => $recordatorio->cuandoEsElEvento($usuario),
                     'yaCorresponde' => $recordatorio->fecha->lessThanOrEqualTo(now()),
                 ];
             })

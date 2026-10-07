@@ -6,7 +6,9 @@ namespace App\Http\Controllers;
 
 use App\Contracts\EsCatalogo;
 use App\Http\Requests\VacunaGuardarRequest;
+use App\Models\AplicacionVacuna;
 use App\Models\Vacuna;
+use App\Support\UsoDeCatalogo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 
@@ -44,16 +46,15 @@ class VacunaController extends CatalogoBaseController
     }
 
     /**
-     * Hoy nada apunta a una vacuna del catálogo, así que siempre se puede borrar.
-     *
-     * ⚠️ Eso cambia con `aplicaciones_vacuna` (las dosis aplicadas, que todavía
-     * no existen): esa tabla va a tener `vacuna_id`, y tiene que declararse acá.
-     * No hace falta acordarse: `ReferenciasACatalogosTest` falla en cuanto
-     * aparezca una FK hacia `vacunas` que no figure en esta lista.
+     * Una vacuna con dosis anotadas no se borra: una dosis "de algo" no se puede
+     * leer. `ReferenciasACatalogosTest` falla si aparece otra FK hacia `vacunas`
+     * que no figure en esta lista.
      */
     public function usos(): array
     {
-        return [];
+        return [
+            new UsoDeCatalogo('dosis aplicada', 'dosis aplicadas', AplicacionVacuna::class, 'vacuna_id'),
+        ];
     }
 
     public function store(VacunaGuardarRequest $peticion): RedirectResponse

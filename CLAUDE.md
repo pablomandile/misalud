@@ -1617,6 +1617,15 @@ lee a medianoche UTC), restarle 24 h da la medianoche UTC del día anterior: las
 Argentina. Es una hora razonable para recibir "mañana termina tu tratamiento", pero **salió
 así por la aritmética y no porque alguien la eligiera**.
 
+⚠️ **Y la misma medianoche, MOSTRADA, corría el día.** El mail pasaba el instante del evento a
+la zona de quien lo recibe, y para un `date` eso decía "el 14/10 a las 21:00" de un
+tratamiento que terminaba el 15: un día antes y con una hora que nadie cargó. Estuvo así desde
+la Etapa 11 y lo encontraron las vacunas aplicadas. Ahora `TipoRecordatorio::esDeCalendario()`
+decide cómo se muestra, y `Recordatorio::cuandoEsElEvento()` es la única función que lo
+formatea —"15/10/2026" sin zona para un día, "15/10/2026 a las 12:00" en la zona de cada uno
+para un instante—, usada por el mail y por la pantalla, que así no se pueden contradecir. Un
+tipo nuevo de recordatorio **tiene** que declarar en ese `match` qué es.
+
 ⚠️ **`misalud:cerrar-tratamientos-vencidos` no dispara el observer**, porque escribe con un
 `update()` masivo. Se dejó así: para cuando el comando cierra un tratamiento su `fin` ya pasó,
 así que el recordatorio venció hace rato y el comando horario lo descarta solo. Cargar
@@ -1755,6 +1764,38 @@ llega creería que se contradicen.
 stderr vacío —nada que diagnosticar—. Se resolvió pasando un `userDataDir` temporal y único
 por proceso. Vale como default para todo script nuevo: no pelea por el lock de un perfil que
 otro proceso tenga abierto, y **no toca el Chrome del usuario**.
+
+## Vacunas aplicadas
+
+`aplicaciones_vacuna` es el carnet: cada fila es una dosis que se aplicó un paciente. El
+catálogo `vacunas` sigue siendo solo el nombre; el comprobante cuelga de la dosis (octavo dueño
+de archivos, sin tocar autorización) y se puede mandar por mail como cualquier documento de la
+ficha. La pantalla es `/pacientes/{paciente}/vacunas`, **agrupada por vacuna**: la pregunta que
+se le hace a un carnet es "¿cuántas dosis de esta tengo y cuándo toca la próxima?".
+
+- **`vacuna_id` con `restrictOnDelete`** y declarado en `VacunaController::usos()`: una dosis
+  "de algo" no se lee. `centro_id` es metadato: `nullOnDelete`, y también figura en los usos
+  del centro.
+- **`fecha` lleva `FechaNoFutura`** (registra algo que ya pasó); `proxima_dosis` puede ser
+  futura —es justamente para eso— pero tiene que ser **posterior** a la dosis que se carga.
+- Las dos son fechas de calendario (`date`).
+- **"Otra dosis" abre el formulario con la vacuna ya elegida**: la segunda dosis de algo que ya
+  está en el carnet es el caso más común.
+- Sin vacunas en el catálogo, la pantalla no ofrece un formulario con el desplegable vacío:
+  dice que primero hay que agregarla, con el enlace.
+
+### ⚠️ La próxima dosis de una aplicación deja de importar cuando llega la siguiente
+
+Si la primera dosis decía "próxima: 15/3" y la segunda ya se cargó, ese aviso no tiene nada que
+avisar, aunque la fila siga diciendo "15/3". Por eso `AplicacionVacunaObserver` **recalcula el
+carnet entero** del paciente en cada guardado y cada borrado: avisa solo la última dosis de
+cada vacuna. Eso cubre de una vez cuatro casos que si no serían cuatro reglas sueltas —cargar
+la siguiente apaga el aviso, borrarla lo vuelve a prender, cambiar la vacuna de una fila lo
+mueve de grupo, corregir una fecha reordena cuál es "la siguiente"—. Son decenas de filas y el
+generador no escribe nada si la fecha no cambió, así que es barato e idempotente.
+
+"Posterior" desempata por `id` cuando dos dosis comparten fecha: sin eso, se apagarían la una
+a la otra y no avisaría ninguna. La pantalla toma "la próxima" con el mismo criterio.
 
 ## Casilla de recetas (IMAP)
 
@@ -3110,7 +3151,17 @@ mails de texto (rompía toda invitación), el toast perdido en el primer montaje
 del toast en 20 px, el panel de coberturas desactualizado desde la Etapa 4, y diez FormRequests
 que validaban antes de autorizar.
 
-Pendiente, en este orden: vacunas aplicadas (sin etapa asignada) · dashboard y pasada mobile ·
-deploy. Queda también, sin fecha, la Etapa 16 (consultas y grabaciones), que necesita decidir
+**Vacunas aplicadas hechas** (estaban en el plan sin etapa asignada): el carnet por paciente,
+con su comprobante y el aviso de la próxima dosis. Verificado en Chrome contra MySQL: anotar la
+dosis la muestra sin recargar, "Otra dosis" trae la vacuna elegida, una próxima dosis anterior
+da el error al lado del campo, el aviso aparece en la pantalla de turnos con **el día correcto**,
+el comprobante sube y el visor lo dibuja, y la matriz de desborde (18) y las áreas táctiles en
+pantalla y formulario. Más `revisar:mobile` entero.
+
+De paso apareció un bug de la Etapa 11: **el mail de un tratamiento que termina decía el día
+anterior a las 21:00** (ver "Turnos y recordatorios"). Arreglado para todo recordatorio de
+fecha de calendario.
+
+Pendiente, en este orden: dashboard y pasada mobile · deploy. Queda también, sin fecha, la Etapa 16 (consultas y grabaciones), que necesita decidir
 cómo servir el audio. Y sin etapa: el 500 de la papelera en coberturas y alergias (los catálogos
 ya están arreglados).

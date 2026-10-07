@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdjuntoController;
 use App\Http\Controllers\AlergiaController;
+use App\Http\Controllers\AplicacionVacunaController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\CentroController;
 use App\Http\Controllers\CoberturaController;
@@ -214,6 +215,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
      * existe para una sola pregunta -qué falta hacerse-, y el archivo de la
      * orden cuelga de ella como cualquier otro adjunto.
      */
+    /*
+     * El carnet de vacunación: las dosis aplicadas, con su comprobante.
+     */
+    Route::get('pacientes/{paciente}/vacunas', [AplicacionVacunaController::class, 'index'])
+        ->name('pacientes.vacunas.index');
+    Route::post('pacientes/{paciente}/vacunas', [AplicacionVacunaController::class, 'store'])
+        ->name('pacientes.vacunas.store');
+    Route::put('vacunas-aplicadas/{aplicacion}', [AplicacionVacunaController::class, 'update'])
+        ->name('vacunas-aplicadas.update');
+    Route::delete('vacunas-aplicadas/{aplicacion}', [AplicacionVacunaController::class, 'destroy'])
+        ->name('vacunas-aplicadas.destroy');
+    Route::post('vacunas-aplicadas/{aplicacion}/adjuntos', [AdjuntoController::class, 'storeParaAplicacionVacuna'])
+        ->name('vacunas-aplicadas.adjuntos.store');
+
     Route::get('pacientes/{paciente}/ordenes', [OrdenEstudioController::class, 'index'])
         ->name('pacientes.ordenes.index');
     Route::post('pacientes/{paciente}/ordenes', [OrdenEstudioController::class, 'store'])

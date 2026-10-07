@@ -8,6 +8,7 @@ use App\Contracts\TieneArchivos;
 use App\Enums\TipoAdjunto;
 use App\Http\Requests\AdjuntoStoreRequest;
 use App\Models\Adjunto;
+use App\Models\AplicacionVacuna;
 use App\Models\Cobertura;
 use App\Models\Estudio;
 use App\Models\Medicamento;
@@ -75,6 +76,14 @@ class AdjuntoController extends Controller
     public function storeParaOrden(AdjuntoStoreRequest $peticion, OrdenEstudio $orden): RedirectResponse
     {
         return $this->guardarEn($peticion, $orden);
+    }
+
+    /**
+     * El comprobante de una dosis, o la foto del carnet de papel. Octavo dueño.
+     */
+    public function storeParaAplicacionVacuna(AdjuntoStoreRequest $peticion, AplicacionVacuna $aplicacion): RedirectResponse
+    {
+        return $this->guardarEn($peticion, $aplicacion);
     }
 
     /**

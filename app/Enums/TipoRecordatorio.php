@@ -46,11 +46,18 @@ enum TipoRecordatorio: string
      */
     case TratamientoTermina = 'tratamiento_termina';
 
+    /**
+     * Toca la próxima dosis de una vacuna. Sale de
+     * `aplicaciones_vacuna.proxima_dosis`, otra fecha de calendario.
+     */
+    case VacunaProxima = 'vacuna_proxima';
+
     public function etiqueta(): string
     {
         return match ($this) {
             self::TurnoProximo => 'Turno próximo',
             self::TratamientoTermina => 'Tratamiento que termina',
+            self::VacunaProxima => 'Próxima dosis de vacuna',
         };
     }
 
@@ -68,13 +75,32 @@ enum TipoRecordatorio: string
         return match ($this) {
             self::TurnoProximo => 'MiSalud: tenés un turno próximo',
             self::TratamientoTermina => 'MiSalud: un tratamiento está por terminar',
+            self::VacunaProxima => 'MiSalud: se acerca la próxima dosis de una vacuna',
+        };
+    }
+
+    /**
+     * Si el evento es una fecha de CALENDARIO (un día) y no un instante.
+     *
+     * ⚠️ Decide cómo se MUESTRA la fecha del evento, y equivocarse corre un día
+     * entero. Un `date` se guarda a medianoche UTC: pasado a la zona de
+     * Argentina es **las 21:00 del día anterior**. Así, el mail de un
+     * tratamiento que terminaba el 15 decía "el 14 a las 21:00" —un día antes y
+     * con una hora que nadie cargó—. Es la trampa de `hoy()` contra
+     * `hoyCalendario()`, del lado de lo que se muestra.
+     */
+    public function esDeCalendario(): bool
+    {
+        return match ($this) {
+            self::TurnoProximo => false,
+            self::TratamientoTermina, self::VacunaProxima => true,
         };
     }
 
     /**
      * Cuánto antes del evento se avisa.
      *
-     * Las dos van a 24 horas: es el aviso que sirve —"mañana tenés que
+     * Las tres van a 24 horas: es el aviso que sirve —"mañana tenés que
      * hacer algo"— y el que deja tiempo de reaccionar sin ser tan temprano
      * que uno se lo olvide de nuevo.
      */
@@ -83,6 +109,7 @@ enum TipoRecordatorio: string
         return match ($this) {
             self::TurnoProximo => 24,
             self::TratamientoTermina => 24,
+            self::VacunaProxima => 24,
         };
     }
 }
