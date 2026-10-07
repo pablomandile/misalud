@@ -218,7 +218,9 @@ mail), en el `nombre_hash` de cada catálogo (unique por `usuario_id`) y en
   el ENUM de MySQL**: los casos de PHP solos pasan los tests (sqlite no valida ENUM) y
   revientan en producción con un 500 al primer guardado.
 - Todo listado con **eager loading explícito**.
-- Soft deletes en las entidades principales.
+- Soft deletes en las entidades principales. **Excepciones, cada una con su motivo:** la casilla
+  (vive una contraseña), los contactos, los catálogos sin uso, y las coberturas y alergias (ver
+  "Borrar borra" en Cobertura médica).
 - Adjuntos en el disco **privado**, servidos por controlador tras verificar propiedad. Nunca
   por URL pública.
 - **`Rule::unique` sobre una columna `date` no es portable.** MySQL trunca a la fecha, pero
@@ -1059,6 +1061,8 @@ que en `Medicion::tipo()`.
 - **`alergias.sustancia` lleva índice ciego y UNIQUE por paciente**; `enfermedades.nombre`
   **no**. Dos neumonías en años distintos son dos enfermedades, no una cargada dos veces; dos
   "Penicilina" con severidades distintas no dejarían saber cuál vale.
+- **Una alergia se borra de verdad**, sin papelera: por el UNIQUE de arriba, una "Penicilina" en
+  la papelera trababa volver a cargarla con un 500 (ver "Borrar borra" en Cobertura médica).
 - **`RegistroEnfermedad` es el primer registro clínico que llega a su paciente en DOS pasos**
   —sube por `enfermedad` y recién ahí lo encuentra—. Es exactamente para lo que
   `PerteneceAPaciente` pide un método y no una relación: con un `BelongsTo` obligatorio, esto
@@ -2456,6 +2460,29 @@ fricción porque resuelven cosas distintas—.
   con su `Dialog`—, y le avisa al padre qué documento abrir por un evento (`verDocumento`) en
   vez de montar su propio visor: sigue habiendo **uno solo** para toda la pantalla.
 
+### Borrar borra: sin papelera
+
+Decidido por el usuario, igual que en los catálogos. Con papelera, una cobertura borrada seguía
+ocupando su `entidad_hash` en el `UNIQUE(paciente_id, entidad_hash)`; `IndiceCiegoUnico` no mira
+la papelera, así que la validación daba el OK y la base rechazaba la nueva: **volver a cargar
+"OSDE" daba un 500**. Medido contra MySQL. Lo mismo con una alergia y su `sustancia_hash`.
+
+Y la papelera no le servía a nadie: **no había ninguna pantalla ni ruta para restaurar**. Los
+datos quedaban guardados, cifrados e irrecuperables, y lo único que lograban era trabar la
+recarga.
+
+- **Borrar una cobertura se lleva su credencial**: primero el disco, después las filas, con
+  `ArchivoService::borrarTodosDe()`, el mismo que usan los catálogos.
+- **Para "ya no la uso" está destildar "Cobertura activa"**, que la deja en el historial (sirve
+  para un reintegro) y la saca del panel. El diálogo de borrar lo dice: borrar queda para lo que
+  se cargó mal.
+- La migración que sacó `deleted_at` **borró de verdad lo que ya estaba en la papelera**,
+  credenciales incluidas. No tiene vuelta atrás, a propósito.
+- ⚠️ **Antes de sumar papelera a otra tabla con un UNIQUE sobre un índice ciego**, hay que resolver
+  esto mismo: o la validación mira la papelera y ofrece restaurar, o borrar borra. Las recetas son
+  el caso opuesto a propósito: ahí la papelera _tiene_ que ocupar el hash, para que lo borrado no
+  se reimporte.
+
 ## Panel principal (dashboard)
 
 `DashboardController` resuelve el **paciente activo**: `session('paciente_activo_id')` si
@@ -2983,7 +3010,8 @@ deja la fila **y su archivo cifrado en disco** para siempre. Se vuelve alcanzabl
 Etapa 14 exponga el `forceDelete` del propietario; hay que resolverlo ahí.
 **Ya resuelto para los catálogos**, que desde la decisión de "si nada lo usa, se borra de
 verdad" hacen `forceDelete`: `CatalogoBaseController::borrarDeVerdad()` se lleva antes los
-archivos (disco y filas). Sigue abierto para el resto de los dueños.
+archivos (disco y filas). Las coberturas también, desde que se borran de verdad. Sigue abierto
+para el resto de los dueños, que tienen papelera.
 
 **Paso 11.2 hecho**: `misalud:enviar-recordatorios`, cada hora por el scheduler, con su mail.
 
@@ -3130,10 +3158,9 @@ borra, y si nada lo usa se borra de verdad (ver "Borrar un catálogo"). Verifica
 volver a cargar un médico, un centro y una vacuna ya no revienta, y protegido por
 `ReferenciasACatalogosTest`, que lee las FK reales del esquema.
 
-**Sigue abierto en las coberturas y las alergias**, que tienen el mismo patrón (soft deletes y un
-UNIQUE sobre un índice ciego). No entraron en la decisión porque son registros clínicos de un
-paciente, no catálogos: borrarlos de verdad pierde historia, y conviene decidirlo junto con la
-papelera de la Etapa 14. Ojo: **las recetas tienen el comportamiento opuesto a propósito** —ahí
+**Las coberturas y las alergias**, con el mismo patrón, quedaron para una decisión aparte —son
+registros clínicos, no catálogos— y después también pasaron a borrarse de verdad (ver "Borrar
+borra" en Cobertura médica). Ojo: **las recetas tienen el comportamiento opuesto a propósito** —ahí
 la papelera _tiene_ que ocupar el hash, para que lo borrado no se reimporte—.
 
 De paso apareció **un bug de la propia Etapa 13**, ya arreglado: `exists:adjuntos,id` consultaba
@@ -3189,6 +3216,12 @@ tocar la base —el script sigue andando contra cualquier servidor— y si la cu
 ficha **lo marca como falla**, en vez de informar verde midiendo menos. Resultado: 342
 combinaciones sin desborde, 44 px en todo, menú que se cierra al navegar.
 
-Pendiente: deploy (15.3, necesita credenciales del mailer y confirmación). Queda también, sin fecha, la Etapa 16 (consultas y grabaciones), que necesita
-decidir cómo servir el audio. Y sin etapa: el 500 de la papelera en coberturas y alergias (los
-catálogos ya están arreglados).
+**Coberturas y alergias se borran de verdad** (decisión del usuario): volver a cargar una que se
+había borrado daba un 500. Verificado contra MySQL y en Chrome —cargar OSDE, borrarla y volver a
+cargarla; lo mismo con "Penicilina"—, sin ningún 500. Ver "Borrar borra" en Cobertura médica.
+
+**Decidido para la Etapa 16:** el audio de las consultas se guarda **sin cifrar** en disco
+(opción A del plan), servido igual por controlador con `Range`. Es la única que anda en iOS sin
+trabajo extra; queda probarlo en un iPhone real (paso 16.0).
+
+Pendiente: deploy (15.3, necesita credenciales del mailer y confirmación) y la Etapa 16.

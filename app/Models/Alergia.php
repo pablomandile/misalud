@@ -15,7 +15,6 @@ use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * A qué es alérgico un paciente.
@@ -34,8 +33,6 @@ class Alergia extends Model implements CifraDatos, PerteneceAPaciente
 
     /** @use HasFactory<AlergiaFactory> */
     use HasFactory;
-
-    use SoftDeletes;
 
     /** @var class-string<\Illuminate\Database\Eloquent\Builder<*>> */
     protected static string $builder = ConsultaVigilada::class;

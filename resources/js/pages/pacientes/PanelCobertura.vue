@@ -663,7 +663,8 @@ function alBorrarCobertura(): void {
                     </DialogTitle>
                     <DialogDescription>
                         Se borra la cobertura y su credencial. Esto no se puede
-                        deshacer.
+                        deshacer. Si solo dejaste de usarla, editala y destildá
+                        «Cobertura activa»: queda guardada para un reintegro.
                     </DialogDescription>
                 </DialogHeader>
 

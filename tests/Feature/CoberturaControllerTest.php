@@ -401,3 +401,51 @@ it('un lector NO puede subir la credencial', function (): void {
 
     expect($cobertura->adjuntos()->count())->toBe(0);
 });
+
+/*
+|--------------------------------------------------------------------------
+| Borrar borra: sin papelera
+|--------------------------------------------------------------------------
+*/
+
+it('borrar una cobertura y volver a cargarla con el mismo nombre funciona', function (): void {
+    /*
+     * Con papelera, la borrada seguía ocupando su `entidad_hash` en el UNIQUE,
+     * la validación no la veía y la base rechazaba la nueva con un 500.
+     */
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+    $cobertura = Cobertura::factory()->for($paciente)->create(['entidad' => 'OSDE']);
+
+    $this->actingAs($usuario)->delete(route('coberturas.destroy', $cobertura))->assertRedirect();
+
+    expect(DB::table('coberturas')->where('id', $cobertura->id)->exists())->toBeFalse();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.coberturas.store', $paciente), [
+            'tipo' => TipoCobertura::Prepaga->value,
+            'entidad' => 'OSDE',
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    expect($paciente->coberturas()->count())->toBe(1);
+});
+
+it('borrar una cobertura se lleva su credencial del disco y de la base', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+    $cobertura = Cobertura::factory()->for($paciente)->create();
+
+    $this->actingAs($usuario)->post(route('coberturas.adjuntos.store', $cobertura), [
+        'archivos' => [imagenDePrueba()],
+        'tipo' => TipoAdjunto::Credencial->value,
+    ]);
+    $ruta = $cobertura->adjuntos()->sole()->ruta;
+    Storage::disk('local')->assertExists($ruta);
+
+    $this->actingAs($usuario)->delete(route('coberturas.destroy', $cobertura))->assertRedirect();
+
+    Storage::disk('local')->assertMissing($ruta);
+    expect(DB::table('adjuntos')->where('adjuntable_id', $cobertura->id)->exists())->toBeFalse();
+});

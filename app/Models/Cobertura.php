@@ -18,7 +18,6 @@ use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * La cobertura médica de un paciente: obra social, prepaga, mutual o PAMI.
@@ -50,7 +49,6 @@ class Cobertura extends Model implements CifraDatos, PerteneceAPaciente, TieneAr
     /** @use HasFactory<CoberturaFactory> */
     use HasFactory;
 
-    use SoftDeletes;
     use TieneAdjuntos;
 
     /** @var class-string<\Illuminate\Database\Eloquent\Builder<*>> */

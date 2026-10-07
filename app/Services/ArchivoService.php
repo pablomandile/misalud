@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Contracts\TieneArchivos;
 use App\Models\Adjunto;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Http\UploadedFile;
@@ -229,6 +230,26 @@ class ArchivoService
     public function borrar(Adjunto $adjunto): bool
     {
         return $this->disco()->delete($adjunto->ruta);
+    }
+
+    /**
+     * Borra DE VERDAD todos los archivos de un dueño que se va a borrar de
+     * verdad: primero el disco, después las filas (la regla de los adjuntos; al
+     * revés, un archivo cifrado quedaría sin nada que lo referencie, invisible y
+     * para siempre).
+     *
+     * Con la papelera de los adjuntos incluida: un archivo que se borró antes ya
+     * no está en el disco, pero su fila sigue ahí apuntando a este dueño.
+     *
+     * Lo usan los catálogos y las coberturas, los dos dueños que se borran sin
+     * papelera.
+     */
+    public function borrarTodosDe(TieneArchivos $duenio): void
+    {
+        foreach ($duenio->adjuntos()->withTrashed()->get() as $adjunto) {
+            $this->borrar($adjunto);
+            $adjunto->forceDelete();
+        }
     }
 
     /**

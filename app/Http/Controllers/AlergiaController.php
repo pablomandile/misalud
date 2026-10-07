@@ -37,6 +37,11 @@ class AlergiaController extends Controller
         return back()->with('exito', 'Se guardaron los cambios.');
     }
 
+    /**
+     * Borra DE VERDAD: sin papelera, por el mismo motivo que una cobertura. La
+     * fila borrada ocupaba su `sustancia_hash` en el UNIQUE y volver a cargar
+     * "Penicilina" daba un 500, sin forma de restaurarla.
+     */
     public function destroy(Alergia $alergia): RedirectResponse
     {
         Gate::authorize('delete', $alergia);

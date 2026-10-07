@@ -180,3 +180,20 @@ it('el dueño borra su alergia', function (): void {
 
     expect(Alergia::find($alergia->id))->toBeNull();
 });
+
+it('borrar una alergia y volver a cargarla con la misma sustancia funciona', function (): void {
+    // Con papelera, la borrada ocupaba su `sustancia_hash` en el UNIQUE: daba un 500.
+    [$usuario, $paciente] = fichaConAlergias();
+    $alergia = Alergia::factory()->for($paciente)->create(['sustancia' => 'Penicilina']);
+
+    $this->actingAs($usuario)->delete(route('alergias.destroy', $alergia))->assertRedirect();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.alergias.store', $paciente), [
+            'sustancia' => 'Penicilina',
+            'severidad' => SeveridadAlergia::Grave->value,
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect($paciente->alergias()->count())->toBe(1);
+});

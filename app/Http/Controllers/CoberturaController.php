@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\CoberturaGuardarRequest;
 use App\Models\Cobertura;
 use App\Models\Paciente;
+use App\Services\ArchivoService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
 
@@ -45,10 +46,20 @@ class CoberturaController extends Controller
         return back()->with('exito', 'Se guardaron los cambios.');
     }
 
-    public function destroy(Cobertura $cobertura): RedirectResponse
+    /**
+     * Borra DE VERDAD, con la credencial: no hay papelera (decisión del
+     * usuario). Con papelera, la fila borrada seguía ocupando su `entidad_hash`
+     * en el UNIQUE, la validación no la veía, y volver a cargar "OSDE" daba un
+     * 500 —sin que existiera ninguna forma de restaurarla—. Para "ya no la uso"
+     * está destildar `activa`, que la deja en el historial; borrar es para lo que
+     * se cargó mal.
+     */
+    public function destroy(Cobertura $cobertura, ArchivoService $archivos): RedirectResponse
     {
         Gate::authorize('delete', $cobertura);
 
+        // Primero el disco, después las filas: la regla de los adjuntos.
+        $archivos->borrarTodosDe($cobertura);
         $cobertura->delete();
 
         return back()->with('exito', 'Se eliminó la cobertura.');

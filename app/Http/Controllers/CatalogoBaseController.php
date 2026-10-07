@@ -275,12 +275,7 @@ abstract class CatalogoBaseController extends Controller
     private function borrarDeVerdad(Model&EsCatalogo $registro): void
     {
         if ($registro instanceof TieneArchivos) {
-            $archivos = app(ArchivoService::class);
-
-            foreach ($registro->adjuntos()->withTrashed()->get() as $adjunto) {
-                $archivos->borrar($adjunto);
-                $adjunto->forceDelete();
-            }
+            app(ArchivoService::class)->borrarTodosDe($registro);
         }
 
         $registro->forceDelete();
