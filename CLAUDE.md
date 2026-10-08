@@ -3126,8 +3126,8 @@ Verificado corriendo el comando de verdad contra el mailer de log y leyendo el m
 no solo con `Mail::fake()`: `text/plain`, el motivo aparece **0 veces**, el nombre 1, y la hora
 en la zona de la cuenta.
 
-⚠️ **`MAIL_FROM_ADDRESS` sigue siendo el `hello@example.com` del starter kit.** Los avisos no
-van a salir de producción hasta configurar el mailer real; queda para el deploy (Etapa 15.3).
+`MAIL_FROM_ADDRESS` es el `hello@example.com` del starter kit **solo en local**, donde el
+mailer es `log`; producción tiene su casilla propia desde el deploy (15.3).
 
 **Etapa 11 completa.** El paso 11.3 del plan es "agenda y pendientes **en pantalla**", y eso
 quedó cubierto por la pantalla de turnos del 11.1: la sección "Avisos" son los pendientes y
@@ -3323,5 +3323,12 @@ tipeado en las notas al pausar, deja los avisos arriba de la barra y se cierra a
 suena; más 44 px y sin desborde a 320 px con la barra abierta, y `revisar:mobile` con las dos
 pantallas nuevas.
 
-Pendiente: deploy (15.3, necesita credenciales del mailer y confirmación) y **probar la
-grabación en un iPhone real** (16.0), que solo se puede con la app desplegada.
+**Paso 15.3 hecho**: la app está desplegada (datos de conexión en la skill `deploy-hostinger`).
+Migraciones y `CatalogosSeeder` corridos, configuración y rutas en caché, el mailer real
+configurado —el login SMTP se probó sin mandar nada—, y verificado por HTTPS: bundle igual al
+local, `manifest` como `application/manifest+json`, `no-store` + `Vary: X-Inertia` en la respuesta
+XHR. El PHP web acepta subidas de 256 MB, así que las grabaciones de 64 MB entran.
+El ingreso con Google queda **apagado** hasta cargar las credenciales en el `.env` del servidor.
+
+Pendiente: el cron de `schedule:run` en hPanel (sin él no salen avisos ni se importan recetas),
+la verificación en producción del 15.4, y **probar la grabación en un iPhone real** (16.0).
