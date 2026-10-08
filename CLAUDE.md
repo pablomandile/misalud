@@ -3328,7 +3328,8 @@ Migraciones y `CatalogosSeeder` corridos, configuración y rutas en caché, el m
 configurado —el login SMTP se probó sin mandar nada—, y verificado por HTTPS: bundle igual al
 local, `manifest` como `application/manifest+json`, `no-store` + `Vary: X-Inertia` en la respuesta
 XHR. El PHP web acepta subidas de 256 MB, así que las grabaciones de 64 MB entran.
-El ingreso con Google queda **apagado** hasta cargar las credenciales en el `.env` del servidor.
+El ingreso con Google está **encendido en producción**: el botón aparece y Google acepta el
+redirect sin `redirect_uri_mismatch`. El cron de `schedule:run` está creado en hPanel, y el
+usuario probó la app en un iPhone real (16.0).
 
-Pendiente: el cron de `schedule:run` en hPanel (sin él no salen avisos ni se importan recetas),
-la verificación en producción del 15.4, y **probar la grabación en un iPhone real** (16.0).
+Pendiente del 15.4: probar la casilla de recetas real desde producción ("Importar ahora").
