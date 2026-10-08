@@ -205,9 +205,31 @@ html[data-texto='muy-grande'] {
     --sidebar: hsl(240 5.9% 10%);
 }
 
+/*
+ * `color-scheme` le dice al NAVEGADOR en qué modo está la app. Sin esto, el modo
+ * oscuro era solo de nuestras variables: la lista desplegable de un <select>
+ * nativo, el calendario de un `type="date"` y las barras de scroll las dibuja el
+ * sistema, y salían claras. Las opciones heredaban el texto casi blanco del
+ * <select> sobre el fondo blanco del sistema: no se veía ninguna.
+ */
+:root {
+    color-scheme: light;
+}
+.dark {
+    color-scheme: dark;
+}
+
 @layer base {
     * {
         @apply border-border outline-ring/50;
+    }
+    /*
+     * Red por si un navegador ignora `color-scheme` en la lista: las opciones
+     * llevan el fondo y el texto de la app, que siempre contrastan entre sí.
+     */
+    option,
+    optgroup {
+        @apply bg-background text-foreground;
     }
     body {
         @apply bg-background text-foreground;

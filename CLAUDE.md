@@ -324,6 +324,10 @@ Trámite completo y cómo verificarlo sin abrir el navegador: `docs/google-oauth
 - Los valores de un formulario viajan en **inputs reales** dentro del `<Form>` de Inertia. Los
   componentes de reka-ui son botones, no inputs: los que envuelvan un valor llevan su
   `<input type="hidden">` espejo.
+- **El modo oscuro necesita `color-scheme: dark` en `.dark`** (`app.css`). Sin eso, la lista de
+  un `<select>` nativo la dibuja el sistema en claro y las opciones heredan el texto blanco:
+  blanco sobre blanco, no se ve ninguna. Lo reportó el usuario en producción; las opciones
+  además llevan `bg-background text-foreground` como red.
 - **Todo formulario con archivo va por POST con `_method=put`**, nunca por PUT directo: PHP no
   parsea el cuerpo multipart de un PUT, `$request->file()` llega vacío y la imagen se pierde
   en silencio, sin error de validación ni ningún síntoma.
