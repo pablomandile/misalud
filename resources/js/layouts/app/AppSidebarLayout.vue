@@ -41,7 +41,16 @@ const posicion = computed(() =>
         <AppSidebar />
         <AppContent variant="sidebar" class="min-w-0 overflow-x-clip">
             <AppSidebarHeader :breadcrumbs="breadcrumbs" />
-            <slot />
+            <!--
+                El margen de TODAS las pantallas vive acá, en un solo lugar. Lo
+                daba el contenedor del panel del starter kit; al reescribir el
+                panel (Etapa 4) se fue con él, y desde ahí todo quedaba pegado
+                al borde —en el celular, el texto contra el canto de la
+                pantalla—. `flex-1` para que el reproductor siga yendo al fondo.
+            -->
+            <div class="flex-1 px-4 py-6 md:px-6">
+                <slot />
+            </div>
             <!--
                 El reproductor de grabaciones: acá, en el layout, para que el
                 audio siga sonando al navegar (ver useReproductor).

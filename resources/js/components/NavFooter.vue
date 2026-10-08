@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import IconoSeccion from '@/components/IconoSeccion.vue';
 import { Link } from '@inertiajs/vue3';
 import {
     SidebarGroup,
@@ -46,11 +47,23 @@ function esExterno(href: NavItem['href']): boolean {
                             target="_blank"
                             rel="noopener noreferrer"
                         >
-                            <component :is="item.icon" />
+                            <IconoSeccion
+                                v-if="item.icon && item.tono"
+                                :icon="item.icon"
+                                :tono="item.tono"
+                                class="group-data-[collapsible=icon]:-m-1.5"
+                            />
+                            <component :is="item.icon" v-else />
                             <span>{{ item.title }}</span>
                         </a>
                         <Link v-else :href="item.href">
-                            <component :is="item.icon" />
+                            <IconoSeccion
+                                v-if="item.icon && item.tono"
+                                :icon="item.icon"
+                                :tono="item.tono"
+                                class="group-data-[collapsible=icon]:-m-1.5"
+                            />
+                            <component :is="item.icon" v-else />
                             <span>{{ item.title }}</span>
                         </Link>
                     </SidebarMenuButton>

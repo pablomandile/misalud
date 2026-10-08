@@ -42,11 +42,13 @@ export const destinosPrincipales: NavItem[] = [
         title: 'Inicio',
         href: dashboard(),
         icon: LayoutGrid,
+        tono: 'lavanda',
     },
     {
         title: 'Pacientes',
         href: PacienteController.index(),
         icon: Users,
+        tono: 'rosa',
     },
     /*
      * La bandeja de recetas va arriba, al lado de Pacientes: se abre en el
@@ -57,6 +59,7 @@ export const destinosPrincipales: NavItem[] = [
         title: 'Recetas',
         href: RecetaController.index(),
         icon: FileText,
+        tono: 'durazno',
     },
     /*
      * La libreta y, en la misma pantalla, lo que se le mandó a cada uno. Un
@@ -67,6 +70,7 @@ export const destinosPrincipales: NavItem[] = [
         title: 'Contactos',
         href: ContactoController.index(),
         icon: BookUser,
+        tono: 'celeste',
     },
     /*
      * Los catálogos son del USUARIO, no de un paciente: por eso van al mismo
@@ -79,26 +83,31 @@ export const destinosPrincipales: NavItem[] = [
         title: 'Médicos',
         href: MedicoController.index(),
         icon: Stethoscope,
+        tono: 'menta',
     },
     {
         title: 'Centros',
         href: CentroController.index(),
         icon: Building2,
+        tono: 'turquesa',
     },
     {
         title: 'Medicamentos',
         href: MedicamentoController.index(),
         icon: Pill,
+        tono: 'lavanda',
     },
     {
         title: 'Vacunas',
         href: VacunaController.index(),
         icon: Syringe,
+        tono: 'limon',
     },
     {
         title: 'Variables',
         href: TipoMedicionController.index(),
         icon: Activity,
+        tono: 'rosa',
     },
 ];
 
@@ -114,10 +123,12 @@ export const destinosSecundarios: NavItem[] = [
         title: 'Casilla de recetas',
         href: CuentaMailController.index(),
         icon: Mail,
+        tono: 'durazno',
     },
     {
         title: 'Configuración',
         href: editarPerfil(),
         icon: Settings,
+        tono: 'celeste',
     },
 ];

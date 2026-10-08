@@ -370,6 +370,31 @@ y rojos incrustados arriba del formulario.
   nadie lo midió: por el bug de arriba, `revisar:mobile` nunca tenía un toast en pantalla.
 - Detalle completo en la skill `overlays-al-navegar`.
 
+## Diseño visual: pastel multicolor
+
+Elegido por el usuario. La paleta vive en `app.css`: un fondo apenas lavanda, el primario en un
+violeta profundo (lleva texto blanco y pasa AA con holgura) y **siete tonos de sección** —lavanda,
+menta, durazno, celeste, rosa, limón, turquesa—, cada uno con su pastel (`bg-menta`) y su color
+fuerte (`text-menta-fuerte`), invertidos en modo oscuro.
+
+- **Un tono identifica una SECCIÓN, nunca juzga un valor** (regla 1). Turnos es lavanda en el
+  menú, en el panel y en la ficha; ningún número cambia de color según si "está bien".
+- Las clases de cada tono están **escritas enteras** en `lib/tonos.ts`: Tailwind solo genera las
+  que encuentra en el código, y un `bg-${tono}` armado en tiempo de ejecución no existe en el CSS.
+- `IconoSeccion` (el ícono en su pastilla), `TarjetaPanel` (la tarjeta teñida del panel) y
+  `FondoAbstracto` (manchas difusas detrás de todo) son las piezas. El fondo usa degradés
+  radiales y no `filter: blur()`, que se recalcula en cada scroll y en un celular viejo se nota;
+  va con `-z-10`, así que su contenedor necesita `isolate`.
+- **Ícono siempre con su nombre escrito al lado.** La ficha de pacientes tenía quince botones
+  de ícono solo, que además aplastaban el nombre hasta no verse en escritorio: ahora son
+  baldosas con ícono y rótulo, que se ajustan al ancho de la **tarjeta** (`@container`) y no al
+  de la pantalla, con los cortes en `rem` para que la letra grande pase a una columna antes.
+- ⚠️ **El margen de todas las pantallas está en `AppSidebarLayout`.** Lo daba el contenedor del
+  panel del starter kit y se fue con él en la Etapa 4: desde ahí todo quedaba pegado al borde,
+  en el celular con el texto contra el canto. Ninguna página pone su propio margen exterior.
+
+Pendiente: llevar los tonos y los encabezados con ícono a cada pantalla de la ficha.
+
 ## Accesibilidad — requisito, no pulido
 
 ### Tamaño de letra

@@ -29,7 +29,8 @@ const { isCurrentOrParentUrl } = useCurrentUrl();
 </script>
 
 <template>
-    <div class="px-4 py-6">
+    <!-- El margen lo pone AppSidebarLayout, igual que en todas las pantallas. -->
+    <div>
         <Heading
             title="Configuración"
             description="Administrá tu perfil y la configuración de la cuenta"

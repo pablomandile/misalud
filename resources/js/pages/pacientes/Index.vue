@@ -17,6 +17,7 @@ import {
     UserRound,
     Users,
 } from '@lucide/vue';
+import type { LucideIcon } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
 import EnfermedadController from '@/actions/App/Http/Controllers/EnfermedadController';
@@ -30,6 +31,9 @@ import ConsultaController from '@/actions/App/Http/Controllers/ConsultaControlle
 import AplicacionVacunaController from '@/actions/App/Http/Controllers/AplicacionVacunaController';
 import TratamientoController from '@/actions/App/Http/Controllers/TratamientoController';
 import Heading from '@/components/Heading.vue';
+import IconoSeccion from '@/components/IconoSeccion.vue';
+import type { Tono } from '@/lib/tonos';
+import type { RouteDefinition } from '@/wayfinder';
 import PanelCobertura from '@/pages/pacientes/PanelCobertura.vue';
 import PanelCompartir from '@/pages/pacientes/PanelCompartir.vue';
 import SubirArchivo from '@/components/SubirArchivo.vue';
@@ -37,7 +41,7 @@ import type { DocumentoVisible } from '@/components/VisorDocumento.vue';
 import VisorDocumento from '@/components/VisorDocumento.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import {
     Dialog,
     DialogClose,
@@ -182,6 +186,78 @@ function pesoLegible(bytes: number): string {
         : `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
 }
 
+/*
+ * Las partes de la historia que son pantalla propia, en el orden en que se
+ * buscan: lo que viene (turnos) y lo que se dijo (consultas) primero. Cada una
+ * con el tono de su sección, el mismo que tiene en el panel.
+ */
+const seccionesDeLaFicha: Array<{
+    titulo: string;
+    icon: LucideIcon;
+    tono: Tono;
+    ruta: (paciente: number) => RouteDefinition<'get'>;
+}> = [
+    {
+        titulo: 'Turnos',
+        icon: CalendarClock,
+        tono: 'lavanda',
+        ruta: (paciente) => TurnoController.index({ paciente }),
+    },
+    {
+        titulo: 'Consultas',
+        icon: Stethoscope,
+        tono: 'lavanda',
+        ruta: (paciente) => ConsultaController.index({ paciente }),
+    },
+    {
+        titulo: 'Tratamientos',
+        icon: Pill,
+        tono: 'rosa',
+        ruta: (paciente) => TratamientoController.index({ paciente }),
+    },
+    {
+        titulo: 'Mediciones',
+        icon: Activity,
+        tono: 'menta',
+        ruta: (paciente) => MedicionController.index({ paciente }),
+    },
+    {
+        titulo: 'Enfermedades',
+        icon: HeartPulse,
+        tono: 'durazno',
+        ruta: (paciente) => EnfermedadController.index({ paciente }),
+    },
+    {
+        titulo: 'Vacunas',
+        icon: Syringe,
+        tono: 'limon',
+        ruta: (paciente) => AplicacionVacunaController.index({ paciente }),
+    },
+    {
+        titulo: 'Órdenes',
+        icon: ClipboardList,
+        tono: 'turquesa',
+        ruta: (paciente) => OrdenEstudioController.index({ paciente }),
+    },
+    {
+        titulo: 'Estudios',
+        icon: FlaskConical,
+        tono: 'turquesa',
+        ruta: (paciente) => EstudioController.index({ paciente }),
+    },
+    {
+        titulo: 'Salud ocular',
+        icon: Eye,
+        tono: 'celeste',
+        ruta: (paciente) => PrescripcionOcularController.index({ paciente }),
+    },
+];
+
+const baldosa =
+    'flex min-h-11 items-center gap-2 rounded-xl border bg-card p-2 text-left text-sm font-medium transition-colors hover:bg-accent';
+const contador =
+    'shrink-0 rounded-full bg-muted px-2 text-xs font-semibold text-muted-foreground';
+
 function edadTexto(p: Paciente): string {
     return p.edad === null ? '' : `${p.edad} años`;
 }
@@ -217,14 +293,35 @@ function edadTexto(p: Paciente): string {
             </p>
         </div>
 
-        <div v-else class="grid gap-3 sm:grid-cols-2">
-            <Card v-for="paciente in pacientes" :key="paciente.id">
-                <CardContent class="flex items-start justify-between gap-3">
-                    <div class="min-w-0 space-y-1">
-                        <p class="truncate font-medium">
+        <div v-else class="grid gap-4 xl:grid-cols-2">
+            <Card
+                v-for="paciente in pacientes"
+                :key="paciente.id"
+                class="@container gap-0 overflow-hidden py-0"
+            >
+                <!--
+                    La cabecera: quién es, y lo que se hace con la ficha entera.
+                    El nombre tiene la fila para él solo: antes compartía renglón
+                    con quince botones de ícono, que lo aplastaban hasta no verse.
+                -->
+                <div
+                    class="flex flex-wrap items-start gap-3 bg-linear-to-br from-rosa/60 to-card px-5 pt-5 pb-4"
+                >
+                    <span
+                        aria-hidden="true"
+                        class="flex size-12 shrink-0 items-center justify-center rounded-full bg-rosa text-lg font-semibold text-rosa-fuerte"
+                    >
+                        {{ paciente.nombre.trim().charAt(0).toUpperCase() }}
+                    </span>
+                    <!-- min-w: si no entra al lado del nombre, Editar baja a otra línea. -->
+                    <div class="min-w-[9rem] flex-1 space-y-0.5">
+                        <h2 class="text-lg font-semibold wrap-break-word">
                             {{ paciente.nombre }}
-                        </p>
-                        <p class="text-sm text-muted-foreground">
+                        </h2>
+                        <p
+                            v-if="paciente.edad !== null || paciente.sexo"
+                            class="text-sm text-muted-foreground"
+                        >
                             <span v-if="paciente.edad !== null">{{
                                 edadTexto(paciente)
                             }}</span>
@@ -244,186 +341,12 @@ function edadTexto(p: Paciente): string {
                             Grupo {{ paciente.grupo_sanguineo }}
                         </p>
                     </div>
-
-                    <div class="flex shrink-0 flex-wrap justify-end gap-1">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            @click="idDeCoberturas = paciente.id"
-                        >
-                            <CreditCard />
-                            {{ paciente.coberturas.length || '' }}
-                            <span class="sr-only">
-                                Cobertura médica de {{ paciente.nombre }}
-                            </span>
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            @click="idDeDocumentos = paciente.id"
-                        >
-                            <FileText />
-                            {{ paciente.adjuntos.length || '' }}
-                            <span class="sr-only">
-                                Documentos de {{ paciente.nombre }}
-                            </span>
-                        </Button>
-                        <!--
-                            Las mediciones son pantalla propia y no un panel:
-                            crecen con el tiempo y en la Etapa 6.3 suman su
-                            gráfico, que no entra en un sheet.
-                        -->
-                        <Button variant="ghost" size="sm" as-child>
-                            <Link
-                                :href="
-                                    MedicionController.index({
-                                        paciente: paciente.id,
-                                    })
-                                "
-                            >
-                                <Activity />
-                                <span class="sr-only">
-                                    Mediciones de {{ paciente.nombre }}
-                                </span>
-                            </Link>
-                        </Button>
-                        <Button variant="ghost" size="sm" as-child>
-                            <Link
-                                :href="
-                                    EnfermedadController.index({
-                                        paciente: paciente.id,
-                                    })
-                                "
-                            >
-                                <HeartPulse />
-                                <span class="sr-only">
-                                    Enfermedades y alergias de
-                                    {{ paciente.nombre }}
-                                </span>
-                            </Link>
-                        </Button>
-                        <Button variant="ghost" size="sm" as-child>
-                            <Link
-                                :href="
-                                    TratamientoController.index({
-                                        paciente: paciente.id,
-                                    })
-                                "
-                            >
-                                <Pill />
-                                <span class="sr-only">
-                                    Tratamientos de {{ paciente.nombre }}
-                                </span>
-                            </Link>
-                        </Button>
-                        <Button variant="ghost" size="sm" as-child>
-                            <Link
-                                :href="
-                                    AplicacionVacunaController.index({
-                                        paciente: paciente.id,
-                                    })
-                                "
-                            >
-                                <Syringe />
-                                <span class="sr-only">
-                                    Vacunas de {{ paciente.nombre }}
-                                </span>
-                            </Link>
-                        </Button>
-                        <Button variant="ghost" size="sm" as-child>
-                            <Link
-                                :href="
-                                    ConsultaController.index({
-                                        paciente: paciente.id,
-                                    })
-                                "
-                            >
-                                <Stethoscope />
-                                <span class="sr-only">
-                                    Consultas de {{ paciente.nombre }}
-                                </span>
-                            </Link>
-                        </Button>
-                        <Button variant="ghost" size="sm" as-child>
-                            <Link
-                                :href="
-                                    OrdenEstudioController.index({
-                                        paciente: paciente.id,
-                                    })
-                                "
-                            >
-                                <ClipboardList />
-                                <span class="sr-only">
-                                    Órdenes de estudio de {{ paciente.nombre }}
-                                </span>
-                            </Link>
-                        </Button>
-                        <Button variant="ghost" size="sm" as-child>
-                            <Link
-                                :href="
-                                    EstudioController.index({
-                                        paciente: paciente.id,
-                                    })
-                                "
-                            >
-                                <FlaskConical />
-                                <span class="sr-only">
-                                    Estudios de {{ paciente.nombre }}
-                                </span>
-                            </Link>
-                        </Button>
-                        <Button variant="ghost" size="sm" as-child>
-                            <Link
-                                :href="
-                                    PrescripcionOcularController.index({
-                                        paciente: paciente.id,
-                                    })
-                                "
-                            >
-                                <Eye />
-                                <span class="sr-only">
-                                    Salud ocular de {{ paciente.nombre }}
-                                </span>
-                            </Link>
-                        </Button>
-                        <Button variant="ghost" size="sm" as-child>
-                            <Link
-                                :href="
-                                    TurnoController.index({
-                                        paciente: paciente.id,
-                                    })
-                                "
-                            >
-                                <CalendarClock />
-                                <span class="sr-only">
-                                    Turnos de {{ paciente.nombre }}
-                                </span>
-                            </Link>
-                        </Button>
-                        <!--
-                            Para todos los que tienen acceso: saber con quién se
-                            comparte una historia es parte de verla. Lo que
-                            cambia según el rol es qué se puede hacer adentro.
-                        -->
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            @click="idDeCompartir = paciente.id"
-                        >
-                            <Users />
-                            {{
-                                paciente.accesos.length > 1
-                                    ? paciente.accesos.length
-                                    : ''
-                            }}
-                            <span class="sr-only">
-                                Quién ve la ficha de {{ paciente.nombre }}
-                            </span>
-                        </Button>
+                    <div class="ml-auto flex shrink-0 gap-1">
                         <Button
                             v-if="paciente.puedeEditar"
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
+                            class="bg-card/80"
                             @click="pacienteAEditar = paciente"
                         >
                             Editar
@@ -436,9 +359,104 @@ function edadTexto(p: Paciente): string {
                             @click="pacienteABorrar = paciente"
                         >
                             <Trash2 class="size-4" />
+                            <span class="sr-only"
+                                >Borrar la ficha de {{ paciente.nombre }}</span
+                            >
                         </Button>
                     </div>
-                </CardContent>
+                </div>
+
+                <!--
+                    Los accesos a cada parte de la historia: ícono de color Y
+                    nombre escrito. Antes eran íconos solos, que es justo lo que
+                    esta app evita (personas mayores; ver CLAUDE.md). Se ajustan
+                    al ancho de la TARJETA (@container), no al de la pantalla:
+                    con dos fichas lado a lado, cada una tiene la mitad. Y como
+                    los cortes van en rem, con la letra "Muy grande" pasa a una
+                    columna antes, en vez de cortar "Tratamientos".
+                -->
+                <nav
+                    :aria-label="`Historia clínica de ${paciente.nombre}`"
+                    class="grid gap-2 p-4 @sm:grid-cols-2 @xl:grid-cols-3 @3xl:grid-cols-4"
+                >
+                    <Link
+                        v-for="seccion in seccionesDeLaFicha"
+                        :key="seccion.titulo"
+                        :href="seccion.ruta(paciente.id)"
+                        :class="baldosa"
+                    >
+                        <IconoSeccion
+                            :icon="seccion.icon"
+                            :tono="seccion.tono"
+                        />
+                        <span class="min-w-0 leading-tight">
+                            {{ seccion.titulo }}
+                            <span class="sr-only">
+                                de {{ paciente.nombre }}</span
+                            >
+                        </span>
+                    </Link>
+
+                    <button
+                        type="button"
+                        :class="baldosa"
+                        @click="idDeCoberturas = paciente.id"
+                    >
+                        <IconoSeccion :icon="CreditCard" tono="celeste" />
+                        <span class="min-w-0 flex-1 leading-tight">
+                            Cobertura
+                            <span class="sr-only">
+                                médica de {{ paciente.nombre }}</span
+                            >
+                        </span>
+                        <span
+                            v-if="paciente.coberturas.length"
+                            :class="contador"
+                        >
+                            {{ paciente.coberturas.length }}
+                        </span>
+                    </button>
+                    <button
+                        type="button"
+                        :class="baldosa"
+                        @click="idDeDocumentos = paciente.id"
+                    >
+                        <IconoSeccion :icon="FileText" tono="durazno" />
+                        <span class="min-w-0 flex-1 leading-tight">
+                            Documentos
+                            <span class="sr-only">
+                                de {{ paciente.nombre }}</span
+                            >
+                        </span>
+                        <span v-if="paciente.adjuntos.length" :class="contador">
+                            {{ paciente.adjuntos.length }}
+                        </span>
+                    </button>
+                    <!--
+                        Para todos los que tienen acceso: saber con quién se
+                        comparte una historia es parte de verla. Lo que cambia
+                        según el rol es qué se puede hacer adentro.
+                    -->
+                    <button
+                        type="button"
+                        :class="baldosa"
+                        @click="idDeCompartir = paciente.id"
+                    >
+                        <IconoSeccion :icon="Users" tono="rosa" />
+                        <span class="min-w-0 flex-1 leading-tight">
+                            Quién la ve
+                            <span class="sr-only">
+                                (la ficha de {{ paciente.nombre }})</span
+                            >
+                        </span>
+                        <span
+                            v-if="paciente.accesos.length > 1"
+                            :class="contador"
+                        >
+                            {{ paciente.accesos.length }}
+                        </span>
+                    </button>
+                </nav>
             </Card>
         </div>
 
