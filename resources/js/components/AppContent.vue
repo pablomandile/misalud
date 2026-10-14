@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import FondoAbstracto from '@/components/FondoAbstracto.vue';
+import FondoDeSalud from '@/components/FondoDeSalud.vue';
 import { SidebarInset } from '@/components/ui/sidebar';
 import type { AppVariant } from '@/types';
 
@@ -26,7 +26,7 @@ const className = computed(() => props.class);
         class="zona-segura-lateral isolate"
         :class="className"
     >
-        <FondoAbstracto />
+        <FondoDeSalud />
         <slot />
     </SidebarInset>
     <main

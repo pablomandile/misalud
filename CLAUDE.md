@@ -381,10 +381,18 @@ fuerte (`text-menta-fuerte`), invertidos en modo oscuro.
   menú, en el panel y en la ficha; ningún número cambia de color según si "está bien".
 - Las clases de cada tono están **escritas enteras** en `lib/tonos.ts`: Tailwind solo genera las
   que encuentra en el código, y un `bg-${tono}` armado en tiempo de ejecución no existe en el CSS.
-- `IconoSeccion` (el ícono en su pastilla), `TarjetaPanel` (la tarjeta teñida del panel) y
-  `FondoAbstracto` (manchas difusas detrás de todo) son las piezas. El fondo usa degradés
-  radiales y no `filter: blur()`, que se recalcula en cada scroll y en un celular viejo se nota;
-  va con `-z-10`, así que su contenedor necesita `isolate`.
+- `IconoSeccion` (el ícono en su pastilla) y `TarjetaPanel` (la tarjeta teñida del panel) son
+  las piezas de las pantallas.
+- **El fondo (`FondoDeSalud`) son corazones, estetoscopios y cofias de enfermera** en trazo fino
+  y muy pálidos, pedido del usuario en lugar de las manchas abstractas del principio. Es un
+  `<pattern>` de SVG en mosaico: cubre una pantalla de cualquier alto sin cálculos al hacer
+  scroll, y toma los colores de las variables, así que el modo oscuro los cambia solo (un SVG en
+  `background-image` no ve las variables de la página). Las posiciones se sortean **una vez al
+  cargar el módulo**: el fondo vive en el layout, que no se remonta, así que no saltan al
+  navegar. Va con `-z-10`, y su contenedor necesita `isolate`.
+- ⚠️ **`:global(.dark) .x` en un `<style scoped>` de Vue se compila como `.dark` a secas.** Una
+  opacidad puesta así le tocó a la página entera y el modo oscuro quedó casi negro. Lo que
+  depende del tema va en clases de Tailwind (`dark:opacity-10`) o en `app.css`.
 - **Ícono siempre con su nombre escrito al lado.** La ficha de pacientes tenía quince botones
   de ícono solo, que además aplastaban el nombre hasta no verse en escritorio: ahora son
   baldosas con ícono y rótulo, que se ajustan al ancho de la **tarjeta** (`@container`) y no al
