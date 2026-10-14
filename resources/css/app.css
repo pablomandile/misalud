@@ -295,6 +295,13 @@ html[data-texto='muy-grande'] {
     }
     body {
         @apply bg-background text-foreground;
+        /*
+         * El aviso de cookies va fijo abajo y en el celular ocupa unos 200 px:
+         * sin este margen tapaba el botón de "Iniciar sesión" y no había forma
+         * de correr la pantalla para alcanzarlo. Lo publica AvisoCookies.vue y
+         * vuelve a cero cuando se cierra.
+         */
+        padding-bottom: var(--alto-aviso, 0px);
     }
 }
 

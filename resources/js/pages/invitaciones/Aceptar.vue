@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { olvidarTodasLasCredenciales } from '@/lib/cacheCredencial';
 import { Form, Head, Link } from '@inertiajs/vue3';
 import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
@@ -147,7 +148,11 @@ defineProps<{
                     <strong class="break-all">{{ email }}</strong
                     >, y entraste con otra cuenta.
                 </p>
-                <Form v-bind="logout.form()" v-slot="{ processing }">
+                <Form
+                    v-bind="logout.form()"
+                    v-slot="{ processing }"
+                    @start="olvidarTodasLasCredenciales"
+                >
                     <Button
                         type="submit"
                         variant="secondary"

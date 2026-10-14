@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, router } from '@inertiajs/vue3';
-import { LogOut, Settings } from '@lucide/vue';
+import { Cookie, LogOut, Settings } from '@lucide/vue';
 import {
     DropdownMenuGroup,
     DropdownMenuItem,
@@ -8,7 +8,8 @@ import {
     DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import UserInfo from '@/components/UserInfo.vue';
-import { logout } from '@/routes';
+import { olvidarTodasLasCredenciales } from '@/lib/cacheCredencial';
+import { cookies, logout } from '@/routes';
 import { edit } from '@/routes/profile';
 import type { User } from '@/types';
 
@@ -18,6 +19,9 @@ type Props = {
 
 const handleLogout = () => {
     router.flushAll();
+    // Las credenciales guardadas para verlas sin señal no se quedan en el
+    // dispositivo después de salir (ver cacheCredencial.ts).
+    olvidarTodasLasCredenciales();
 };
 
 defineProps<Props>();
@@ -34,7 +38,13 @@ defineProps<Props>();
         <DropdownMenuItem :as-child="true">
             <Link class="block w-full cursor-pointer" :href="edit()" prefetch>
                 <Settings class="mr-2 h-4 w-4" />
-                Settings
+                Configuración
+            </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem :as-child="true">
+            <Link class="block w-full cursor-pointer" :href="cookies()">
+                <Cookie class="mr-2 h-4 w-4" />
+                Cookies y datos guardados
             </Link>
         </DropdownMenuItem>
     </DropdownMenuGroup>

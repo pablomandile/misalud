@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { olvidarTodasLasCredenciales } from '@/lib/cacheCredencial';
 import { Form, Head } from '@inertiajs/vue3';
 import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
@@ -40,7 +41,12 @@ defineProps<{
             Reenviar el email de verificación
         </Button>
 
-        <TextLink :href="logout()" as="button" class="mx-auto block text-sm">
+        <TextLink
+            :href="logout()"
+            as="button"
+            class="mx-auto block text-sm"
+            @click="olvidarTodasLasCredenciales"
+        >
             Cerrar sesión
         </TextLink>
     </Form>

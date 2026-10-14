@@ -2,6 +2,7 @@ import { createInertiaApp } from '@inertiajs/vue3';
 import { initializeTheme } from '@/composables/useAppearance';
 import AppLayout from '@/layouts/AppLayout.vue';
 import AuthLayout from '@/layouts/AuthLayout.vue';
+import PublicoLayout from '@/layouts/PublicoLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
 import { initializeFlashToast } from '@/lib/flashToast';
 
@@ -9,10 +10,17 @@ const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
 void createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
-    layout: (name) => {
+    layout: (name, page) => {
         switch (true) {
+            // La portada se dibuja sola; el layout público solo le suma el
+            // aviso de cookies, que tiene que verse en la primera visita.
             case name === 'Welcome':
-                return null;
+                return PublicoLayout;
+            // La página de cookies se abre con sesión y sin ella.
+            case name === 'Cookies':
+                return (page.props as { auth?: { user?: unknown } }).auth?.user
+                    ? AppLayout
+                    : PublicoLayout;
             // Las invitaciones se abren muchas veces SIN sesión: el layout con
             // menú no tiene sentido para alguien que todavía no entró.
             case name.startsWith('auth/'):

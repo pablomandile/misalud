@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { dashboard, login, register } from '@/routes';
+import { cookies, dashboard, login, register } from '@/routes';
 import { Button } from '@/components/ui/button';
 </script>
 
@@ -59,5 +59,14 @@ import { Button } from '@/components/ui/button';
                 </Button>
             </div>
         </main>
+
+        <footer class="mx-auto w-full max-w-3xl text-sm">
+            <Link
+                :href="cookies()"
+                class="inline-flex min-h-11 items-center text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
+                Cookies y datos guardados
+            </Link>
+        </footer>
     </div>
 </template>

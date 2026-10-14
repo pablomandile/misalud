@@ -35,6 +35,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
 
+// Qué guarda la app en el navegador. Pública: el aviso de cookies enlaza acá
+// desde la portada y el ingreso, antes de que exista una sesión.
+Route::inertia('cookies', 'Cookies')->name('cookies');
+
 // Respaldo que sirve el service worker cuando no hay conexión. Es una vista
 // suelta, no Inertia: tiene que poder mostrarse sin los assets compilados.
 Route::view('offline', 'offline')->name('offline');

@@ -546,6 +546,46 @@ Pedido explícito del usuario, con la salvedad que el plan ya anticipaba: es una
 - Verificado en Chrome real: se cachea al verla online, sirve desde el cache con
   `page.setOfflineMode(true)`, y desaparece del cache al borrar la cobertura.
 
+## Aviso de cookies
+
+**Informativo, con un solo botón** («Entendido» + «Más información»), porque todo lo que MiSalud
+guarda en el navegador es necesario: la sesión, el `XSRF-TOKEN`, «Recordarme», el tamaño de letra,
+el tema, el estado del menú lateral, la app para que abra rápido y las credenciales para verlas sin
+señal. Las fuentes se sirven desde el propio servidor (Bunny, compiladas por Vite), no hay
+analíticas y lo único de terceros es Google durante el ingreso. Un «Rechazar» sería de adorno: lo
+único que podría apagar es la sesión. Armado con la skill `aviso-cookies`.
+
+| Pieza               | Qué hace                                                              |
+| ------------------- | --------------------------------------------------------------------- |
+| `useAvisoCookies`   | Estado de módulo; la marca `misalud:aviso-cookies` guarda una versión |
+| `AvisoCookies.vue`  | El aviso. En los tres layouts: app, ingreso y `PublicoLayout`         |
+| `pages/Cookies.vue` | `/cookies`, pública: el inventario, una tarjeta por dato              |
+| `AvisoCookiesTest`  | Falla si el código guarda una clave que la página no declara          |
+
+- ⚠️ **Si entra algo que no es necesario** (analíticas, un widget de terceros), el modelo cambia:
+  consentimiento previo, «Aceptar» y «Rechazar» del mismo peso, el script se carga recién al
+  aceptar, y se sube `VERSION` en `useAvisoCookies` para que el aviso vuelva a todos.
+- **La marca guarda una versión** y se lee en `onMounted`, no en el setup: leída en el primer
+  render, quien ya lo cerró lo vería aparecer y desaparecer en cada carga.
+- **Publica su alto en `--alto-aviso`**, como el reproductor: la barra de la grabación, los toasts
+  del celular y el `padding-bottom` del `body` lo suman. ⚠️ Sin ese margen, en el celular el aviso
+  (unos 200 px) **tapaba «Iniciar sesión»** y no había scroll para alcanzarlo.
+- En escritorio va **abajo a la derecha**: a la izquierda está el menú de la cuenta, y los toasts
+  en escritorio salen arriba.
+- `revisar:mobile` arranca con el aviso cerrado (`evaluateOnNewDocument`): abierto, el chequeo de
+  áreas táctiles medía el aviso en vez del control de abajo. El aviso se mide en su propia
+  verificación.
+
+### ⚠️ Salir de la cuenta borra las credenciales guardadas
+
+Lo encontró el inventario: la caché `misalud-credenciales-v1` sobrevivía al cierre de sesión, y
+en un teléfono compartido la foto de la credencial de alguien quedaba disponible. Ahora las tres
+salidas de la cuenta (menú de usuario, verificar el mail, aceptar una invitación) llaman a
+`olvidarTodasLasCredenciales()`, que la borra **desde la página** con la Cache Storage API y no
+por `postMessage`: un mensaje se pierde si el service worker todavía no controla la página. El
+nombre está repetido en `cacheCredencial.ts` y en `sw.js`, y `AvisoCookiesTest` falla si se
+separan o si una salida deja de llamarla.
+
 ## Adjuntos
 
 Una sola tabla polimórfica para todos los archivos de la historia clínica. Cuelga de

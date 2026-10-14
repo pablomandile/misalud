@@ -69,7 +69,7 @@ function alMover(evento: Event): void {
         v-if="r.pista.value"
         ref="barra"
         aria-label="Reproductor de la grabación"
-        class="sticky bottom-0 z-20 mt-auto border-t bg-background/95 px-3 pt-2 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] backdrop-blur"
+        class="sticky bottom-[var(--alto-aviso,0px)] z-20 mt-auto border-t bg-background/95 px-3 pt-2 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] backdrop-blur"
         style="padding-bottom: calc(0.5rem + env(safe-area-inset-bottom))"
     >
         <div class="flex items-center gap-2">

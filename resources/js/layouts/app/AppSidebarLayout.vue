@@ -5,6 +5,7 @@ import AppContent from '@/components/AppContent.vue';
 import AppShell from '@/components/AppShell.vue';
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppSidebarHeader from '@/components/AppSidebarHeader.vue';
+import AvisoCookies from '@/components/AvisoCookies.vue';
 import Reproductor from '@/components/Reproductor.vue';
 import { Toaster } from '@/components/ui/sonner';
 import { useAvisos } from '@/composables/useAvisos';
@@ -69,7 +70,8 @@ const posicion = computed(() =>
             :position="posicion"
             :mobile-offset="{
                 // Arriba del reproductor cuando está abierto: si no, el aviso lo tapa.
-                bottom: 'calc(1rem + env(safe-area-inset-bottom) + var(--alto-reproductor, 0px))',
+                // y arriba del aviso de cookies, que también va abajo en el celular.
+                bottom: 'calc(1rem + env(safe-area-inset-bottom) + var(--alto-reproductor, 0px) + var(--alto-aviso, 0px))',
                 left: 'calc(1rem + env(safe-area-inset-left))',
                 right: 'calc(1rem + env(safe-area-inset-right))',
             }"
@@ -78,5 +80,7 @@ const posicion = computed(() =>
             container-aria-label="Avisos"
             :toast-options="{ closeButtonAriaLabel: 'Cerrar el aviso' }"
         />
+
+        <AvisoCookies />
     </AppShell>
 </template>

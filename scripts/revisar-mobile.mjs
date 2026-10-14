@@ -55,7 +55,7 @@ const PASSWORD = process.env.PASSWORD ?? 'prueba-1234';
  * la matriz decía "sin desborde" sobre la pantalla equivocada. Es la primera
  * que ve cualquiera, y la que más texto apila cuando la letra es muy grande.
  */
-const RUTAS_INVITADO = ['/login', '/register'];
+const RUTAS_INVITADO = ['/login', '/register', '/cookies'];
 const RUTAS = [
     '/dashboard',
     '/pacientes',
@@ -134,6 +134,22 @@ const navegador = await puppeteer.launch({
 });
 
 const pagina = await navegador.newPage();
+
+/*
+ * El aviso de cookies arranca CERRADO, como lo ve cualquiera que ya lo leyó.
+ * Con un perfil limpio queda abierto, fijo abajo, en todas las pantallas: el
+ * chequeo de áreas táctiles mide con `elementFromPoint` y se encontraba con el
+ * aviso en vez del control de abajo ("Recordarme: 18px"), y el ingreso no
+ * llegaba a tocar el botón. El aviso mismo se mide aparte (44 px, sin desborde,
+ * y que deje alcanzar "Iniciar sesión"): ver AvisoCookiesTest y CLAUDE.md.
+ */
+await pagina.evaluateOnNewDocument(() => {
+    try {
+        localStorage.setItem('misalud:aviso-cookies', '1');
+    } catch {
+        // Sin almacenamiento, el aviso queda abierto y el chequeo lo va a decir.
+    }
+});
 
 async function ingresar(pagina) {
     await pagina.goto(`${BASE}/login`, { waitUntil: 'networkidle0' });
