@@ -1,6 +1,6 @@
 <script lang="ts">
 /*
- * El fondo de la app: corazones, estetoscopios y cofias de enfermera en tonos
+ * El fondo de la app: corazones con una cruz, estetoscopios y cofias de enfermera en tonos
  * pálidos, desparramados detrás de todo el contenido. Pura decoración:
  * `aria-hidden` y sin eventos.
  *
@@ -103,10 +103,16 @@ const color: Record<Figura, string> = {
                 sin relleno: un ícono de línea se lee como dibujo y no como
                 mancha, que es lo que hace que no moleste.
             -->
+            <!--
+                El corazón con una cruz adentro, el de "una vida más" de los
+                videojuegos. La cruz va en el centro óptico del corazón, que no
+                es el de la caja: está más arriba, donde el corazón es ancho.
+            -->
             <g id="figura-corazon">
                 <path
                     d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"
                 />
+                <path d="M12 8.2v5.6M9.2 11h5.6" />
             </g>
             <g id="figura-estetoscopio">
                 <path d="M11 2v2M5 2v2" />

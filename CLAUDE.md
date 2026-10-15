@@ -383,7 +383,8 @@ fuerte (`text-menta-fuerte`), invertidos en modo oscuro.
   que encuentra en el código, y un `bg-${tono}` armado en tiempo de ejecución no existe en el CSS.
 - `IconoSeccion` (el ícono en su pastilla) y `TarjetaPanel` (la tarjeta teñida del panel) son
   las piezas de las pantallas.
-- **El fondo (`FondoDeSalud`) son corazones, estetoscopios y cofias de enfermera** en trazo fino
+- **El fondo (`FondoDeSalud`) son corazones con una cruz (el de "una vida más" de los
+  videojuegos), estetoscopios y cofias de enfermera** en trazo fino
   y muy pálidos, pedido del usuario en lugar de las manchas abstractas del principio. Es un
   `<pattern>` de SVG en mosaico: cubre una pantalla de cualquier alto sin cálculos al hacer
   scroll, y toma los colores de las variables, así que el modo oscuro los cambia solo (un SVG en
@@ -457,6 +458,9 @@ Tres opciones, **con la mediana por defecto**: Normal `100%`, **Grande `112.5%`*
 - **Menú hamburguesa** en mobile, sidebar en `>= md`. Sin barra inferior de tabs: los íconos
   chicos son lo contrario de lo que esta app necesita. `lib/navegacion.ts` es la definición
   única de los dos layouts — cada etapa suma ahí sus destinos y aparecen en los dos.
+- **El botón del menú es una hamburguesa clásica** (`Menu` de lucide, `size-6`), el mismo ícono
+  abierto o cerrado, en celular y en escritorio. El del kit era un panel con una flecha que
+  cambiaba según el estado y no se leía como "menú". Es el default de la skill `adaptar-a-pwa`.
 - **El sheet se cierra al navegar**, con un `router.on('navigate')` en `AppSidebar.vue`. Tres
   decisiones, ninguna sobra: va en el router y no en cada `<Link>` (hay tres grupos de
   enlaces y con el séptimo alguien se olvida); **solo en mobile**, porque en escritorio la
