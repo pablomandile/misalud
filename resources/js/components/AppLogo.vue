@@ -1,19 +1,25 @@
 <script setup lang="ts">
-import { usePage } from '@inertiajs/vue3';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
+import LogoConNombre from '@/components/LogoConNombre.vue';
+import { useSidebar } from '@/components/ui/sidebar';
 
-const name = usePage().props.name;
+/*
+ * El logo de la cabecera del menú, según dónde se dibuja:
+ *
+ * - En el celular (el menú hamburguesa) va el ícono solo.
+ * - En escritorio, el logo con el nombre.
+ * - Con la barra lateral contraída a íconos, el ícono solo: el nombre no entra
+ *   en los 48 px que le quedan.
+ */
+const { isMobile } = useSidebar();
 </script>
 
 <template>
-    <div
-        class="flex aspect-square size-8 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground"
-    >
-        <AppLogoIcon class="size-5 fill-current text-white dark:text-black" />
-    </div>
-    <div class="ml-1 grid flex-1 text-left text-sm">
-        <span class="mb-0.5 truncate leading-tight font-semibold">{{
-            name
-        }}</span>
-    </div>
+    <AppLogoIcon v-if="isMobile" class="size-11 rounded-lg" />
+    <template v-else>
+        <AppLogoIcon
+            class="hidden size-8 rounded-md group-data-[collapsible=icon]:block"
+        />
+        <LogoConNombre class="h-10 group-data-[collapsible=icon]:hidden" />
+    </template>
 </template>

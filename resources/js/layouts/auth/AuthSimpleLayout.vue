@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import FondoDeSalud from '@/components/FondoDeSalud.vue';
 import { Link } from '@inertiajs/vue3';
-import AppLogoIcon from '@/components/AppLogoIcon.vue';
+import LogoConNombre from '@/components/LogoConNombre.vue';
 import { home } from '@/routes';
 
 defineProps<{
@@ -22,14 +22,8 @@ defineProps<{
                         :href="home()"
                         class="flex min-h-11 flex-col items-center gap-2 font-medium"
                     >
-                        <div
-                            class="mb-1 flex h-9 w-9 items-center justify-center rounded-md"
-                        >
-                            <AppLogoIcon
-                                class="size-9 fill-current text-[var(--foreground)] dark:text-white"
-                            />
-                        </div>
-                        <span class="sr-only">{{ title }}</span>
+                        <!-- El logo con el nombre: es la presentación de la app. -->
+                        <LogoConNombre class="mb-1 h-14" />
                     </Link>
                     <div class="space-y-2 text-center">
                         <h1 class="text-xl font-medium">{{ title }}</h1>

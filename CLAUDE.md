@@ -501,8 +501,8 @@ JSON crudo de Inertia ni del `beforeinstallprompt` capturado antes de que monte 
   `beforeinstallprompt` y la instalación es manual. Condicionarlo a que exista el prompt lo
   haría desaparecer justo en el dispositivo donde más se usa la app. iPadOS se declara como
   Mac desde iOS 13: lo delata `navigator.maxTouchPoints > 1`.
-- Los íconos **se generan** desde `resources/marca/*.svg` con `npm run generar:iconos`, nunca
-  se editan a mano. El maskable llena el lienzo sin esquinas redondeadas —Android aplica su
+- Los íconos **se generan** desde las imágenes de `public/img/` con `npm run generar:iconos`
+  (ver "Marca"), nunca se editan a mano. El maskable llena el lienzo sin esquinas redondeadas —Android aplica su
   propia máscara y un ícono ya redondeado se recorta dos veces— y su cruz ocupa el 50%, bien
   adentro de la zona segura del 80%. El `apple-touch-icon` sale del maskable porque iOS
   pinta de negro cualquier transparencia.
@@ -2749,19 +2749,35 @@ y del que Chrome headless no puede decir nada.
 
 ## Marca
 
-**Provisoria.** Una cruz de puntas redondeadas sobre `#0e7490`, genérica a propósito hasta que
-exista la marca real. Vive en dos lugares y no hay que confundirlos:
+La marca definitiva la trajo el usuario: **la cruz blanca con un corazón naranja (`#e4572e`)
+sobre un cuadrado verde azulado (`#0e6b6b`)**, en dos imágenes que viven en `public/img/`:
 
-| Archivo                              | Para qué                                       |
-| ------------------------------------ | ---------------------------------------------- |
-| `resources/marca/icono.svg`          | Fuente de los íconos de la PWA (con fondo)     |
-| `resources/marca/icono-maskable.svg` | Variante para el recorte de Android y para iOS |
-| `components/AppLogoIcon.vue`         | La cruz sola, sin fondo, para la interfaz      |
+| Archivo                            | Dónde va                                                 |
+| ---------------------------------- | -------------------------------------------------------- |
+| `mi-salud-icono.webp`              | Menú del celular, barra lateral contraída, favicon y PWA |
+| `mi-salud-logo-nombre.webp`        | Barra lateral de escritorio, ingreso y registro          |
+| `mi-salud-logo-nombre-oscuro.webp` | Lo mismo en modo oscuro. **Generada**, no se edita       |
 
-Cambiar la marca son tres pasos: reemplazar los dos SVG, correr `npm run generar:iconos`, y
-actualizar `AppLogoIcon.vue`. Y después **subir los tres números de versión** —`CACHE` en
-`sw.js`, el `?v=` del blade y el del manifest—, o se sigue viendo el ícono viejo: son tres
-cachés distintas y ninguna se limpia sola.
+`AppLogoIcon` es el ícono solo, `LogoConNombre` el logo con el nombre (con las dos variantes y
+`dark:hidden`/`dark:block`), y `AppLogo` elige: ícono en el celular y con la barra contraída,
+logo con nombre en escritorio.
+
+- **El texto del logo es del mismo verde azulado que el ícono**, que sobre el fondo oscuro de la
+  app casi no se lee. La variante oscura aclara **solo el texto** (`#cdeae6`) y deja el ícono
+  idéntico; el corte entre ícono y texto lo busca el generador (la primera franja vacía después
+  del ícono), no está fijado a mano. Un `filter: invert()` también habría dado vuelta el ícono.
+- `npm run generar:iconos` parte de esas dos imágenes y produce los íconos de la PWA, el
+  maskable, el `apple-touch-icon`, los favicons (PNG de 32 y 48: ya no hay `favicon.svg`, la
+  marca es una imagen) y la variante oscura. El maskable y el de iOS pintan el fondo de la marca
+  y el ícono encima: las esquinas redondeadas se funden con el fondo, y la cruz ocupa un 53% del
+  lado, adentro de la zona segura del 80%.
+- `theme-color` y el `theme_color` del manifest son el verde azulado de la marca. **El primario
+  de la interfaz sigue siendo el violeta** de la paleta pastel (ver "Diseño visual").
+
+Cambiar la marca son dos pasos: reemplazar las dos imágenes y correr `npm run generar:iconos`. Y
+después **subir los tres números de versión** —`CACHE` en `sw.js`, el `?v=` del blade y el del
+manifest—, o se sigue viendo el ícono viejo: son tres cachés distintas y ninguna se limpia sola.
+Van en `v2` desde este cambio.
 
 ## Caché de las respuestas de Inertia
 
@@ -2842,7 +2858,7 @@ npm run dev               # Vite
 npm run revisar:mobile    # desborde y 44 px en 21 pantallas (8 por ficha) + menú al navegar
 npm run revisar:pwa       # el veredicto de instalabilidad de Chrome, no "se ve el botón"
 npm run revisar:visor     # sube un PDF y verifica que pdf.js lo dibuje de verdad
-npm run generar:iconos    # regenera el set de íconos desde resources/marca/
+npm run generar:iconos    # íconos de la PWA, favicons y logo oscuro desde public/img/
 
 php artisan misalud:enviar-recordatorios --seco   # qué avisos saldrían, sin mandar nada
 php artisan misalud:sincronizar-recetas --seco    # qué recetas entrarían, sin guardar nada

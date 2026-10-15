@@ -43,7 +43,7 @@
                 min-height: 44px;
                 padding: .75rem 1.5rem;
                 border-radius: .5rem;
-                background: #0e7490;
+                background: #0e6b6b;
                 color: #fff;
                 text-decoration: none;
                 font-weight: 600;
@@ -51,7 +51,7 @@
         </style>
     </head>
     <body>
-        <img src="/icons/icon-192.png?v=1" alt="" width="72" height="72">
+        <img src="/icons/icon-192.png?v=2" alt="" width="72" height="72">
 
         <h1>No hay conexión</h1>
 

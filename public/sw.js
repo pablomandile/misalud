@@ -27,7 +27,7 @@
  * `?v=` del manifest. Los tres, o se sigue viendo el ícono viejo.
  */
 
-const CACHE = 'misalud-v1';
+const CACHE = 'misalud-v2';
 
 /*
  * Caché APARTE para la credencial, y no una entrada más en `CACHE`.
@@ -45,7 +45,7 @@ const CACHE_CREDENCIALES = 'misalud-credenciales-v1';
 const BASICOS = [
     '/offline',
     '/manifest.webmanifest',
-    '/icons/icon-192.png?v=1',
+    '/icons/icon-192.png?v=2',
 ];
 
 self.addEventListener('install', (evento) => {
@@ -259,8 +259,8 @@ self.addEventListener('fetch', (evento) => {
             .then((respuesta) => {
                 const esEstatico =
                     url.pathname.startsWith('/icons/') ||
-                    url.pathname === '/manifest.webmanifest' ||
-                    url.pathname === '/favicon.svg';
+                    url.pathname.startsWith('/img/') ||
+                    url.pathname === '/manifest.webmanifest';
 
                 if (respuesta.ok && esEstatico) {
                     const copia = respuesta.clone();

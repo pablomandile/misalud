@@ -1,13 +1,17 @@
 /*
- * Genera el set de íconos de la PWA desde los SVG de `resources/marca/`.
+ * Genera los íconos de la PWA, el favicon y la variante oscura del logo desde
+ * las dos imágenes de la marca, en `public/img/`:
  *
- * Los PNG NO se editan a mano. Cuando cambie la marca, se reemplazan los dos
- * SVG de origen, se corre esto, y se sube el número de versión (ver abajo).
+ *   mi-salud-icono.webp          el ícono solo (1024×1024, esquinas transparentes)
+ *   mi-salud-logo-nombre.webp    el ícono con "Mi Salud" al lado
+ *
+ * Los PNG NO se editan a mano. Cuando cambie la marca, se reemplazan esas dos
+ * imágenes, se corre esto, y se sube el número de versión (ver abajo).
  *
  *   npm run generar:iconos
  *
- * Rasteriza con el Chrome que ya usa `revisar-mobile.mjs`, así no hace falta
- * sumar una dependencia de imágenes solo para esto.
+ * Dibuja con un <canvas> del Chrome que ya usa `revisar-mobile.mjs`, así no
+ * hace falta sumar una dependencia de imágenes solo para esto.
  *
  * ⚠️ Al cambiar un ícono hay que tocar TRES lugares o se sigue viendo el
  * viejo, y cada uno es una caché distinta:
@@ -18,7 +22,7 @@
  *      favicons de Chrome mobile, que es aparte y muy pegajosa)
  */
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -38,26 +42,39 @@ const CHROME =
     process.env.CHROME ??
     'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
-/** @type {{ origen: string, destino: string, lado: number }[]} */
-const SALIDAS = [
-    { origen: 'icono.svg', destino: 'public/icons/icon-192.png', lado: 192 },
-    { origen: 'icono.svg', destino: 'public/icons/icon-512.png', lado: 512 },
-    {
-        origen: 'icono-maskable.svg',
-        destino: 'public/icons/icon-maskable-512.png',
-        lado: 512,
-    },
-    /*
-     * iOS no entiende `purpose: maskable` ni transparencias: recorta el ícono
-     * con su propio radio y le pone fondo negro a lo que sea transparente. Por
-     * eso el apple-touch-icon sale del maskable, que es el de fondo lleno.
-     */
-    {
-        origen: 'icono-maskable.svg',
-        destino: 'public/apple-touch-icon.png',
-        lado: 180,
-    },
+/** El verde azulado del fondo del ícono: es también el `theme-color`. */
+const FONDO = '#0e6b6b';
+
+/**
+ * El texto del logo en modo oscuro. El original es el mismo verde azulado del
+ * fondo del ícono, que sobre el fondo oscuro de la app casi no se lee.
+ */
+const TEXTO_OSCURO = '#cdeae6';
+
+/**
+ * - `lleno`: el maskable y el de iOS. Android recorta el ícono con su propia
+ *   máscara, así que el lienzo tiene que estar lleno hasta el borde; y iOS
+ *   pinta de negro cualquier transparencia. Se pinta el fondo de la marca y el
+ *   ícono encima: sus esquinas redondeadas se funden con el fondo, y la cruz
+ *   (un 53% del lado) queda bien adentro de la zona segura del 80%.
+ * - sin `lleno`: las esquinas quedan transparentes, como en la imagen.
+ *
+ * @type {{ destino: string, lado: number, lleno?: boolean }[]}
+ */
+const ICONOS = [
+    { destino: 'public/icons/icon-192.png', lado: 192 },
+    { destino: 'public/icons/icon-512.png', lado: 512 },
+    { destino: 'public/icons/icon-maskable-512.png', lado: 512, lleno: true },
+    { destino: 'public/apple-touch-icon.png', lado: 180, lleno: true },
+    { destino: 'public/icons/favicon-32.png', lado: 32 },
+    { destino: 'public/icons/favicon-48.png', lado: 48 },
 ];
+
+async function comoDataUrl(ruta) {
+    const bytes = await readFile(resolve(RAIZ, ruta));
+
+    return `data:image/webp;base64,${bytes.toString('base64')}`;
+}
 
 const navegador = await puppeteer.launch({
     executablePath: CHROME,
@@ -66,56 +83,113 @@ const navegador = await puppeteer.launch({
 });
 
 const pagina = await navegador.newPage();
+await pagina.setContent('<!doctype html><meta charset="utf-8">');
 
-await mkdir(resolve(RAIZ, 'public/icons'), { recursive: true });
+const icono = await comoDataUrl('public/img/mi-salud-icono.webp');
 
-for (const { origen, destino, lado } of SALIDAS) {
-    const svg = await readFile(
-        resolve(RAIZ, 'resources/marca', origen),
-        'utf8',
+for (const { destino, lado, lleno = false } of ICONOS) {
+    const png = await pagina.evaluate(
+        async (fuente, lado, lleno, fondo) => {
+            const imagen = new Image();
+            imagen.src = fuente;
+            await imagen.decode();
+
+            const lienzo = document.createElement('canvas');
+            lienzo.width = lado;
+            lienzo.height = lado;
+            const ctx = lienzo.getContext('2d');
+            ctx.imageSmoothingQuality = 'high';
+
+            if (lleno) {
+                ctx.fillStyle = fondo;
+                ctx.fillRect(0, 0, lado, lado);
+            }
+
+            ctx.drawImage(imagen, 0, 0, lado, lado);
+
+            return lienzo.toDataURL('image/png').split(',')[1];
+        },
+        icono,
+        lado,
+        lleno,
+        FONDO,
     );
 
-    await pagina.setViewport({
-        width: lado,
-        height: lado,
-        deviceScaleFactor: 1,
-    });
-
-    // `margin: 0` y el SVG al 100%: sin esto quedan bordes blancos del body.
-    await pagina.setContent(
-        `<!doctype html><meta charset="utf-8">
-         <style>html,body{margin:0;padding:0;width:100%;height:100%}
-         svg{display:block;width:100%;height:100%}</style>${svg}`,
-        { waitUntil: 'load' },
-    );
-
-    /*
-     * `omitBackground: true` o las esquinas redondeadas del ícono salen con el
-     * fondo por defecto de Chrome headless —un gris casi negro, opaco— en vez
-     * de transparentes. Se ve como un cuadrado oscuro en cualquier launcher
-     * claro, y no se nota hasta instalar la app.
-     *
-     * No afecta al maskable ni al de iOS: esos llenan el lienzo entero, así
-     * que no tienen zona transparente, que es justo lo que iOS necesita (la
-     * transparencia la pinta de negro).
-     */
-    const png = await pagina.screenshot({
-        type: 'png',
-        omitBackground: true,
-        clip: { x: 0, y: 0, width: lado, height: lado },
-    });
-
-    await writeFile(resolve(RAIZ, destino), png);
-    console.log(`  ${destino.padEnd(38)} ${lado}x${lado}`);
+    await writeFile(resolve(RAIZ, destino), Buffer.from(png, 'base64'));
+    console.log(`  ${destino.padEnd(40)} ${lado}x${lado}`);
 }
 
-// El favicon vectorial es el mismo SVG de origen, sin rasterizar.
+/*
+ * La variante oscura del logo con nombre: el ícono queda igual (ya tiene su
+ * propio fondo) y se aclara solo el texto. El corte entre los dos es la
+ * primera franja de columnas vacía después del ícono, buscada en la imagen y
+ * no fijada a mano: si cambia la proporción del logo, el corte la sigue.
+ */
+const logo = await comoDataUrl('public/img/mi-salud-logo-nombre.webp');
+const oscuro = await pagina.evaluate(
+    async (fuente, color) => {
+        const imagen = new Image();
+        imagen.src = fuente;
+        await imagen.decode();
+
+        const lienzo = document.createElement('canvas');
+        lienzo.width = imagen.naturalWidth;
+        lienzo.height = imagen.naturalHeight;
+        const ctx = lienzo.getContext('2d');
+        ctx.drawImage(imagen, 0, 0);
+
+        const { width: ancho, height: alto } = lienzo;
+        const datos = ctx.getImageData(0, 0, ancho, alto);
+        const px = datos.data;
+
+        const columnaVacia = (x) => {
+            for (let y = 0; y < alto; y++) {
+                if (px[(y * ancho + x) * 4 + 3] !== 0) {
+                    return false;
+                }
+            }
+
+            return true;
+        };
+
+        // Saltear el margen transparente de la izquierda, recorrer el ícono y
+        // frenar en la primera columna vacía: ahí empieza el texto.
+        let x = 0;
+        while (x < ancho && columnaVacia(x)) x++;
+        while (x < ancho && !columnaVacia(x)) x++;
+        const corte = x;
+
+        const r = parseInt(color.slice(1, 3), 16);
+        const g = parseInt(color.slice(3, 5), 16);
+        const b = parseInt(color.slice(5, 7), 16);
+
+        for (let y = 0; y < alto; y++) {
+            for (let cx = corte; cx < ancho; cx++) {
+                const i = (y * ancho + cx) * 4;
+                // Solo el color: el alfa queda, y con él el suavizado del borde.
+                px[i] = r;
+                px[i + 1] = g;
+                px[i + 2] = b;
+            }
+        }
+
+        ctx.putImageData(datos, 0, 0);
+
+        return {
+            corte,
+            webp: lienzo.toDataURL('image/webp', 0.92).split(',')[1],
+        };
+    },
+    logo,
+    TEXTO_OSCURO,
+);
+
 await writeFile(
-    resolve(RAIZ, 'public/favicon.svg'),
-    await readFile(resolve(RAIZ, 'resources/marca/icono.svg'), 'utf8'),
+    resolve(RAIZ, 'public/img/mi-salud-logo-nombre-oscuro.webp'),
+    Buffer.from(oscuro.webp, 'base64'),
 );
 console.log(
-    '  public/favicon.svg                     (copia del SVG de origen)',
+    `  public/img/mi-salud-logo-nombre-oscuro.webp  (texto aclarado desde x=${oscuro.corte})`,
 );
 
 await navegador.close();
