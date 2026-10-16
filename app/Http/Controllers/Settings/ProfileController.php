@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Settings;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\ProfileDeleteRequest;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
+use App\Services\BorradorDeCuenta;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -46,13 +47,18 @@ class ProfileController extends Controller
     /**
      * Delete the user's profile.
      */
-    public function destroy(ProfileDeleteRequest $request): RedirectResponse
+    /**
+     * Elimina la cuenta de verdad, en el momento: es lo que promete la política
+     * de privacidad. `BorradorDeCuenta` sabe el orden (y por qué un `delete()` a
+     * secas reventaba con un 500 apenas había un tratamiento cargado).
+     */
+    public function destroy(ProfileDeleteRequest $request, BorradorDeCuenta $borrador): RedirectResponse
     {
         $user = $request->user();
 
         Auth::logout();
 
-        $user->delete();
+        $borrador->borrar($user);
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();

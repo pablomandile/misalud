@@ -55,7 +55,13 @@ const PASSWORD = process.env.PASSWORD ?? 'prueba-1234';
  * la matriz decía "sin desborde" sobre la pantalla equivocada. Es la primera
  * que ve cualquiera, y la que más texto apila cuando la letra es muy grande.
  */
-const RUTAS_INVITADO = ['/login', '/register', '/cookies'];
+const RUTAS_INVITADO = [
+    '/login',
+    '/register',
+    '/cookies',
+    '/terminos',
+    '/privacidad',
+];
 const RUTAS = [
     '/dashboard',
     '/pacientes',

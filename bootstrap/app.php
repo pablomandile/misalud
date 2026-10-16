@@ -3,6 +3,8 @@
 use App\Console\Commands\CerrarTratamientosVencidos;
 use App\Console\Commands\EnviarRecordatorios;
 use App\Console\Commands\SincronizarRecetas;
+use App\Console\Commands\VaciarPapelera;
+use App\Http\Middleware\AceptoTerminos;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\HandleTamanioTexto;
@@ -26,6 +28,8 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleAppearance::class,
             HandleTamanioTexto::class,
             HandleInertiaRequests::class,
+            // Frena a quien no aceptó los términos vigentes (ver EXENTAS).
+            AceptoTerminos::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
     })
@@ -37,6 +41,13 @@ return Application::configure(basePath: dirname(__DIR__))
          * `deploy-hostinger`); acá solo se declara QUÉ correr y cuándo.
          */
         $schedule->command(CerrarTratamientosVencidos::class)->daily();
+
+        /*
+         * Una vez al día: lo que lleva más de 30 días en la papelera se borra
+         * de verdad, con sus archivos. Es lo que promete la política de
+         * privacidad (ver VaciarPapelera::DIAS).
+         */
+        $schedule->command(VaciarPapelera::class)->daily();
 
         /*
          * Cada HORA, no una vez al día: un recordatorio vence a cualquier

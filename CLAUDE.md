@@ -218,7 +218,8 @@ mail), en el `nombre_hash` de cada catálogo (unique por `usuario_id`) y en
   el ENUM de MySQL**: los casos de PHP solos pasan los tests (sqlite no valida ENUM) y
   revientan en producción con un 500 al primer guardado.
 - Todo listado con **eager loading explícito**.
-- Soft deletes en las entidades principales. **Excepciones, cada una con su motivo:** la casilla
+- Soft deletes en las entidades principales, y **la papelera se vacía a los 30 días**
+  (`misalud:vaciar-papelera`). **Excepciones, cada una con su motivo:** la casilla
   (vive una contraseña), los contactos, los catálogos sin uso, y las coberturas y alergias (ver
   "Borrar borra" en Cobertura médica).
 - Adjuntos en el disco **privado**, servidos por controlador tras verificar propiedad. Nunca
@@ -589,6 +590,88 @@ salidas de la cuenta (menú de usuario, verificar el mail, aceptar una invitaci�
 por `postMessage`: un mensaje se pierde si el service worker todavía no controla la página. El
 nombre está repetido en `cacheCredencial.ts` y en `sw.js`, y `AvisoCookiesTest` falla si se
 separan o si una salida deja de llamarla.
+
+## Términos, privacidad y borrado de datos
+
+Armado con la skill `terminos-y-privacidad`. Los textos viven en `resources/legales/*.md`, se
+convierten con `Str::markdown(..., ['html_input' => 'escape'])` en `LegalesController` y se
+muestran en una sola página (`Legal.vue`), pública. **Responsable: Pablo Mandile; contacto:
+misalud@pablomandile.com.ar** (decidido por el usuario).
+
+> ⚠️ **Cada frase de la política tiene que poder señalarse en el código.** Una promesa falsa en
+> una política de privacidad es peor que no tenerla. Cambiar un texto obliga a revisar el código
+> que lo sostiene —y al revés—, y si el cambio importa, a subir `config('legales.version')`.
+
+| Lo que promete el texto                                      | Lo que lo sostiene                                         |
+| ------------------------------------------------------------ | ---------------------------------------------------------- |
+| Eliminar la cuenta borra **en el momento y de verdad**       | `BorradorDeCuenta`                                         |
+| Lo que borrás se borra de verdad a los **30 días**           | `misalud:vaciar-papelera` (diario), `VaciarPapelera::DIAS` |
+| _Configuración → Perfil → **Descargar mis datos**_           | `ExportadorDeDatos`, el botón en `settings/Profile.vue`    |
+| Al salir se borran las credenciales del dispositivo          | `olvidarTodasLasCredenciales()` en las cuatro salidas      |
+| Todo el contenido clínico cifrado, **salvo las grabaciones** | `CifraDatos`, `ArchivoService`, `seGuardaCifrado()`        |
+| Los avisos dicen cuándo y no qué                             | `TipoRecordatorio::asunto()`, la vista del mail            |
+
+Los tests atan las dos puntas: el plazo del texto contra la constante, la frase "Descargar mis
+datos" contra el botón, el `!respuesta.redirected` del service worker.
+
+### La aceptación
+
+- **Una versión para los dos textos** en `config/legales.php`, y la constancia en `users`
+  (`terminos_version`, `terminos_aceptados_en`), que **no son fillable**: las escribe
+  `User::aceptarTerminos()`. La factory acepta la vigente por defecto (si no, el middleware frena
+  a toda la suite); `sinAceptarTerminos()` para el caso contrario.
+- **Registro**: el `Checkbox` del kit (44 px; el nativo medía 18) y la regla `accepted`. Sin
+  `required`: el input del kit es oculto y la validación del navegador no puede llevarle el foco.
+- **`AceptoTerminos`, en todo el grupo `web`**: una ruta nueva nace cubierta. Las exentas están en
+  `EXENTAS` con su motivo, y un test fija la lista exacta de las que tienen sesión. Entre ellas
+  `exportacion.datos`, `profile.edit` y `profile.destroy` —**llevarse los datos y eliminar la
+  cuenta no pueden depender de aceptar nada**— y `tamanio-texto.update`: quien no llega a leer la
+  pantalla de aceptación es quien más necesita agrandar la letra.
+- **Google** no pasa por la casilla y no hace falta código: la cuenta nace sin versión y el
+  middleware la manda a aceptar. Debajo del botón va la leyenda con los enlaces.
+- ⚠️ En producción la config está cacheada: después de subir la versión, **`config:cache`**, o el
+  middleware sigue comparando contra la vieja.
+- ⚠️ El service worker guarda la credencial solo si `!respuesta.redirected`: sin aceptar, la
+  credencial redirige a "aceptar y continuar" y `fetch` sigue el 302 hasta un 200.
+
+### ⚠️ Eliminar la cuenta daba un 500
+
+`ProfileController::destroy` hacía `$user->delete()`, y la base borraba en cascada la cuenta, sus
+fichas y su catálogo a la vez: `tratamientos.medicamento_id` (`restrictOnDelete`) frenaba el
+borrado del medicamento antes de que se fuera el tratamiento. **Medido contra MySQL**: cualquier
+cuenta con un tratamiento cargado no se podía eliminar. Y además dejaba los archivos en el disco.
+
+`BorradorDeCuenta` lo hace en orden: primero **traspasa al dueño de la ficha** lo del catálogo que
+un cuidador usó en una ficha ajena (usa la entrada del dueño con el mismo nombre, o le hace una
+copia), después borra de verdad las fichas propias, las sesiones y la cuenta, y al final —fuera de
+la transacción— los archivos sin dueño.
+
+### Los archivos sin dueño: un barrido y no una persecución
+
+`adjuntos` es polimórfica y no tiene FK: cada cascada de la base deja filas apuntando a nada y el
+archivo en el disco. En vez de seguirle la pista a cada cascada —frágil: una FK nueva alcanza para
+que se escape una—, `BarredorDeArchivosHuerfanos` barre después: todo adjunto cuyo
+`adjuntable_id` no está en la tabla de su dueño es huérfano (un dueño en la papelera sí existe).
+Lo corren el borrado de una cuenta y el vaciado de la papelera. Esto **cierra el hueco latente** de
+los adjuntos huérfanos que venía anotado desde la Etapa 11.
+
+### La papelera se vacía a los 30 días
+
+Hasta acá lo borrado quedaba en la papelera para siempre, sin pantalla para restaurarlo. Ahora
+`misalud:vaciar-papelera` (diario, `--seco` para ensayar) borra con `forceDelete` —así corren los
+observers— lo que lleva más de 30 días, y después barre los archivos.
+
+- **Las recetas son la excepción**: se va el PDF, queda la fila con el `message_id_hash`, que es lo
+  que impide reimportarla.
+- **Un catálogo** de la papelera solo se borra si nada lo usa.
+
+### La descarga de datos
+
+Un ZIP con `datos.json` (todo descifrado, sin columnas `*_hash`), los archivos tal como se
+subieron y un `LEEME.txt`. Entran **las fichas de las que la cuenta es dueña**, no las que le
+compartieron; nada de la papelera; la casilla sin su contraseña (va en `$hidden`). Cada archivo se
+descifra a una carpeta temporal y se agrega desde ahí: `addFromString` retendría todo en memoria
+hasta cerrar el ZIP. La respuesta va `private, no-store` (Symfony marca `public` las descargas).
 
 ## Adjuntos
 
@@ -3201,8 +3284,8 @@ deja la fila **y su archivo cifrado en disco** para siempre. Se vuelve alcanzabl
 Etapa 14 exponga el `forceDelete` del propietario; hay que resolverlo ahí.
 **Ya resuelto para los catálogos**, que desde la decisión de "si nada lo usa, se borra de
 verdad" hacen `forceDelete`: `CatalogoBaseController::borrarDeVerdad()` se lleva antes los
-archivos (disco y filas). Las coberturas también, desde que se borran de verdad. Sigue abierto
-para el resto de los dueños, que tienen papelera.
+archivos (disco y filas). Las coberturas también, desde que se borran de verdad. **Cerrado del
+todo** con `BarredorDeArchivosHuerfanos` (ver "Términos, privacidad y borrado de datos").
 
 **Paso 11.2 hecho**: `misalud:enviar-recordatorios`, cada hora por el scheduler, con su mail.
 

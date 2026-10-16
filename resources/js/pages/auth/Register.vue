@@ -5,10 +5,11 @@ import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
-import { login } from '@/routes';
+import { login, privacidad, terminos } from '@/routes';
 import { store } from '@/routes/register';
 
 defineProps<{
@@ -90,6 +91,43 @@ defineOptions({
                     :passwordrules="passwordRules"
                 />
                 <InputError :message="errors.password_confirmation" />
+            </div>
+
+            <!--
+                La aceptación. Casilla nativa (manda "on", que la regla
+                `accepted` sí acepta) y los enlaces en otra pestaña: abrirlos acá
+                perdería todo lo que ya se cargó en el formulario.
+            -->
+            <div class="grid gap-1">
+                <label
+                    class="flex min-h-11 cursor-pointer items-start gap-3 text-sm text-pretty"
+                >
+                    <!--
+                        El Checkbox del kit y no uno nativo: trae el área de 44
+                        px (el nativo medía 18) y manda "on", que `accepted`
+                        acepta. Sin `required`: su input es oculto y la
+                        validación del navegador no puede llevarle el foco;
+                        lo exige el servidor, con el error al lado.
+                    -->
+                    <Checkbox id="terminos" name="terminos" class="mt-1" />
+                    <span>
+                        Leí y acepto los
+                        <a
+                            :href="terminos().url"
+                            target="_blank"
+                            class="underline underline-offset-4 hover:text-primary"
+                            >términos y condiciones</a
+                        >
+                        y la
+                        <a
+                            :href="privacidad().url"
+                            target="_blank"
+                            class="underline underline-offset-4 hover:text-primary"
+                            >política de privacidad</a
+                        >.
+                    </span>
+                </label>
+                <InputError :message="errors.terminos" />
             </div>
 
             <Button

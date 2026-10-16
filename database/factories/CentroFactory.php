@@ -23,7 +23,7 @@ class CentroFactory extends Factory
     {
         return [
             'usuario_id' => User::factory(),
-            'nombre' => 'Centro '.$this->faker->lastName(),
+            'nombre' => 'Centro '.$this->faker->unique()->lastName(),
             'tipo' => TipoCentro::Consultorio,
             'direccion' => $this->faker->streetAddress(),
             'telefono' => $this->faker->phoneNumber(),

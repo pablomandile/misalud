@@ -27,7 +27,7 @@
  * `?v=` del manifest. Los tres, o se sigue viendo el ícono viejo.
  */
 
-const CACHE = 'misalud-v2';
+const CACHE = 'misalud-v3';
 
 /*
  * Caché APARTE para la credencial, y no una entrada más en `CACHE`.
@@ -216,7 +216,13 @@ self.addEventListener('fetch', (evento) => {
         evento.respondWith(
             fetch(request)
                 .then((respuesta) => {
-                    if (respuesta.ok) {
+                    /*
+                     * `!respuesta.redirected`: si la cuenta todavía no aceptó
+                     * los términos, el servidor redirige a "aceptar y continuar"
+                     * y `fetch` sigue el 302 hasta un 200. Sin esta condición,
+                     * esa pantalla se guardaría como si fuera la credencial.
+                     */
+                    if (respuesta.ok && !respuesta.redirected) {
                         const copia = respuesta.clone();
                         caches
                             .open(CACHE_CREDENCIALES)

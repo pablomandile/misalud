@@ -22,7 +22,7 @@ class MedicoFactory extends Factory
     {
         return [
             'usuario_id' => User::factory(),
-            'nombre' => 'Dr. '.$this->faker->lastName(),
+            'nombre' => 'Dr. '.$this->faker->unique()->lastName(),
             'especialidad' => $this->faker->randomElement([
                 'Clínica médica', 'Cardiología', 'Traumatología', 'Oftalmología',
             ]),

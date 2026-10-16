@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Form, Head, usePage } from '@inertiajs/vue3';
 import { Link } from '@inertiajs/vue3';
+import { Download } from '@lucide/vue';
 import { computed } from 'vue';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import DeleteUser from '@/components/DeleteUser.vue';
@@ -9,6 +10,7 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { datos as misDatos } from '@/routes/exportacion';
 import { edit } from '@/routes/profile';
 import { send } from '@/routes/verification';
 
@@ -99,6 +101,25 @@ const user = computed(() => page.props.auth.user);
                 >
             </div>
         </Form>
+    </div>
+
+    <!--
+        El derecho de acceso: toda la historia en un ZIP. Lo promete la política
+        de privacidad con estas mismas palabras, y un test ata las dos cosas.
+        Un <a> común y no un <Link> de Inertia: es una descarga, no una pantalla.
+    -->
+    <div class="mt-10 space-y-4">
+        <Heading
+            variant="small"
+            title="Descargar mis datos"
+            description="Un archivo ZIP con todo lo que cargaste: tu cuenta, tus fichas con su historial, tus archivos, recetas y contactos. Tiene tu historia sin cifrar: guardalo en un lugar seguro."
+        />
+        <Button variant="outline" as-child>
+            <a :href="misDatos().url" download>
+                <Download />
+                Descargar mis datos
+            </a>
+        </Button>
     </div>
 
     <DeleteUser />

@@ -2,7 +2,7 @@
 import FondoDeSalud from '@/components/FondoDeSalud.vue';
 import { Link } from '@inertiajs/vue3';
 import LogoConNombre from '@/components/LogoConNombre.vue';
-import { home } from '@/routes';
+import { cookies, home, privacidad, terminos } from '@/routes';
 
 defineProps<{
     title?: string;
@@ -33,6 +33,27 @@ defineProps<{
                     </div>
                 </div>
                 <slot />
+
+                <nav
+                    aria-label="Textos legales"
+                    class="flex flex-wrap justify-center gap-x-4 text-sm text-muted-foreground"
+                >
+                    <a
+                        :href="terminos().url"
+                        class="inline-flex min-h-11 items-center underline-offset-4 hover:text-foreground hover:underline"
+                        >Términos</a
+                    >
+                    <a
+                        :href="privacidad().url"
+                        class="inline-flex min-h-11 items-center underline-offset-4 hover:text-foreground hover:underline"
+                        >Privacidad</a
+                    >
+                    <a
+                        :href="cookies().url"
+                        class="inline-flex min-h-11 items-center underline-offset-4 hover:text-foreground hover:underline"
+                        >Cookies</a
+                    >
+                </nav>
             </div>
         </div>
     </div>

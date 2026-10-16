@@ -2,6 +2,7 @@
 import { usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { Button } from '@/components/ui/button';
+import { privacidad, terminos } from '@/routes';
 import { redirect } from '@/routes/google';
 
 /*
@@ -72,6 +73,29 @@ const texto = computed(() =>
                 {{ texto }}
             </a>
         </Button>
+
+        <!--
+            Con Google la cuenta se crea sin pasar por la casilla del registro.
+            No hace falta nada más: nace sin versión aceptada y el middleware
+            AceptoTerminos le pide aceptar en el primer pedido. Esto es solo el
+            aviso, con los enlaces, antes de tocar el botón.
+        -->
+        <p class="-mt-4 text-center text-sm text-pretty text-muted-foreground">
+            Al continuar con Google vas a leer y aceptar los
+            <a
+                :href="terminos().url"
+                target="_blank"
+                class="underline underline-offset-4 hover:text-foreground"
+                >términos</a
+            >
+            y la
+            <a
+                :href="privacidad().url"
+                target="_blank"
+                class="underline underline-offset-4 hover:text-foreground"
+                >política de privacidad</a
+            >.
+        </p>
 
         <!-- Separador con la etiqueta encima de la línea, para lector de pantalla. -->
         <div v-if="conSeparador" class="relative text-center text-sm">

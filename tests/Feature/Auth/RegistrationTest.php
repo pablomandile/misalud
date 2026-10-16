@@ -31,6 +31,8 @@ class RegistrationTest extends TestCase
             'email' => 'test@example.com',
             'password' => 'password',
             'password_confirmation' => 'password',
+            // La casilla de los términos y la privacidad, que es obligatoria.
+            'terminos' => 'on',
         ]);
 
         $this->assertAuthenticated();

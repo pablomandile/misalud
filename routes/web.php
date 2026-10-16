@@ -15,6 +15,7 @@ use App\Http\Controllers\EnfermedadController;
 use App\Http\Controllers\EnvioController;
 use App\Http\Controllers\EstudioController;
 use App\Http\Controllers\InvitacionController;
+use App\Http\Controllers\Legales\LegalesController;
 use App\Http\Controllers\MedicamentoController;
 use App\Http\Controllers\MedicionController;
 use App\Http\Controllers\MedicoController;
@@ -38,6 +39,16 @@ Route::inertia('/', 'Welcome')->name('home');
 // Qué guarda la app en el navegador. Pública: el aviso de cookies enlaza acá
 // desde la portada y el ingreso, antes de que exista una sesión.
 Route::inertia('cookies', 'Cookies')->name('cookies');
+
+// Los textos legales, públicos: se leen antes de crear la cuenta.
+Route::get('terminos', [LegalesController::class, 'terminos'])->name('terminos');
+Route::get('privacidad', [LegalesController::class, 'privacidad'])->name('privacidad');
+
+// "Aceptar y continuar": adonde manda el middleware AceptoTerminos.
+Route::middleware('auth')->group(function () {
+    Route::get('terminos/aceptar', [LegalesController::class, 'aceptar'])->name('terminos.aceptar');
+    Route::post('terminos/aceptar', [LegalesController::class, 'guardarAceptacion'])->name('terminos.aceptar.store');
+});
 
 // Respaldo que sirve el service worker cuando no hay conexión. Es una vista
 // suelta, no Inertia: tiene que poder mostrarse sin los assets compilados.

@@ -73,7 +73,31 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
             'tamanio_texto' => TamanioTexto::class,
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
+            'terminos_aceptados_en' => 'datetime',
         ];
+    }
+
+    /**
+     * Deja la constancia de que aceptó la versión vigente de los términos y la
+     * política de privacidad.
+     *
+     * `terminos_version` y `terminos_aceptados_en` NO son fillable: es una
+     * constancia, y solo la escribe esto —al registrarse o en la pantalla de
+     * "aceptar y continuar"—, nunca un formulario de perfil.
+     */
+    public function aceptarTerminos(): void
+    {
+        $this->forceFill([
+            'terminos_version' => config('legales.version'),
+            'terminos_aceptados_en' => now(),
+        ])->save();
+    }
+
+    public function aceptoTerminosVigentes(): bool
+    {
+        $vigente = config('legales.version');
+
+        return is_string($vigente) && $this->terminos_version === $vigente;
     }
 
     /**

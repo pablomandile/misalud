@@ -33,12 +33,29 @@ class UserFactory extends Factory
             'two_factor_secret' => null,
             'two_factor_recovery_codes' => null,
             'two_factor_confirmed_at' => null,
+            // Por defecto ya aceptó la versión vigente: si no, el middleware
+            // AceptoTerminos frenaría a todo usuario de prueba y la suite entera
+            // fallaría. El caso contrario es `sinAceptarTerminos()`.
+            'terminos_version' => config('legales.version'),
+            'terminos_aceptados_en' => now(),
         ];
     }
 
     /**
      * Indicate that the model's email address should be unverified.
      */
+    /**
+     * Una cuenta que todavía no aceptó los términos: las de antes de que
+     * existieran, o una recién creada con Google.
+     */
+    public function sinAceptarTerminos(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'terminos_version' => null,
+            'terminos_aceptados_en' => null,
+        ]);
+    }
+
     public function unverified(): static
     {
         return $this->state(fn (array $attributes) => [

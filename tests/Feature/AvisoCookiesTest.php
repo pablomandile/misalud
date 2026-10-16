@@ -108,11 +108,12 @@ it('salir de la cuenta borra la misma caché de credenciales que llena el servic
     expect($enElWorker[1] ?? null)->not->toBeNull()
         ->and($enLaPagina[1] ?? null)->toBe($enElWorker[1]);
 
-    // Y lo llaman las tres salidas de la cuenta.
+    // Y lo llaman todas las salidas de la cuenta.
     foreach ([
         'resources/js/components/UserMenuContent.vue',
         'resources/js/pages/auth/VerifyEmail.vue',
         'resources/js/pages/invitaciones/Aceptar.vue',
+        'resources/js/pages/terminos/Aceptar.vue',
     ] as $archivo) {
         expect(str_contains(fuenteCookies($archivo), 'olvidarTodasLasCredenciales'))
             ->toBeTrue("{$archivo} sale de la cuenta sin borrar las credenciales guardadas");

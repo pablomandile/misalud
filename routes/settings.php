@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Settings\DescargaDeDatosController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Middleware\ConfirmarClaveSiLaTiene;
@@ -14,6 +15,12 @@ Route::middleware(['auth'])->group(function () {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('settings/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    // El derecho de acceso: toda la historia en un ZIP. Pocas por hora, porque
+    // cada una descifra todos los archivos de la cuenta.
+    Route::get('settings/mis-datos', DescargaDeDatosController::class)
+        ->middleware('throttle:5,60')
+        ->name('exportacion.datos');
 
     Route::get('settings/security', [SecurityController::class, 'edit'])
         // NO es el RequirePassword de Laravel: para una cuenta de Google, que

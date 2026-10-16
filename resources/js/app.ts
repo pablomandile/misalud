@@ -16,8 +16,9 @@ void createInertiaApp({
             // aviso de cookies, que tiene que verse en la primera visita.
             case name === 'Welcome':
                 return PublicoLayout;
-            // La página de cookies se abre con sesión y sin ella.
+            // Cookies y los textos legales se abren con sesión y sin ella.
             case name === 'Cookies':
+            case name === 'Legal':
                 return (page.props as { auth?: { user?: unknown } }).auth?.user
                     ? AppLayout
                     : PublicoLayout;
@@ -25,6 +26,8 @@ void createInertiaApp({
             // menú no tiene sentido para alguien que todavía no entró.
             case name.startsWith('auth/'):
             case name.startsWith('invitaciones/'):
+            // "Aceptar y continuar": todavía no se entra a la app.
+            case name.startsWith('terminos/'):
                 return AuthLayout;
             case name.startsWith('settings/'):
                 return [AppLayout, SettingsLayout];
