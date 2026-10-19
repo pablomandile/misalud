@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Models\CuentaMail;
 use App\Support\AdjuntoDeCasilla;
 use App\Support\MensajeDeCasilla;
 use Carbon\CarbonImmutable;
+use RuntimeException;
 use Webklex\PHPIMAP\Attachment;
 use Webklex\PHPIMAP\Client;
 use Webklex\PHPIMAP\ClientManager;
@@ -15,71 +15,50 @@ use Webklex\PHPIMAP\IMAP;
 use Webklex\PHPIMAP\Message;
 
 /**
- * Lo único que habla IMAP. Traduce mensajes a `MensajeDeCasilla` y nada más.
+ * Lo único que habla IMAP con el buzón de la app. Traduce mensajes a
+ * `MensajeDeCasilla` y los mueve a Procesados, y nada más.
  *
  * ## Es tonto a propósito
  *
- * Acá no hay ninguna regla: ni la ventana, ni el filtro por remitente, ni la
- * deduplicación, ni qué adjunto sirve. Todo eso vive en
- * `SincronizadorDeRecetas`, que recibe DTOs y **se puede probar entero sin
- * red**. Esta clase es la costura, y es la única parte del paso que no tiene
- * tests automáticos porque no se puede tener sin un servidor de verdad: por eso
- * conviene que no decida nada.
+ * Acá no hay ninguna regla: ni quién es el remitente, ni qué dice el asunto, ni
+ * si el mail es auténtico, ni qué adjunto sirve. Todo eso vive del otro lado
+ * del DTO (`ProcesadorDeBuzon`, `CabecerasDelMail`, `AutenticidadDelMail`,
+ * `AsuntoDeDocumento`), que **se puede probar entero sin red**. Esta clase es
+ * la costura, y es la única que no tiene tests automáticos porque no se puede
+ * tener sin un servidor de verdad: por eso conviene que no decida nada. Por eso
+ * también pasa los encabezados CRUDOS y no los interpreta.
  *
- * ## ⚠️ No se toca la casilla de la persona
+ * ## El buzón es de la app
  *
- * La pantalla promete "solo lee: no manda mails ni borra nada", y esto es lo que
- * lo cumple. Dos cosas, las dos explícitas:
- *
- * - **`FT_PEEK`**, que trae el mensaje sin ponerle la marca `\Seen`. Es el
- *   default del paquete, y va escrito igual: si algún día cambia, el síntoma
- *   sería que la app le marca como leídos los mails a alguien, y eso no se
- *   descubre con un test.
- * - **`leaveUnread()`** en la consulta, que es lo mismo por el otro lado.
- *
- * ## ⚠️ El `SINCE` de IMAP compara FECHAS, no instantes
- *
- * Es por día, contra la fecha interna del servidor, y es `>=`. Así que la
- * ventana que se pide siempre es un poco más ancha que la calculada —arranca a
- * la medianoche de ese día— y nunca más angosta. Eso es exactamente lo que se
- * quiere: de más es gratis (el UNIQUE de `message_id_hash` frena la
- * reimportación), de menos sería un agujero silencioso.
+ * Al revés que la casilla de cada persona de antes, este buzón es nuestro: se
+ * puede mover lo procesado a otra carpeta. Igual se trae con `FT_PEEK` (sin la
+ * marca de leído): lo que no se pudo procesar por un error sigue apareciendo
+ * como nuevo para quien entre al webmail a mirarlo.
  */
 class LectorDeCasilla
 {
-    /** Lo mismo que la prueba de conexión: alguien puede estar esperando. */
-    private const SEGUNDOS_DE_ESPERA = 20;
+    /**
+     * Corre en el scheduler, sin nadie esperando, pero no puede quedarse
+     * colgado: la corrida siguiente arranca en cinco minutos.
+     */
+    private const SEGUNDOS_DE_ESPERA = 30;
 
     /**
-     * Los mensajes de la casilla desde una fecha, del más viejo al más nuevo.
-     *
-     * El orden importa y no es cosmético: `SincronizadorDeRecetas` mueve la
-     * marca de sincronización a la fecha del último mensaje que procesó, y para
-     * que eso sea correcto tiene que procesarlos en orden.
+     * Los mensajes del INBOX, de a lo sumo `$tope`, del más viejo al más nuevo:
+     * un mail que llegó primero se procesa primero.
      *
      * @return list<MensajeDeCasilla>
      */
-    public function mensajesDesde(CuentaMail $cuenta, CarbonImmutable $desde, int $tope): array
+    public function mensajes(int $tope): array
     {
-        $cliente = $this->cliente($cuenta);
-
-        try {
-            $cliente->connect();
-
-            $carpeta = $cliente->getFolderByPath($cuenta->carpeta);
-
-            if ($carpeta === null) {
-                // La prueba de conexión del 12.1 existe justamente para que esto
-                // se descubra antes y con un mensaje que explique el separador.
-                throw new \RuntimeException("La carpeta [{$cuenta->carpeta}] no existe en la casilla.");
-            }
-
-            $mensajes = $carpeta->query()
-                ->whereSince($desde->toDateString())
+        return $this->conCliente(function (Client $cliente) use ($tope): array {
+            $mensajes = $cliente->getFolderByPath($this->carpeta())
+                ?->query()
+                ->all()
                 ->leaveUnread()
                 ->setFetchOrder('asc')
                 ->limit($tope)
-                ->get();
+                ->get() ?? [];
 
             $traducidos = [];
 
@@ -88,11 +67,60 @@ class LectorDeCasilla
             }
 
             return $traducidos;
+        });
+    }
+
+    /**
+     * Mueve a Procesados los mensajes con estos UID, creando la carpeta si no
+     * existe. Lo que no se pueda mover queda en el INBOX: `mails_recibidos` lo
+     * frena en la corrida siguiente, así que un fallo acá no reprocesa nada.
+     *
+     * @param  list<int>  $uids
+     */
+    public function moverAProcesados(array $uids): void
+    {
+        if ($uids === []) {
+            return;
+        }
+
+        $this->conCliente(function (Client $cliente) use ($uids): void {
+            $destino = (string) config('misalud.buzon.carpeta_procesados');
+
+            if ($cliente->getFolderByPath($destino) === null) {
+                $cliente->createFolder($destino);
+            }
+
+            $carpeta = $cliente->getFolderByPath($this->carpeta());
+
+            foreach ($uids as $uid) {
+                try {
+                    $carpeta?->query()->getMessageByUid($uid)->move($destino);
+                } catch (\Throwable) {
+                    // Ver el comentario del método: no mover no cambia el resultado.
+                }
+            }
+        });
+    }
+
+    /**
+     * @template T
+     *
+     * @param  callable(Client): T  $trabajo
+     * @return T
+     */
+    private function conCliente(callable $trabajo): mixed
+    {
+        $cliente = $this->cliente();
+
+        try {
+            $cliente->connect();
+
+            return $trabajo($cliente);
         } finally {
             try {
                 $cliente->disconnect();
             } catch (\Throwable) {
-                // Cerrar nunca puede cambiar el resultado de la lectura.
+                // Cerrar nunca puede cambiar el resultado.
             }
         }
     }
@@ -137,6 +165,8 @@ class LectorDeCasilla
             asunto: $asunto,
             fecha: $fecha,
             adjuntos: $adjuntos,
+            cabeceras: (string) ($mensaje->getHeader()->raw ?? ''),
+            uid: (int) $mensaje->getUid(),
         );
     }
 
@@ -144,27 +174,17 @@ class LectorDeCasilla
      * ⚠️ Descarta los adjuntos EN LÍNEA, que son el logo de la firma.
      *
      * Media empresa manda mails con firma en HTML, y cada imagen de esa firma
-     * viaja como adjunto. Sin este filtro, una casilla sin filtros de remitente
-     * importa el logotipo de la farmacia como si fuera una receta: un JPG de 4 KB
-     * que pasa la lista blanca de `ArchivoService` sin problema.
-     *
-     * Lo que distingue a uno de otro es el `Content-Disposition`: un archivo que
-     * alguien adjuntó va como `attachment`, y una imagen incrustada en el cuerpo
-     * va como `inline` y además trae `Content-ID` para que el HTML la referencie.
-     *
-     * Un adjunto sin disposición declarada se acepta: hay clientes de correo que
-     * no la mandan, y rechazarlo perdería recetas de verdad. El caso que hay que
-     * atajar es el `inline` explícito.
+     * viaja como adjunto: sin este filtro, el logotipo de la farmacia entraría
+     * como si fuera una receta (un JPG de 4 KB que pasa la lista blanca de
+     * `ArchivoService` sin problema). Lo que los distingue es el
+     * `Content-Disposition`. Un adjunto sin disposición declarada se acepta: hay
+     * clientes que no la mandan, y rechazarlo perdería documentos de verdad.
      */
     private function esArchivoDeVerdad(Attachment $adjunto): bool
     {
         $disposicion = $adjunto->disposition;
 
-        if (is_string($disposicion) && mb_strtolower($disposicion) === 'inline') {
-            return false;
-        }
-
-        return true;
+        return ! (is_string($disposicion) && mb_strtolower($disposicion) === 'inline');
     }
 
     private function remitenteDe(Message $mensaje): string
@@ -188,32 +208,42 @@ class LectorDeCasilla
             ? $atributo->first()
             : $atributo;
 
-        if (is_string($valor)) {
-            return trim($valor);
-        }
+        return is_string($valor) ? trim($valor) : null;
+    }
 
-        return null;
+    private function carpeta(): string
+    {
+        return (string) config('misalud.buzon.carpeta');
     }
 
     /**
-     * Mismas elecciones que `ProbadorDeCasilla::cliente()`, y por los mismos
-     * motivos -ahí está el detalle de cada una-.
+     * ⚠️ `ClientManager` NO se resuelve del contenedor: el binding del paquete
+     * hace `new ClientManager(config('imap'))` y este proyecto no publica
+     * `config/imap.php`, así que eso le pasa `null` a un parámetro que no lo
+     * acepta. Se construye con un array vacío -el paquete carga sus defaults- y
+     * todo lo que importa va explícito acá.
      */
-    private function cliente(CuentaMail $cuenta): Client
+    private function cliente(): Client
     {
-        return (new ClientManager)->make([
-            'host' => $cuenta->host,
-            'port' => $cuenta->puerto,
+        $direccion = config('misalud.buzon.direccion');
+        $password = config('misalud.buzon.password');
+
+        if (! is_string($direccion) || $direccion === '' || ! is_string($password) || $password === '') {
+            throw new RuntimeException('Falta configurar el buzón: BUZON_DIRECCION y BUZON_PASSWORD en el .env.');
+        }
+
+        return (new ClientManager([]))->make([
+            'host' => (string) config('misalud.buzon.host'),
+            'port' => (int) config('misalud.buzon.puerto'),
             'protocol' => 'imap',
-            'encryption' => $cuenta->encriptacion(),
+            // 993 es IMAP sobre TLS. No hay forma de pedirlo sin cifrar: por
+            // esa conexión viaja la contraseña.
+            'encryption' => 'ssl',
             'validate_cert' => true,
-            'username' => $cuenta->direccion,
-            'password' => $cuenta->password,
+            'username' => $direccion,
+            'password' => $password,
             'authentication' => null,
             'timeout' => self::SEGUNDOS_DE_ESPERA,
-
-            // Traer el mensaje SIN marcarlo como leído. Ver el comentario de la
-            // clase: es la promesa de "solo lee" de la pantalla.
             'options' => ['fetch' => IMAP::FT_PEEK],
         ]);
     }

@@ -387,3 +387,86 @@ it('un usuario ajeno NO puede ver una credencial por esta ruta tampoco', functio
         ->get(route('credenciales.show', $adjunto))
         ->assertForbidden();
 });
+
+it('guarda el nombre y la descripción que se escriben al subir', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.adjuntos.store', $paciente), [
+            'archivos' => [pdfDePrueba('IMG_2031.pdf')],
+            'tipo' => TipoAdjunto::Otro->value,
+            'titulo' => 'Análisis de marzo',
+            'descripcion' => 'Pedido por el clínico',
+        ])
+        ->assertSessionHasNoErrors();
+
+    $adjunto = $paciente->adjuntos()->sole();
+    $fila = (array) DB::table('adjuntos')->where('id', $adjunto->id)->first();
+
+    expect($adjunto->titulo)->toBe('Análisis de marzo')
+        ->and($adjunto->descripcion)->toBe('Pedido por el clínico')
+        ->and($adjunto->nombreVisible())->toBe('Análisis de marzo')
+        ->and($fila['titulo'])->not->toContain('marzo');
+});
+
+it('sin nombre, se ve el del archivo', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.adjuntos.store', $paciente), [
+            'archivos' => [pdfDePrueba('IMG_2031.pdf')],
+            'tipo' => TipoAdjunto::Otro->value,
+        ]);
+
+    $this->actingAs($usuario)->get(route('pacientes.index'))
+        ->assertInertia(fn ($p) => $p
+            ->where('pacientes.0.adjuntos.0.nombre', 'IMG_2031.pdf')
+            ->where('pacientes.0.adjuntos.0.titulo', null));
+});
+
+it('con varios archivos y un nombre, cada uno lleva su número', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.adjuntos.store', $paciente), [
+            'archivos' => [pdfDePrueba('a.pdf'), pdfDePrueba('b.pdf')],
+            'tipo' => TipoAdjunto::Otro->value,
+            'titulo' => 'Análisis',
+        ]);
+
+    expect($paciente->adjuntos()->get()->map->titulo->sort()->values()->all())
+        ->toBe(['Análisis (1 de 2)', 'Análisis (2 de 2)']);
+});
+
+it('se puede ponerle nombre y descripción a un documento ya subido', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+    $adjunto = adjuntoDe($paciente);
+
+    $this->actingAs($usuario)
+        ->put(route('adjuntos.update', $adjunto), [
+            'titulo' => 'Ecografía',
+            'descripcion' => 'La de control',
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect($adjunto->fresh()->titulo)->toBe('Ecografía')
+        ->and($adjunto->fresh()->descripcion)->toBe('La de control');
+});
+
+it('un lector no puede renombrar un documento', function (): void {
+    $paciente = Paciente::factory()->create();
+    $lector = User::factory()->create();
+    $paciente->cuidadores()->attach($lector, ['rol' => RolPaciente::Lector->value]);
+    $adjunto = adjuntoDe($paciente);
+
+    $this->actingAs($lector)
+        ->put(route('adjuntos.update', $adjunto), ['titulo' => 'Otro'])
+        ->assertForbidden();
+
+    expect($adjunto->fresh()->titulo)->toBeNull();
+});

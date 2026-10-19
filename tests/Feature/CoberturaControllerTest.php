@@ -449,3 +449,52 @@ it('borrar una cobertura se lleva su credencial del disco y de la base', functio
     Storage::disk('local')->assertMissing($ruta);
     expect(DB::table('adjuntos')->where('adjuntable_id', $cobertura->id)->exists())->toBeFalse();
 });
+
+it('sube la credencial en el mismo alta de la cobertura', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.coberturas.store', $paciente), [
+            'tipo' => TipoCobertura::Prepaga->value,
+            'entidad' => 'OSDE',
+            'activa' => '1',
+            'archivos' => [imagenDePrueba('frente.jpg'), imagenDePrueba('dorso.jpg')],
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    $cobertura = $paciente->coberturas()->sole();
+
+    expect($cobertura->adjuntos()->count())->toBe(2)
+        ->and($cobertura->adjuntos()->pluck('tipo')->unique()->all())->toBe([TipoAdjunto::Credencial]);
+});
+
+it('la credencial es opcional al dar de alta la cobertura', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.coberturas.store', $paciente), [
+            'tipo' => TipoCobertura::Prepaga->value,
+            'entidad' => 'OSDE',
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect($paciente->coberturas()->sole()->adjuntos()->count())->toBe(0);
+});
+
+it('una credencial que no es una imagen ni un PDF frena el alta entera', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.coberturas.store', $paciente), [
+            'tipo' => TipoCobertura::Prepaga->value,
+            'entidad' => 'OSDE',
+            'archivos' => [UploadedFile::fake()->createWithContent('pagina.html', '<html><script>x</script></html>')],
+        ])
+        ->assertSessionHasErrors('archivos.0');
+
+    expect($paciente->coberturas()->count())->toBe(0);
+});

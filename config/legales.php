@@ -12,6 +12,6 @@ return [
      * ⚠️ En producción la config está cacheada: después de cambiarla hay que
      * correr `config:cache`, o el middleware sigue comparando contra la vieja.
      */
-    'version' => '2026-10-15',
+    'version' => '2026-10-20',
 
 ];

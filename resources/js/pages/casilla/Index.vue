@@ -1,10 +1,16 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
-import { Download, Inbox, Info, PlugZap, Plus, Trash2 } from '@lucide/vue';
+import { Form, Head, Link } from '@inertiajs/vue3';
+import { Copy, FileText, Inbox, Mail, Trash2 } from '@lucide/vue';
 import { ref } from 'vue';
-import CuentaMailController from '@/actions/App/Http/Controllers/CuentaMailController';
+import { toast } from 'vue-sonner';
+import CasillaController from '@/actions/App/Http/Controllers/CasillaController';
+import DocumentoPorRevisarController from '@/actions/App/Http/Controllers/DocumentoPorRevisarController';
+import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
+import RecetaController from '@/actions/App/Http/Controllers/RecetaController';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import type { DocumentoVisible } from '@/components/VisorDocumento.vue';
+import VisorDocumento from '@/components/VisorDocumento.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -28,332 +34,403 @@ import {
 } from '@/components/ui/sheet';
 
 /*
- * La casilla de correo de la que se importan las recetas.
+ * La casilla: a qué dirección reenviar las recetas, órdenes y estudios, cómo
+ * escribir el asunto para que se guarden solos, y lo que llegó y quedó para
+ * revisar.
  *
- * Copiada del patrón de los catálogos (ver `catalogos/Medicos.vue`): mismo
- * listado en tarjetas, mismo sheet para alta y edición, mismo dialog para
- * borrar. Lo único propio es el botón de probar la conexión.
- *
- * ⚠️ La CONTRASEÑA no viaja en los props -ver `CuentaMailController`-, así que
- * el formulario de edición abre con ese campo vacío y eso significa "dejá la
- * que está". El cartel al lado del campo lo dice, porque un campo de
- * contraseña vacío en una pantalla de edición se lee como "se perdió".
+ * Ya no se configura nada: el buzón es uno solo, el de la app.
  */
 
-type Casilla = {
+type Documento = DocumentoVisible & { id: number; tamanio: number };
+
+type PorRevisar = {
     id: number;
-    host: string;
-    puerto: number;
-    direccion: string;
-    carpeta: string;
-    filtros: string[];
-    /** Ya formateada por el servidor en la zona de la cuenta. */
-    sincronizadoHasta: string | null;
-    recetasImportadas: number;
+    remitente: string;
+    asunto: string | null;
+    motivo: string;
+    tipoSugerido: string | null;
+    pacienteId: number | null;
+    pacienteNombre: string | null;
+    fechaVisible: string;
+    adjuntos: Documento[];
 };
 
-defineProps<{ cuentas: Casilla[] }>();
+const props = defineProps<{
+    direccion: string | null;
+    maximoMb: number;
+    tuCorreo: string | null;
+    fichas: Array<{ id: number; nombre: string; email: string | null }>;
+    tipos: Array<{ valor: string; etiqueta: string }>;
+    porRevisar: PorRevisar[];
+    hayRecetasAnteriores: boolean;
+}>();
 
 defineOptions({
     layout: {
         breadcrumbs: [
-            { title: 'Casilla de recetas', href: CuentaMailController.index() },
+            { title: 'Casilla de recetas', href: CasillaController.index() },
         ],
     },
 });
 
-const campoBase =
-    'flex w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm';
-const campoUnaLinea = `${campoBase} min-h-11`;
-const campoTexto = `${campoBase} min-h-24`;
+const campoUnaLinea =
+    'flex min-h-11 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm';
 
-const sheetCrearAbierto = ref(false);
-const casillaAEditar = ref<Casilla | null>(null);
-const casillaABorrar = ref<Casilla | null>(null);
+const ejemplos = ['Receta Enalapril', 'Orden Ecografía', 'Estudio Laboratorio'];
+
+const aGuardar = ref<PorRevisar | null>(null);
+const aDescartar = ref<PorRevisar | null>(null);
+const documentoAbierto = ref<DocumentoVisible | null>(null);
+
+async function copiarDireccion(): Promise<void> {
+    if (!props.direccion) {
+        return;
+    }
+
+    try {
+        await navigator.clipboard.writeText(props.direccion);
+        toast.success('Se copió la dirección.');
+    } catch {
+        toast.error('No se pudo copiar. Anotala a mano.', {
+            duration: Infinity,
+        });
+    }
+}
+
+function pesoLegible(bytes: number): string {
+    return bytes < 1024 * 1024
+        ? `${Math.round(bytes / 1024)} KB`
+        : `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
+}
 </script>
 
 <template>
     <Head title="Casilla de recetas" />
 
     <div class="space-y-6">
-        <div class="flex items-center justify-between gap-4">
-            <Heading
-                variant="small"
-                title="Casilla de recetas"
-                description="De acá se importan las recetas que te llegan por mail"
-            />
-            <Button @click="sheetCrearAbierto = true">
-                <Plus />
-                Agregar
-            </Button>
-        </div>
+        <Heading
+            variant="small"
+            title="Mandá tus recetas, órdenes y estudios por mail"
+            :description="`En PDF, JPG o PNG, de hasta ${maximoMb} MB cada uno. Se guardan solos en la ficha del paciente.`"
+        />
 
-        <!--
-            Va arriba y siempre visible, no escondido en un "¿ayuda?": es el
-            dato sin el cual la configuración falla, y falla con un mensaje
-            que parece decir que la contraseña está mal escrita.
-        -->
+        <!-- La dirección: lo único que hay que anotar. -->
         <Card>
-            <CardContent class="flex gap-3">
-                <Info class="mt-0.5 size-5 shrink-0 text-muted-foreground" />
-                <div class="space-y-2 text-sm">
-                    <p>
-                        MiSalud se conecta a tu casilla, busca los mails con
-                        recetas y se guarda los archivos. Solo lee: no manda
-                        mails ni borra nada.
+            <CardContent class="space-y-3">
+                <p class="text-sm text-muted-foreground">Reenvialos a</p>
+                <template v-if="direccion">
+                    <p
+                        class="font-mono text-lg font-semibold break-all sm:text-xl"
+                    >
+                        {{ direccion }}
                     </p>
-                    <p>
-                        <strong>Si usás Gmail</strong>, necesitás una
-                        «contraseña de aplicación», que se genera en la
-                        configuración de tu cuenta de Google y requiere tener
-                        activada la verificación en dos pasos. La contraseña con
-                        la que entrás a Gmail no sirve para esto.
+                    <Button variant="outline" @click="copiarDireccion()">
+                        <Copy />
+                        Copiar la dirección
+                    </Button>
+                </template>
+                <p v-else class="text-sm">
+                    El buzón todavía no está configurado. Volvé a mirar en un
+                    rato.
+                </p>
+            </CardContent>
+        </Card>
+
+        <!-- Cómo funciona -->
+        <Card>
+            <CardContent class="space-y-4">
+                <h2 class="font-medium">Cómo funciona</h2>
+
+                <ol class="list-decimal space-y-3 pl-5 text-sm">
+                    <li>
+                        Mandá el mail <strong>desde tu correo</strong> o desde
+                        el correo cargado en la ficha del paciente, con el
+                        documento adjunto.
+                    </li>
+                    <li>
+                        En el asunto poné <strong>Receta</strong>,
+                        <strong>Orden</strong> o <strong>Estudio</strong>, y si
+                        querés, qué es. Por ejemplo:
+                        <span class="mt-2 flex flex-wrap gap-2">
+                            <span
+                                v-for="ejemplo in ejemplos"
+                                :key="ejemplo"
+                                class="rounded-md bg-muted px-2 py-1 font-mono"
+                            >
+                                {{ ejemplo }}
+                            </span>
+                        </span>
+                    </li>
+                    <li v-if="fichas.length > 1">
+                        Como administrás varias fichas, agregá el nombre del
+                        paciente:
+                        <span
+                            class="rounded-md bg-muted px-2 py-1 font-mono whitespace-nowrap"
+                        >
+                            Receta {{ fichas[0].nombre.split(' ')[0] }}
+                        </span>
+                    </li>
+                    <li>
+                        Lo guardamos en Recetas, Órdenes o Estudios de esa ficha
+                        y te contestamos para avisarte.
+                    </li>
+                </ol>
+
+                <div class="space-y-2 rounded-md bg-muted/60 p-3 text-sm">
+                    <p class="font-medium">Queda para revisar acá abajo si…</p>
+                    <ul class="list-disc space-y-1 pl-5">
+                        <li>
+                            el asunto no dice si es una receta, una orden o un
+                            estudio;
+                        </li>
+                        <li>no supimos de cuál de tus fichas es;</li>
+                        <li>
+                            no pudimos confirmar que el mail viniera de verdad
+                            de esa dirección.
+                        </li>
+                    </ul>
+                    <p class="text-muted-foreground">
+                        Un mail de una dirección que no conocemos no se guarda
+                        en ningún lado.
                     </p>
                 </div>
             </CardContent>
         </Card>
 
-        <div
-            v-if="cuentas.length === 0"
-            class="rounded-lg border border-dashed p-8 text-center"
-        >
-            <Inbox class="mx-auto size-8 text-muted-foreground" />
-            <p class="mt-3 text-sm text-muted-foreground">
-                Todavía no configuraste ninguna casilla.
-            </p>
-        </div>
+        <!-- Desde qué correos -->
+        <Card>
+            <CardContent class="space-y-3">
+                <h2 class="font-medium">Desde qué correos te reconocemos</h2>
+                <ul class="space-y-2 text-sm">
+                    <li v-if="tuCorreo" class="flex items-start gap-2">
+                        <Mail
+                            class="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                        />
+                        <span class="min-w-0 break-all">
+                            {{ tuCorreo }}
+                            <span class="text-muted-foreground">
+                                (tu cuenta, para cualquiera de tus fichas)
+                            </span>
+                        </span>
+                    </li>
+                    <li
+                        v-for="ficha in fichas"
+                        :key="ficha.id"
+                        class="flex items-start gap-2"
+                    >
+                        <Mail
+                            class="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                        />
+                        <span class="min-w-0 break-all">
+                            <template v-if="ficha.email">
+                                {{ ficha.email }}
+                                <span class="text-muted-foreground">
+                                    (de {{ ficha.nombre }})
+                                </span>
+                            </template>
+                            <template v-else>
+                                <span class="text-muted-foreground">
+                                    {{ ficha.nombre }} no tiene correo cargado.
+                                </span>
+                            </template>
+                        </span>
+                    </li>
+                </ul>
+                <Button variant="outline" size="sm" as-child>
+                    <Link :href="PacienteController.index()">
+                        Cargar el correo de una ficha
+                    </Link>
+                </Button>
+            </CardContent>
+        </Card>
 
-        <div v-else class="space-y-3">
-            <Card v-for="casilla in cuentas" :key="casilla.id">
-                <CardContent class="space-y-4">
-                    <div class="space-y-1">
-                        <p class="font-medium break-all">
-                            {{ casilla.direccion }}
+        <!-- Por revisar -->
+        <section class="space-y-3">
+            <h2 class="font-medium">Por revisar</h2>
+
+            <div
+                v-if="porRevisar.length === 0"
+                class="rounded-lg border border-dashed p-6 text-center"
+            >
+                <Inbox class="mx-auto size-8 text-muted-foreground" />
+                <p class="mt-3 text-sm text-muted-foreground">
+                    No hay nada para revisar.
+                </p>
+            </div>
+
+            <Card v-for="documento in porRevisar" :key="documento.id">
+                <CardContent class="space-y-3">
+                    <div class="min-w-0 space-y-1">
+                        <p class="font-medium wrap-break-word">
+                            {{ documento.asunto || 'Sin asunto' }}
                         </p>
-                        <p class="text-sm text-muted-foreground">
-                            {{ casilla.host }}, puerto {{ casilla.puerto }} ·
-                            carpeta {{ casilla.carpeta }}
+                        <p class="text-sm break-all text-muted-foreground">
+                            De {{ documento.remitente }} ·
+                            {{ documento.fechaVisible }}
                         </p>
-                        <p class="text-sm text-muted-foreground">
-                            <template v-if="casilla.filtros.length === 0">
-                                Se mira todo lo que haya en esa carpeta.
-                            </template>
-                            <template v-else>
-                                Solo de:
-                                {{ casilla.filtros.join(', ') }}
-                            </template>
+                        <p
+                            v-if="documento.pacienteNombre"
+                            class="text-sm text-muted-foreground"
+                        >
+                            Para la ficha de {{ documento.pacienteNombre }}
                         </p>
-                        <p class="text-sm text-muted-foreground">
-                            <template v-if="casilla.sincronizadoHasta === null">
-                                Todavía no se importó nada de esta casilla.
-                            </template>
-                            <template v-else>
-                                Última importación:
-                                {{ casilla.sincronizadoHasta }} ·
-                                {{ casilla.recetasImportadas }}
-                                {{
-                                    casilla.recetasImportadas === 1
-                                        ? 'receta'
-                                        : 'recetas'
-                                }}
-                            </template>
-                        </p>
+                        <p class="text-sm">{{ documento.motivo }}</p>
                     </div>
 
-                    <div class="flex flex-wrap gap-2">
-                        <Form
-                            v-bind="
-                                CuentaMailController.sincronizar.form({
-                                    cuenta: casilla.id,
-                                })
-                            "
-                            :options="{ preserveScroll: true }"
-                            v-slot="{ processing }"
+                    <ul class="grid gap-2">
+                        <li
+                            v-for="archivo in documento.adjuntos"
+                            :key="archivo.id"
                         >
-                            <!--
-                                Puede tardar: abre la conexión y se baja los
-                                adjuntos. Sin el cambio de texto parece que no
-                                hizo nada y se lo toca de nuevo -y eso sí que
-                                importa acá, porque dos importaciones en paralelo
-                                bajan los mismos archivos dos veces antes de que
-                                la deduplicación las frene-.
-                            -->
-                            <Button type="submit" :disabled="processing">
-                                <Download />
-                                {{
-                                    processing
-                                        ? 'Importando…'
-                                        : 'Importar ahora'
-                                }}
-                            </Button>
-                        </Form>
-
-                        <Form
-                            v-bind="
-                                CuentaMailController.probar.form({
-                                    cuenta: casilla.id,
-                                })
-                            "
-                            :options="{ preserveScroll: true }"
-                            v-slot="{ processing }"
-                        >
-                            <!--
-                                La prueba abre una conexión de verdad y puede
-                                tardar unos segundos: sin el cambio de texto,
-                                parece que el botón no hizo nada y se lo toca
-                                de nuevo.
-                            -->
-                            <Button
-                                type="submit"
-                                variant="secondary"
-                                :disabled="processing"
+                            <button
+                                type="button"
+                                class="flex min-h-11 w-full min-w-0 items-center gap-3 rounded-md border p-2 text-left"
+                                @click="documentoAbierto = archivo"
                             >
-                                <PlugZap />
-                                {{
-                                    processing ? 'Probando…' : 'Probar conexión'
-                                }}
-                            </Button>
-                        </Form>
+                                <FileText
+                                    class="size-5 shrink-0 text-muted-foreground"
+                                />
+                                <span class="min-w-0">
+                                    <span class="block truncate text-sm">
+                                        {{ archivo.nombre }}
+                                    </span>
+                                    <span
+                                        class="block text-sm text-muted-foreground"
+                                    >
+                                        {{ pesoLegible(archivo.tamanio) }}
+                                    </span>
+                                </span>
+                            </button>
+                        </li>
+                    </ul>
 
+                    <div class="flex flex-wrap gap-2">
                         <Button
-                            variant="ghost"
-                            @click="casillaAEditar = casilla"
+                            :disabled="fichas.length === 0"
+                            @click="aGuardar = documento"
                         >
-                            Editar
+                            Guardar en una ficha
                         </Button>
                         <Button
                             variant="ghost"
-                            size="icon"
                             class="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            :aria-label="`Borrar la casilla ${casilla.direccion}`"
-                            @click="casillaABorrar = casilla"
+                            @click="aDescartar = documento"
                         >
-                            <Trash2 class="size-4" />
+                            <Trash2 />
+                            Descartar
                         </Button>
                     </div>
                 </CardContent>
             </Card>
-        </div>
+        </section>
 
-        <!-- Crear -->
-        <Sheet v-model:open="sheetCrearAbierto">
-            <SheetContent>
+        <p v-if="hayRecetasAnteriores" class="text-sm">
+            <Link
+                :href="RecetaController.index()"
+                class="inline-flex min-h-11 items-center underline underline-offset-4"
+            >
+                Ver las recetas que llegaron con la casilla de antes
+            </Link>
+        </p>
+
+        <!-- Guardar en una ficha -->
+        <Sheet
+            :open="!!aGuardar"
+            @update:open="
+                (v: boolean) => {
+                    if (!v) aGuardar = null;
+                }
+            "
+        >
+            <SheetContent v-if="aGuardar">
                 <Form
-                    v-bind="CuentaMailController.store.form()"
-                    reset-on-success
+                    v-bind="
+                        DocumentoPorRevisarController.guardar.form({
+                            documento: aGuardar.id,
+                        })
+                    "
                     :options="{ preserveScroll: true }"
-                    @success="sheetCrearAbierto = false"
                     v-slot="{ errors, processing }"
                     class="flex h-full flex-col"
+                    @success="aGuardar = null"
                 >
                     <SheetHeader>
-                        <SheetTitle>Agregar una casilla</SheetTitle>
+                        <SheetTitle>Guardar en una ficha</SheetTitle>
                         <SheetDescription>
-                            Después de guardarla, probá la conexión para
-                            confirmar que anda.
+                            {{ aGuardar.asunto || 'Sin asunto' }}
                         </SheetDescription>
                     </SheetHeader>
 
                     <div class="flex-1 space-y-4 overflow-y-auto px-4">
                         <div class="grid gap-2">
-                            <Label for="direccion-crear">
-                                Dirección de correo
-                            </Label>
-                            <input
-                                id="direccion-crear"
-                                name="direccion"
-                                type="email"
-                                inputmode="email"
-                                autocomplete="off"
-                                required
-                                :class="campoUnaLinea"
-                            />
-                            <InputError :message="errors.direccion" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="password-crear">Contraseña</Label>
-                            <!--
-                                `new-password` y no `current-password`: con el
-                                segundo, el navegador ofrece la contraseña con
-                                la que la persona entra a MiSalud, que no es
-                                la que va acá.
-                            -->
-                            <input
-                                id="password-crear"
-                                name="password"
-                                type="password"
-                                autocomplete="new-password"
-                                required
-                                :class="campoUnaLinea"
-                            />
-                            <InputError :message="errors.password" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="host-crear">Servidor</Label>
-                            <input
-                                id="host-crear"
-                                name="host"
-                                type="text"
-                                autocomplete="off"
-                                required
-                                value="imap.gmail.com"
-                                :class="campoUnaLinea"
-                            />
-                            <InputError :message="errors.host" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="puerto-crear">Puerto</Label>
+                            <Label for="revisar-paciente">Paciente</Label>
                             <select
-                                id="puerto-crear"
-                                name="puerto"
+                                id="revisar-paciente"
+                                name="paciente_id"
                                 required
+                                :value="
+                                    aGuardar.pacienteId ??
+                                    (fichas.length === 1 ? fichas[0].id : '')
+                                "
                                 :class="campoUnaLinea"
                             >
-                                <option value="993">993 — lo normal</option>
-                                <option value="143">143</option>
+                                <option
+                                    value=""
+                                    disabled
+                                    class="bg-background text-foreground"
+                                >
+                                    Elegí una ficha
+                                </option>
+                                <option
+                                    v-for="ficha in fichas"
+                                    :key="ficha.id"
+                                    :value="ficha.id"
+                                    class="bg-background text-foreground"
+                                >
+                                    {{ ficha.nombre }}
+                                </option>
                             </select>
-                            <InputError :message="errors.puerto" />
+                            <InputError :message="errors.paciente_id" />
                         </div>
 
                         <div class="grid gap-2">
-                            <Label for="carpeta-crear">Carpeta</Label>
-                            <input
-                                id="carpeta-crear"
-                                name="carpeta"
-                                type="text"
-                                autocomplete="off"
+                            <Label for="revisar-tipo">Qué es</Label>
+                            <select
+                                id="revisar-tipo"
+                                name="tipo"
                                 required
-                                value="INBOX"
+                                :value="aGuardar.tipoSugerido ?? ''"
+                                :class="campoUnaLinea"
+                            >
+                                <option
+                                    value=""
+                                    disabled
+                                    class="bg-background text-foreground"
+                                >
+                                    Elegí qué es
+                                </option>
+                                <option
+                                    v-for="tipo in tipos"
+                                    :key="tipo.valor"
+                                    :value="tipo.valor"
+                                    class="bg-background text-foreground"
+                                >
+                                    {{ tipo.etiqueta }}
+                                </option>
+                            </select>
+                            <InputError :message="errors.tipo" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="revisar-texto">Descripción</Label>
+                            <input
+                                id="revisar-texto"
+                                name="texto"
+                                type="text"
+                                placeholder="Por ejemplo: Enalapril 10 mg"
                                 :class="campoUnaLinea"
                             />
-                            <p class="text-sm text-muted-foreground">
-                                INBOX es la bandeja de entrada. Si tenés una
-                                carpeta aparte para las recetas, poné su nombre
-                                completo.
-                            </p>
-                            <InputError :message="errors.carpeta" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="filtros-crear">
-                                Importar solo de (opcional)
-                            </Label>
-                            <textarea
-                                id="filtros-crear"
-                                name="filtros"
-                                rows="3"
-                                :class="campoTexto"
-                            ></textarea>
-                            <p class="text-sm text-muted-foreground">
-                                Una dirección o un dominio por línea, por
-                                ejemplo recetas@farmacia.com.ar o
-                                farmacia.com.ar. Si lo dejás vacío, se mira todo
-                                lo que haya en la carpeta.
-                            </p>
-                            <InputError :message="errors.filtros" />
+                            <InputError :message="errors.texto" />
                         </div>
                     </div>
 
@@ -371,179 +448,30 @@ const casillaABorrar = ref<Casilla | null>(null);
             </SheetContent>
         </Sheet>
 
-        <!-- Editar -->
-        <Sheet
-            :open="!!casillaAEditar"
-            @update:open="
-                (v: boolean) => {
-                    if (!v) casillaAEditar = null;
-                }
-            "
-        >
-            <SheetContent v-if="casillaAEditar">
-                <Form
-                    v-bind="
-                        CuentaMailController.update.form({
-                            cuenta: casillaAEditar.id,
-                        })
-                    "
-                    :options="{ preserveScroll: true }"
-                    @success="casillaAEditar = null"
-                    v-slot="{ errors, processing }"
-                    class="flex h-full flex-col"
-                >
-                    <SheetHeader>
-                        <SheetTitle>Editar la casilla</SheetTitle>
-                    </SheetHeader>
-
-                    <div class="flex-1 space-y-4 overflow-y-auto px-4">
-                        <div class="grid gap-2">
-                            <Label for="direccion-editar">
-                                Dirección de correo
-                            </Label>
-                            <input
-                                id="direccion-editar"
-                                name="direccion"
-                                type="email"
-                                inputmode="email"
-                                autocomplete="off"
-                                required
-                                :value="casillaAEditar.direccion"
-                                :class="campoUnaLinea"
-                            />
-                            <InputError :message="errors.direccion" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="password-editar">Contraseña</Label>
-                            <input
-                                id="password-editar"
-                                name="password"
-                                type="password"
-                                autocomplete="new-password"
-                                :class="campoUnaLinea"
-                            />
-                            <p class="text-sm text-muted-foreground">
-                                Dejala vacía para seguir usando la que ya tenías
-                                guardada.
-                            </p>
-                            <InputError :message="errors.password" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="host-editar">Servidor</Label>
-                            <input
-                                id="host-editar"
-                                name="host"
-                                type="text"
-                                autocomplete="off"
-                                required
-                                :value="casillaAEditar.host"
-                                :class="campoUnaLinea"
-                            />
-                            <InputError :message="errors.host" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="puerto-editar">Puerto</Label>
-                            <select
-                                id="puerto-editar"
-                                name="puerto"
-                                required
-                                :class="campoUnaLinea"
-                            >
-                                <option
-                                    value="993"
-                                    :selected="casillaAEditar.puerto === 993"
-                                >
-                                    993 — lo normal
-                                </option>
-                                <option
-                                    value="143"
-                                    :selected="casillaAEditar.puerto === 143"
-                                >
-                                    143
-                                </option>
-                            </select>
-                            <InputError :message="errors.puerto" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="carpeta-editar">Carpeta</Label>
-                            <input
-                                id="carpeta-editar"
-                                name="carpeta"
-                                type="text"
-                                autocomplete="off"
-                                required
-                                :value="casillaAEditar.carpeta"
-                                :class="campoUnaLinea"
-                            />
-                            <InputError :message="errors.carpeta" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="filtros-editar">
-                                Importar solo de (opcional)
-                            </Label>
-                            <textarea
-                                id="filtros-editar"
-                                name="filtros"
-                                rows="3"
-                                :class="campoTexto"
-                                >{{
-                                    casillaAEditar.filtros.join('\n')
-                                }}</textarea>
-                            <p class="text-sm text-muted-foreground">
-                                Una dirección o un dominio por línea. Vacío
-                                significa que se mira todo lo que haya en la
-                                carpeta.
-                            </p>
-                            <InputError :message="errors.filtros" />
-                        </div>
-                    </div>
-
-                    <SheetFooter>
-                        <Button type="submit" :disabled="processing">
-                            Guardar
-                        </Button>
-                        <SheetClose as-child>
-                            <Button type="button" variant="secondary">
-                                Cancelar
-                            </Button>
-                        </SheetClose>
-                    </SheetFooter>
-                </Form>
-            </SheetContent>
-        </Sheet>
-
-        <!-- Borrar -->
+        <!-- Descartar -->
         <Dialog
-            :open="!!casillaABorrar"
+            :open="!!aDescartar"
             @update:open="
                 (v: boolean) => {
-                    if (!v) casillaABorrar = null;
+                    if (!v) aDescartar = null;
                 }
             "
         >
-            <DialogContent v-if="casillaABorrar">
+            <DialogContent v-if="aDescartar">
                 <Form
                     v-bind="
-                        CuentaMailController.destroy.form({
-                            cuenta: casillaABorrar.id,
+                        DocumentoPorRevisarController.destroy.form({
+                            documento: aDescartar.id,
                         })
                     "
                     :options="{ preserveScroll: true }"
-                    @success="casillaABorrar = null"
                     v-slot="{ processing }"
+                    @success="aDescartar = null"
                 >
                     <DialogHeader class="space-y-3">
-                        <DialogTitle>¿Borrar esta casilla?</DialogTitle>
+                        <DialogTitle>¿Descartar este documento?</DialogTitle>
                         <DialogDescription>
-                            Se borra la configuración y la contraseña guardada,
-                            y se deja de importar de
-                            {{ casillaABorrar.direccion }}. Las recetas que ya
-                            se importaron se quedan. Esto no se puede deshacer.
+                            Se borra con sus archivos y no se puede recuperar.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -558,11 +486,17 @@ const casillaABorrar = ref<Casilla | null>(null);
                             variant="destructive"
                             :disabled="processing"
                         >
-                            Borrar
+                            Descartar
                         </Button>
                     </DialogFooter>
                 </Form>
             </DialogContent>
         </Dialog>
+
+        <!-- UNO SOLO para toda la pantalla, fuera de todo v-for. -->
+        <VisorDocumento
+            :documento="documentoAbierto"
+            @cerrar="documentoAbierto = null"
+        />
     </div>
 </template>

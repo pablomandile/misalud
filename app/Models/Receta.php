@@ -30,9 +30,13 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * un mail de la farmacia no dice de quién es la receta, y adivinarlo sería
  * cargársela a un familiar equivocado. Ver la migración para el detalle.
  *
+ * ⚠️ **Ya no entra nada nuevo acá.** Desde el buzón único, lo que llega por
+ * mail se guarda en la ficha del paciente (`RecetaMedica`, `OrdenEstudio`,
+ * `Estudio`). Esta tabla queda con lo que se importó antes, consultable desde
+ * la página de la casilla.
+ *
  * @property int $id
  * @property int $usuario_id
- * @property int|null $cuenta_mail_id
  * @property string $message_id
  * @property string $remitente
  * @property string|null $asunto
@@ -62,7 +66,6 @@ class Receta extends Model implements CifraDatos, TieneArchivos
      * receta se crea por la relación, `$usuario->recetas()->create(...)`.
      */
     protected $fillable = [
-        'cuenta_mail_id',
         'message_id',
         'remitente',
         'asunto',
@@ -98,20 +101,6 @@ class Receta extends Model implements CifraDatos, TieneArchivos
     public function usuario(): BelongsTo
     {
         return $this->belongsTo(User::class, 'usuario_id');
-    }
-
-    /**
-     * De qué casilla vino.
-     *
-     * ⚠️ Con `withTrashed()` no haría falta —`cuentas_mail` no tiene soft
-     * deletes—, pero puede ser `null`: borrar la casilla deja la receta sin
-     * vínculo y eso es lo correcto (ver la migración).
-     *
-     * @return BelongsTo<CuentaMail, $this>
-     */
-    public function cuentaMail(): BelongsTo
-    {
-        return $this->belongsTo(CuentaMail::class, 'cuenta_mail_id');
     }
 
     /**

@@ -149,7 +149,11 @@ class PacienteController extends Controller
                 ->values()
                 ->map(fn (Adjunto $adjunto): array => [
                     'id' => $adjunto->id,
-                    'nombre' => $adjunto->nombre_original,
+                    // El que le puso la persona, o el del archivo.
+                    'nombre' => $adjunto->nombreVisible(),
+                    'titulo' => $adjunto->titulo,
+                    'descripcion' => $adjunto->descripcion,
+                    'archivo' => $adjunto->nombre_original,
                     'mime' => $adjunto->mime,
                     'tamanio' => $adjunto->tamanio_bytes,
                     'tipo' => $adjunto->tipo->etiqueta(),

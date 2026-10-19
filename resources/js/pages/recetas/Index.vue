@@ -2,7 +2,7 @@
 import { Form, Head, Link } from '@inertiajs/vue3';
 import { FileText, Inbox, Send, Trash2 } from '@lucide/vue';
 import { ref } from 'vue';
-import CuentaMailController from '@/actions/App/Http/Controllers/CuentaMailController';
+import CasillaController from '@/actions/App/Http/Controllers/CasillaController';
 import EnvioController from '@/actions/App/Http/Controllers/EnvioController';
 import RecetaController from '@/actions/App/Http/Controllers/RecetaController';
 import Heading from '@/components/Heading.vue';
@@ -65,7 +65,6 @@ const props = defineProps<{
     disponibles: Receta[];
     historial: Receta[];
     mes: { nombre: string; llegaron: number };
-    tieneCasilla: boolean;
 }>();
 
 defineOptions({
@@ -141,29 +140,21 @@ function pesoLegible(bytes: number): string {
             </CardContent>
         </Card>
 
-        <!-- Vacío: sin casilla hay que decir "configurá una", no "no llegó nada". -->
-        <div
-            v-if="!hayAlguna()"
-            class="space-y-4 rounded-lg border border-dashed p-8 text-center"
-        >
+        <!--
+            Esta bandeja ya no recibe nada: lo que llega por mail se guarda en
+            la ficha de cada paciente. Queda para lo que se importó antes.
+        -->
+        <div class="space-y-4 rounded-lg border border-dashed p-6 text-center">
             <Inbox class="mx-auto size-8 text-muted-foreground" />
-            <template v-if="tieneCasilla">
-                <p class="text-sm text-muted-foreground">
-                    Todavía no llegó ninguna receta. Se buscan solas cada hora
-                    en tu casilla.
-                </p>
-            </template>
-            <template v-else>
-                <p class="text-sm text-muted-foreground">
-                    Para que las recetas lleguen solas, primero configurá la
-                    casilla de correo donde te las mandan.
-                </p>
-                <Button as-child>
-                    <Link :href="CuentaMailController.index()">
-                        Configurar la casilla
-                    </Link>
-                </Button>
-            </template>
+            <p class="text-sm text-muted-foreground">
+                Estas son las recetas que llegaron con la casilla de antes. Las
+                nuevas se guardan solas en la ficha de cada paciente.
+            </p>
+            <Button variant="outline" as-child>
+                <Link :href="CasillaController.index()">
+                    Cómo mandar documentos por mail
+                </Link>
+            </Button>
         </div>
 
         <template

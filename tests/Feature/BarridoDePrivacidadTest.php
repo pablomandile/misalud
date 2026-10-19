@@ -11,7 +11,7 @@ use App\Models\Clave;
 use App\Models\Cobertura;
 use App\Models\Consulta;
 use App\Models\Contacto;
-use App\Models\CuentaMail;
+use App\Models\DocumentoPorRevisar;
 use App\Models\Enfermedad;
 use App\Models\Estudio;
 use App\Models\Medicamento;
@@ -111,6 +111,7 @@ function fichaParaBarrer(User $duenio, User $cuidador): array
         'tratamiento' => Tratamiento::factory()->for($paciente)->create(),
         'orden' => OrdenEstudio::factory()->for($paciente)->create(),
         'recetaMedica' => RecetaMedica::factory()->for($paciente)->create(),
+        'documento' => tap(DocumentoPorRevisar::factory()->create(), fn (DocumentoPorRevisar $d) => $d->forceFill(['paciente_id' => $paciente->id])->save()),
         'estudio' => $estudio,
         'resultado' => ResultadoEstudio::factory()->for($estudio)->create(),
         'prescripcion' => PrescripcionOcular::factory()->for($paciente)->create(),
@@ -130,7 +131,6 @@ function fichaParaBarrer(User $duenio, User $cuidador): array
         'medicamento' => Medicamento::factory()->for($duenio, 'usuario')->create(),
         'vacuna' => Vacuna::factory()->for($duenio, 'usuario')->create(),
         'tipo_medicion' => $tipo,
-        'cuenta' => CuentaMail::factory()->for($duenio, 'usuario')->create(),
         'contacto' => Contacto::factory()->for($duenio, 'usuario')->create(),
         'receta' => Receta::factory()->create(['usuario_id' => $duenio->id]),
     ];
@@ -141,7 +141,7 @@ function parametrosDeLaFicha(): array
 {
     return [
         'paciente', 'cobertura', 'enfermedad', 'registro', 'alergia', 'clave', 'medicion',
-        'tratamiento', 'orden', 'recetaMedica', 'estudio', 'resultado', 'prescripcion', 'aplicacion', 'consulta', 'turno',
+        'tratamiento', 'orden', 'recetaMedica', 'documento', 'estudio', 'resultado', 'prescripcion', 'aplicacion', 'consulta', 'turno',
         'recordatorio', 'adjunto', 'usuario',
     ];
 }

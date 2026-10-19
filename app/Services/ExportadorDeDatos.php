@@ -55,6 +55,7 @@ final class ExportadorDeDatos
         'aplicacionesVacuna' => [],
         'ordenesEstudio' => [],
         'recetasMedicas' => [],
+        'documentosPorRevisar' => [],
         'estudios' => ['resultados'],
         'prescripcionesOculares' => ['graduaciones'],
         'consultas' => [],
@@ -106,8 +107,11 @@ final class ExportadorDeDatos
                     'vacunas' => $this->filas(Vacuna::where('usuario_id', $usuario->id)->get()),
                     'variables' => $this->filas(TipoMedicion::where('usuario_id', $usuario->id)->get()),
                 ],
-                // `password` va en $hidden del modelo: no sale ni acá.
-                'casillas_de_recetas' => $this->filas($usuario->cuentasMail()->get()),
+                // Lo que llegó al buzón desde tu correo y no tiene ficha todavía.
+                'documentos_por_revisar' => $this->conArchivos(
+                    $usuario->documentosPorRevisar()->whereNull('paciente_id')->get(),
+                    'por-revisar',
+                ),
                 'recetas' => $this->conArchivos($usuario->recetas()->get(), 'recetas'),
                 'contactos' => $this->filas($usuario->contactos()->get()),
                 'envios' => $usuario->envios()->with('archivos')->get()->map(fn (Model $envio) => [
@@ -293,8 +297,7 @@ final class ExportadorDeDatos
 
             Lo que NO está:
               - las fichas que otra persona te compartió (se las lleva su dueño);
-              - lo que mandaste a la papelera;
-              - la contraseña de tu casilla de recetas.
+              - lo que mandaste a la papelera.
 
             Este archivo tiene tu historia clínica sin cifrar, y también las
             contraseñas que guardaste en Claves: guardalo en un lugar seguro y no

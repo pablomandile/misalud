@@ -16,6 +16,7 @@ use App\Models\Centro;
 use App\Models\Consulta;
 use App\Models\Enfermedad;
 use App\Models\Estudio;
+use App\Models\MailRecibido;
 use App\Models\Medicamento;
 use App\Models\Medicion;
 use App\Models\Medico;
@@ -65,6 +66,9 @@ class VaciarPapelera extends Command
 {
     /** Lo que promete la política de privacidad. */
     public const DIAS = 30;
+
+    /** Cuánto se guarda el registro de cada mail que llegó al buzón. */
+    public const DIAS_MAILS_RECIBIDOS = 90;
 
     protected $signature = 'misalud:vaciar-papelera {--seco : Mostrar qué se borraría, sin borrar nada}';
 
@@ -151,6 +155,18 @@ class VaciarPapelera extends Command
 
         if (! $seco) {
             $recetas->each(fn (Receta $receta) => $archivos->borrarTodosDe($receta));
+        }
+
+        /*
+         * El registro del buzón (`mails_recibidos`) a los 90 días: para
+         * entonces el mail ya salió del INBOX y no hay nada que deduplicar, y no
+         * hay por qué guardar quién mandó qué más tiempo del necesario.
+         */
+        $mails = MailRecibido::query()->where('created_at', '<', now()->subDays(self::DIAS_MAILS_RECIBIDOS));
+        $this->line(sprintf('  %-22s %d', 'MailRecibido', $mails->count()));
+
+        if (! $seco) {
+            $mails->delete();
         }
 
         // Los adjuntos de la papelera: su archivo ya se borró al mandarlos ahí,

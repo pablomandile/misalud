@@ -11,6 +11,7 @@ use App\Http\Controllers\MedicoController;
 use App\Http\Controllers\TipoMedicionController;
 use App\Http\Controllers\VacunaController;
 use App\Models\Centro;
+use App\Models\MailRecibido;
 use App\Models\Medicamento;
 use App\Models\Medico;
 use App\Models\Paciente;
@@ -78,6 +79,12 @@ final readonly class BorradorDeCuenta
                 ->each(fn (Paciente $paciente) => $paciente->forceDelete());
 
             DB::table('sessions')->where('user_id', $usuario->id)->delete();
+
+            // Lo que su correo mandó al buzón: el registro guarda la dirección
+            // (cifrada) y el asunto, y la cuenta promete irse entera.
+            MailRecibido::query()
+                ->where('remitente_hash', MailRecibido::hashCiego($usuario->email))
+                ->delete();
 
             $usuario->delete();
         });

@@ -50,8 +50,9 @@ pasa, no una herramienta de diagnóstico:
   acceso cuando quieras.
 - **Si mandás documentos a un contacto**, salen por mail y ya no dependen de
   MiSalud: no se pueden recuperar. Revisá el destinatario antes de mandar.
-- **Si configurás la casilla de recetas**, nos autorizás a leer esa casilla para
-  importar las recetas. MiSalud solo lee: no manda mails desde ella ni borra nada.
+- **Si nos mandás documentos por mail**, los guardamos en la ficha que reconocemos
+  por tu dirección y te contestamos para avisarte. Mandalos solo desde tu correo o
+  desde el que cargaste en la ficha del paciente.
 
 ## El servicio
 

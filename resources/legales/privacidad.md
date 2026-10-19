@@ -37,13 +37,16 @@ decisión, y solo los usamos para mostrártelos.
 - Los archivos que subas: PDF, fotos y **grabaciones de audio** de las consultas.
 - Tu catálogo: médicos, centros, medicamentos, vacunas y variables.
 
-**Si configurás la casilla de recetas**
+**Si nos mandás documentos por mail**
 
-- La dirección, el servidor y la contraseña de esa casilla. La contraseña se guarda
-  cifrada y nunca se muestra en pantalla.
-- De cada mail con una receta: el remitente, el asunto, la fecha y el archivo
-  adjunto. MiSalud **solo lee** esa casilla: no manda mails desde ella, no los marca
-  como leídos y no borra nada.
+- Los mails que reenviás a la casilla de MiSalud se guardan en la ficha que
+  corresponde: el documento adjunto, y el asunto como descripción.
+- De cada mail anotamos el remitente, el asunto, la fecha y qué hicimos con él, y lo
+  borramos a los 90 días. De un mail que llega de una dirección que no conocemos no
+  guardamos nada más que una huella para no procesarlo dos veces.
+- Para saber si un mail viene de verdad de quien dice, miramos la verificación que
+  hace nuestro servidor de correo al recibirlo (SPF, DKIM y DMARC). Si no la pasa,
+  el documento no entra solo a la ficha: queda para que lo revises.
 
 **Si mandás documentos**
 
@@ -63,7 +66,7 @@ decisión, y solo los usamos para mostrártelos.
 
 - mostrarte tu información y la de las fichas a las que tenés acceso;
 - mandarte los avisos de tus turnos, tratamientos y vacunas;
-- importar las recetas de tu casilla, si la configurás;
+- guardar en cada ficha los documentos que nos mandás por mail;
 - mandar las invitaciones y los documentos que vos decidas enviar.
 
 **Lo que no hacemos:**
@@ -81,8 +84,6 @@ decisión, y solo los usamos para mostrártelos.
   manda los mails. Procesa los datos solo para prestar ese servicio.
 - **Google**, solo si elegís entrar con tu cuenta de Google. En ese caso Google nos
   pasa tu nombre, tu email y un identificador de tu cuenta.
-- **Tu proveedor de correo**, solo si configurás la casilla de recetas: MiSalud se
-  conecta a esa casilla para leer los mails.
 - **Las personas que vos elijas:**
     - Si invitás a alguien a una ficha, esa persona la ve entera. Si le das el rol de
       cuidador, además puede cargar y corregir datos en ella. Podés quitarle el

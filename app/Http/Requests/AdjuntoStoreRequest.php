@@ -61,6 +61,7 @@ class AdjuntoStoreRequest extends FormRequest
              * ciphertext. Las grabaciones tienen su ruta y su FormRequest.
              */
             'tipo' => ['required', Rule::enum(TipoAdjunto::class)->except([TipoAdjunto::AudioConsulta])],
+            'titulo' => ['nullable', 'string', 'max:255'],
             'descripcion' => ['nullable', 'string', 'max:500'],
         ];
     }
@@ -74,6 +75,7 @@ class AdjuntoStoreRequest extends FormRequest
             'archivos' => 'archivos',
             'archivos.*' => 'archivo',
             'tipo' => 'tipo de documento',
+            'titulo' => 'nombre',
             'descripcion' => 'descripción',
         ];
     }

@@ -6,8 +6,10 @@ namespace App\Services;
 
 use App\Contracts\TieneArchivos;
 use App\Enums\TipoAdjunto;
+use App\Support\AdjuntoDeCasilla;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -59,6 +61,7 @@ final readonly class AdjuntadorDeArchivos
         array $archivos,
         TipoAdjunto $tipo,
         ?string $descripcion = null,
+        ?string $titulo = null,
     ): int {
         $escritas = [];
 
@@ -73,6 +76,7 @@ final readonly class AdjuntadorDeArchivos
                  */
                 $duenio->adjuntos()->create($datos + [
                     'tipo' => $tipo,
+                    'titulo' => $this->tituloPara($titulo, count($escritas), count($archivos)),
                     'descripcion' => $descripcion,
                 ]);
             }
@@ -85,5 +89,101 @@ final readonly class AdjuntadorDeArchivos
         }
 
         return count($escritas);
+    }
+
+    /**
+     * Con varios archivos y un solo nombre ("Análisis de marzo"), cada uno
+     * lleva su número: tres documentos que se llaman igual no se distinguen en
+     * la lista.
+     */
+    private function tituloPara(?string $titulo, int $posicion, int $total): ?string
+    {
+        $titulo = $titulo === null ? '' : trim($titulo);
+
+        if ($titulo === '') {
+            return null;
+        }
+
+        return $total > 1 ? "{$titulo} ({$posicion} de {$total})" : $titulo;
+    }
+
+    /**
+     * Lo mismo, para archivos que no llegaron por un formulario sino por mail.
+     * El mime se deduce del CONTENIDO (`ArchivoService::guardarContenido()`),
+     * nunca del `Content-Type` del mail, que lo escribe alguien de afuera.
+     *
+     * Mismo cuidado que `adjuntar()`: si algo falla, borra lo ya escrito.
+     *
+     * @param  list<AdjuntoDeCasilla>  $archivos  ya filtrados (ver `utiles()`)
+     */
+    public function adjuntarContenidos(
+        Model&TieneArchivos $duenio,
+        array $archivos,
+        TipoAdjunto $tipo,
+        ?string $descripcion = null,
+    ): int {
+        $escritas = [];
+
+        try {
+            foreach ($archivos as $archivo) {
+                $datos = $this->archivos->guardarContenido($archivo->contenido, $archivo->nombre, $duenio->carpetaDeArchivos());
+                $escritas[] = $datos['ruta'];
+
+                $duenio->adjuntos()->create($datos + [
+                    'tipo' => $tipo,
+                    'descripcion' => $descripcion,
+                ]);
+            }
+        } catch (Throwable $error) {
+            foreach ($escritas as $ruta) {
+                $this->archivos->borrarRuta($ruta);
+            }
+
+            throw $error;
+        }
+
+        return count($escritas);
+    }
+
+    /**
+     * De lo que llegó por mail, lo que sirve: hasta 10, de un tipo y un tamaño
+     * que se aceptan. Se descartan DE A UNO, no el mail entero: si trae la
+     * receta en PDF y además un instructivo en Word, la receta entra. Pregunta
+     * sin escribir nada, así se decide antes de abrir una transacción.
+     *
+     * @param  list<AdjuntoDeCasilla>  $archivos
+     * @return list<AdjuntoDeCasilla>
+     */
+    public function utiles(array $archivos): array
+    {
+        $utiles = array_values(array_filter($archivos, function (AdjuntoDeCasilla $archivo): bool {
+            try {
+                $this->archivos->mimeAceptado($archivo->contenido);
+
+                return true;
+            } catch (RuntimeException) {
+                return false;
+            }
+        }));
+
+        return array_slice($utiles, 0, 10);
+    }
+
+    /**
+     * Pasa los archivos de un dueño a otro: lo que quedó "por revisar" se
+     * convierte en una receta, una orden o un estudio, y sus archivos se van
+     * con él. **No se copia nada en el disco**: cambia de quién cuelga la fila,
+     * y la ruta cifrada sigue apuntando al mismo archivo.
+     *
+     * `adjuntable` no es fillable (de él cuelga la autorización), así que va
+     * por `associate()`, el único camino.
+     */
+    public function traspasar(TieneArchivos $de, Model&TieneArchivos $a, TipoAdjunto $tipo): void
+    {
+        foreach ($de->adjuntos()->get() as $adjunto) {
+            $adjunto->adjuntable()->associate($a);
+            $adjunto->setAttribute('tipo', $tipo);
+            $adjunto->save();
+        }
     }
 }

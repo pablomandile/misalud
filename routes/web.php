@@ -4,14 +4,15 @@ use App\Http\Controllers\AdjuntoController;
 use App\Http\Controllers\AlergiaController;
 use App\Http\Controllers\AplicacionVacunaController;
 use App\Http\Controllers\Auth\GoogleController;
+use App\Http\Controllers\CasillaController;
 use App\Http\Controllers\CentroController;
 use App\Http\Controllers\ClaveController;
 use App\Http\Controllers\CoberturaController;
 use App\Http\Controllers\CompartirController;
 use App\Http\Controllers\ConsultaController;
 use App\Http\Controllers\ContactoController;
-use App\Http\Controllers\CuentaMailController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DocumentoPorRevisarController;
 use App\Http\Controllers\EnfermedadController;
 use App\Http\Controllers\EnvioController;
 use App\Http\Controllers\EstudioController;
@@ -119,6 +120,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('pacientes/{paciente}/adjuntos', [AdjuntoController::class, 'store'])
         ->name('pacientes.adjuntos.store');
     Route::get('adjuntos/{adjunto}', [AdjuntoController::class, 'show'])->name('adjuntos.show');
+    Route::put('adjuntos/{adjunto}', [AdjuntoController::class, 'update'])->name('adjuntos.update');
     Route::delete('adjuntos/{adjunto}', [AdjuntoController::class, 'destroy'])->name('adjuntos.destroy');
 
     /*
@@ -356,28 +358,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('recordatorios.update');
 
     /*
-     * La casilla de correo de la que se importan las recetas: es del USUARIO,
-     * como un catálogo, y no de un paciente.
-     *
-     * `probar` es un POST aunque no escriba nada nuestro: abre una sesión IMAP
-     * contra un servidor de verdad usando la contraseña guardada, que no es
-     * algo que pueda quedar colgado de un GET -repetible desde el historial,
-     * precargable por el navegador-.
+     * El buzón de la app: la página explica a qué dirección reenviar recetas,
+     * órdenes y estudios, y muestra lo que llegó y quedó para revisar.
+     * Resolver y descartar autorizan contra el documento (su Policy mira la
+     * ficha y la cuenta de la que vino).
      */
-    Route::get('casilla', [CuentaMailController::class, 'index'])->name('casilla.index');
-    Route::post('casilla', [CuentaMailController::class, 'store'])->name('casilla.store');
-    Route::put('casilla/{cuenta}', [CuentaMailController::class, 'update'])->name('casilla.update');
-    Route::delete('casilla/{cuenta}', [CuentaMailController::class, 'destroy'])->name('casilla.destroy');
-    Route::post('casilla/{cuenta}/probar', [CuentaMailController::class, 'probar'])
-        ->name('casilla.probar');
-
-    /*
-     * Importar ahora, sin esperar al scheduler. Las RECETAS no tienen rutas de
-     * alta: entran solo por acá y por `misalud:sincronizar-recetas` -lo fija
-     * `RecetaPolicy::create()`, que devuelve `false` a propósito-.
-     */
-    Route::post('casilla/{cuenta}/sincronizar', [CuentaMailController::class, 'sincronizar'])
-        ->name('casilla.sincronizar');
+    Route::get('casilla', [CasillaController::class, 'index'])->name('casilla.index');
+    Route::post('por-revisar/{documento}/guardar', [DocumentoPorRevisarController::class, 'guardar'])
+        ->name('por-revisar.guardar');
+    Route::delete('por-revisar/{documento}', [DocumentoPorRevisarController::class, 'destroy'])
+        ->name('por-revisar.destroy');
 
     /*
      * La bandeja de recetas. Sin `store`: entran solo por importación

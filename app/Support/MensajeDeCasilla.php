@@ -36,6 +36,13 @@ final readonly class MensajeDeCasilla
         public ?string $asunto,
         public CarbonImmutable $fecha,
         public array $adjuntos,
+        /*
+         * Los encabezados tal cual llegaron. Los interpreta `CabecerasDelMail`
+         * (autenticidad, si es una respuesta automática): el lector no decide.
+         */
+        public string $cabeceras = '',
+        /** Para moverlo a Procesados después. */
+        public ?int $uid = null,
     ) {}
 
     /**

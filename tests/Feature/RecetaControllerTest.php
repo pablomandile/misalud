@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use App\Enums\EstadoReceta;
 use App\Enums\TipoAdjunto;
-use App\Models\CuentaMail;
 use App\Models\Receta;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -136,18 +135,6 @@ it('el contador cuenta también las usadas: la pregunta es cuántas llegaron', f
     $this->actingAs($this->usuario)
         ->get(route('recetas.index'))
         ->assertInertia(fn ($pagina) => $pagina->where('mes.llegaron', 2));
-});
-
-it('avisa si todavía no hay casilla configurada', function (): void {
-    $this->actingAs($this->usuario)
-        ->get(route('recetas.index'))
-        ->assertInertia(fn ($pagina) => $pagina->where('tieneCasilla', false));
-
-    CuentaMail::factory()->for($this->usuario, 'usuario')->create();
-
-    $this->actingAs($this->usuario)
-        ->get(route('recetas.index'))
-        ->assertInertia(fn ($pagina) => $pagina->where('tieneCasilla', true));
 });
 
 it('manda los archivos de cada receta para abrirlos en el visor', function (): void {

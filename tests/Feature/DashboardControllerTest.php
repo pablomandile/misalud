@@ -5,11 +5,12 @@ declare(strict_types=1);
 use App\Enums\TipoAdjunto;
 use App\Models\AplicacionVacuna;
 use App\Models\Cobertura;
+use App\Models\DocumentoPorRevisar;
 use App\Models\Medicamento;
 use App\Models\Medicion;
 use App\Models\OrdenEstudio;
 use App\Models\Paciente;
-use App\Models\Receta;
+use App\Models\RecetaMedica;
 use App\Models\TipoMedicion;
 use App\Models\Tratamiento;
 use App\Models\Turno;
@@ -274,21 +275,38 @@ it('las últimas mediciones: una por variable, la más reciente, con el mismo fo
             ->where('ultimasMediciones.0.unidad', 'kg'));
 });
 
-it('las recetas: sin casilla ni recetas la tarjeta no existe; con recetas cuenta solo las disponibles', function (): void {
+it('las recetas son las de la ficha activa que se pueden usar hoy', function (): void {
     $usuario = User::factory()->create();
-    Paciente::factory()->for($usuario, 'usuario')->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+    $hoy = $usuario->hoyCalendario();
 
     $this->actingAs($usuario)->get(route('dashboard'))
-        ->assertInertia(fn ($p) => $p->where('recetas', null));
+        ->assertInertia(fn ($p) => $p->where('recetas.total', 0));
 
-    Receta::factory()->create(['usuario_id' => $usuario->id, 'asunto' => 'Disponible']);
-    Receta::factory()->vencida()->create(['usuario_id' => $usuario->id]);
-    Receta::factory()->usada()->create(['usuario_id' => $usuario->id]);
-    // La de otra persona no aparece nunca.
-    Receta::factory()->create(['asunto' => 'Ajena']);
+    RecetaMedica::factory()->for($paciente)->create(['detalle' => 'Disponible', 'fecha' => $hoy]);
+    RecetaMedica::factory()->for($paciente)->create(['fecha' => $hoy->subDays(60)]);
+    RecetaMedica::factory()->for($paciente)->usada()->create(['fecha' => $hoy]);
+    // La de otra ficha no aparece nunca.
+    RecetaMedica::factory()->create(['detalle' => 'Ajena', 'fecha' => $hoy]);
 
     $this->actingAs($usuario)->get(route('dashboard'))
         ->assertInertia(fn ($p) => $p
             ->where('recetas.total', 1)
-            ->where('recetas.filas.0.asunto', 'Disponible'));
+            ->where('recetas.filas.0.titulo', 'Disponible'));
+});
+
+it('cuenta lo que quedó por revisar del buzón', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+
+    $this->actingAs($usuario)->get(route('dashboard'))
+        ->assertInertia(fn ($p) => $p->where('porRevisar', 0));
+
+    DocumentoPorRevisar::factory()->create()->forceFill(['paciente_id' => $paciente->id])->save();
+    DocumentoPorRevisar::factory()->create()->forceFill(['usuario_id' => $usuario->id])->save();
+    // El de otra cuenta no.
+    DocumentoPorRevisar::factory()->create()->forceFill(['usuario_id' => User::factory()->create()->id])->save();
+
+    $this->actingAs($usuario)->get(route('dashboard'))
+        ->assertInertia(fn ($p) => $p->where('porRevisar', 2));
 });

@@ -94,6 +94,15 @@ class Paciente extends Model implements CifraDatos, TieneArchivos
     }
 
     /**
+     * El correo, para que el buzón reconozca de quién es un mail sin descifrar
+     * cada ficha. Sin UNIQUE: dos fichas de la misma persona pueden repetirlo.
+     */
+    public function indicesCiegos(): array
+    {
+        return ['email' => 'email_hash'];
+    }
+
+    /**
      * Quien dio de alta al paciente. No es "el dueño de los permisos" —eso lo
      * decide el pivote—, es solo de quién fue el alta original.
      *
@@ -216,6 +225,16 @@ class Paciente extends Model implements CifraDatos, TieneArchivos
     public function recetasMedicas(): HasMany
     {
         return $this->hasMany(RecetaMedica::class);
+    }
+
+    /**
+     * Lo que llegó al buzón para esta ficha y no se pudo guardar solo.
+     *
+     * @return HasMany<DocumentoPorRevisar, $this>
+     */
+    public function documentosPorRevisar(): HasMany
+    {
+        return $this->hasMany(DocumentoPorRevisar::class);
     }
 
     /**

@@ -65,10 +65,6 @@ class RecetaController extends Controller
                 ->all(),
 
             'mes' => $this->contadorDelMes($recetas, $usuario),
-
-            // Para el estado vacío: sin casilla, lo que hay que decir es "configurá
-            // una", no "no te llegó nada".
-            'tieneCasilla' => $usuario->cuentasMail()->exists(),
         ]);
     }
 

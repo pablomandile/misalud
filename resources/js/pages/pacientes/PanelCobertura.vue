@@ -623,6 +623,19 @@ function alBorrarCobertura(): void {
                         <InputError :message="errors.activa" />
                     </div>
 
+                    <!--
+                        La credencial en el mismo alta: es lo que se tiene en la
+                        mano al cargar la cobertura. Solo acá, nunca en la
+                        edición (va por PUT, y PHP no parsea el multipart de un
+                        PUT).
+                    -->
+                    <SubirArchivo
+                        name="archivos[]"
+                        multiple
+                        etiqueta="Foto de la credencial, frente y dorso (opcional)"
+                        :error="errors['archivos.0'] ?? errors.archivos"
+                    />
+
                     <Button type="submit" class="w-full" :disabled="processing">
                         Guardar
                     </Button>

@@ -6,6 +6,7 @@ import {
     ClipboardList,
     CreditCard,
     FileText,
+    Inbox,
     Pill,
     Syringe,
 } from '@lucide/vue';
@@ -15,7 +16,8 @@ import MedicionController from '@/actions/App/Http/Controllers/MedicionControlle
 import OrdenEstudioController from '@/actions/App/Http/Controllers/OrdenEstudioController';
 import PacienteActivoController from '@/actions/App/Http/Controllers/PacienteActivoController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
-import RecetaController from '@/actions/App/Http/Controllers/RecetaController';
+import CasillaController from '@/actions/App/Http/Controllers/CasillaController';
+import RecetaMedicaController from '@/actions/App/Http/Controllers/RecetaMedicaController';
 import TratamientoController from '@/actions/App/Http/Controllers/TratamientoController';
 import TurnoController from '@/actions/App/Http/Controllers/TurnoController';
 import TarjetaPanel from '@/components/TarjetaPanel.vue';
@@ -77,9 +79,11 @@ defineProps<{
     }>;
     recetas: Tarjeta<{
         id: number;
-        asunto: string | null;
+        titulo: string;
         venceVisible: string;
     }> | null;
+    /** Lo que llegó al buzón y quedó para revisar, de cualquier ficha. */
+    porRevisar: number;
 }>();
 
 defineOptions({
@@ -304,22 +308,45 @@ function masDe(total: number, mostradas: number): string | null {
                 </template>
             </TarjetaPanel>
 
-            <!-- Recetas: de la casilla, no de la ficha. -->
+            <!--
+                Lo que llegó al buzón y quedó para revisar: puede no saberse de
+                qué ficha es, así que cuenta todo y aparece solo si hay algo.
+            -->
             <TarjetaPanel
-                v-if="recetas"
-                :icon="FileText"
-                tono="durazno"
-                titulo="Recetas sin usar"
+                v-if="porRevisar > 0"
+                :icon="Inbox"
+                tono="limon"
+                titulo="Documentos por revisar"
             >
-                <p class="text-sm text-muted-foreground">
-                    Las que llegaron a tu casilla, de cualquier ficha.
+                <p class="text-sm">
+                    {{
+                        porRevisar === 1
+                            ? 'Llegó 1 documento por mail que necesita que elijas dónde guardarlo.'
+                            : `Llegaron ${porRevisar} documentos por mail que necesitan que elijas dónde guardarlos.`
+                    }}
                 </p>
 
+                <template #accion>
+                    <Button variant="outline" size="sm" as-child>
+                        <Link :href="CasillaController.index()">
+                            Revisarlos
+                        </Link>
+                    </Button>
+                </template>
+            </TarjetaPanel>
+
+            <!-- Recetas de la ficha que se pueden usar hoy. -->
+            <TarjetaPanel
+                v-if="recetas && pacienteActivo"
+                :icon="FileText"
+                tono="durazno"
+                titulo="Recetas para usar"
+            >
                 <p
                     v-if="recetas.total === 0"
                     class="text-sm text-muted-foreground"
                 >
-                    Sin datos. No hay recetas sin usar.
+                    Sin datos. No hay recetas para usar.
                 </p>
 
                 <ul v-else class="divide-y">
@@ -329,7 +356,7 @@ function masDe(total: number, mostradas: number): string | null {
                         class="py-2"
                     >
                         <p class="font-medium wrap-break-word">
-                            {{ receta.asunto || 'Receta sin asunto' }}
+                            {{ receta.titulo }}
                         </p>
                         <p class="text-sm text-muted-foreground">
                             Vence el {{ receta.venceVisible }}
@@ -345,7 +372,13 @@ function masDe(total: number, mostradas: number): string | null {
 
                 <template #accion>
                     <Button variant="outline" size="sm" as-child>
-                        <Link :href="RecetaController.index()">
+                        <Link
+                            :href="
+                                RecetaMedicaController.index({
+                                    paciente: pacienteActivo.id,
+                                })
+                            "
+                        >
                             Ver las recetas
                         </Link>
                     </Button>

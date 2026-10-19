@@ -10,10 +10,11 @@ use App\Enums\TipoAdjunto;
 use App\Models\Adjunto;
 use App\Models\AplicacionVacuna;
 use App\Models\Cobertura;
+use App\Models\DocumentoPorRevisar;
 use App\Models\Medicion;
 use App\Models\OrdenEstudio;
 use App\Models\Paciente;
-use App\Models\Receta;
+use App\Models\RecetaMedica;
 use App\Models\Tratamiento;
 use App\Models\Turno;
 use App\Models\User;
@@ -33,9 +34,9 @@ use Inertia\Response;
  * Cada tarjeta trae **pocas filas y el total**, nunca el listado entero: el
  * panel orienta y lleva a la pantalla de cada cosa, no la reemplaza.
  *
- * Las recetas son la excepción a "todo es de la ficha activa": cuelgan de la
- * casilla del usuario, no de un paciente (ver "Lo que queda afuera del 12.2"
- * en CLAUDE.md), así que esa tarjeta no cambia al elegir otra ficha.
+ * Lo que quedó por revisar del buzón es la excepción a "todo es de la ficha
+ * activa": puede no saberse de qué ficha es (es el motivo de que esté ahí), así
+ * que esa tarjeta cuenta todo lo que esta persona puede resolver.
  */
 class DashboardController extends Controller
 {
@@ -72,7 +73,8 @@ class DashboardController extends Controller
             'ordenesPendientes' => $paciente === null ? null : $this->ordenesPendientesDe($paciente),
             'proximasVacunas' => $paciente === null ? [] : $this->proximasVacunasDe($paciente, $usuario),
             'ultimasMediciones' => $paciente === null ? [] : $this->ultimasMedicionesDe($paciente, $usuario),
-            'recetas' => $this->recetasSinUsar($usuario),
+            'recetas' => $paciente === null ? null : $this->recetasDisponiblesDe($paciente, $usuario),
+            'porRevisar' => DocumentoPorRevisar::query()->visiblesPara($usuario)->count(),
         ]);
     }
 
@@ -292,33 +294,30 @@ class DashboardController extends Controller
     }
 
     /**
-     * Las recetas sin usar y vigentes de la casilla del usuario: la que vence
-     * antes, primero. `null` si no tiene casilla ni recetas, para que la
-     * tarjeta no aparezca en una cuenta que nunca usó el módulo.
+     * Las recetas de medicamentos de la ficha que se pueden usar hoy: la que
+     * vence antes, primero. El mismo criterio que su pantalla
+     * (`RecetaMedica::estaDisponible()`).
      *
-     * @return array{total: int, filas: list<array<string, mixed>>}|null
+     * @return array{total: int, filas: list<array<string, mixed>>}
      */
-    private function recetasSinUsar(User $usuario): ?array
+    private function recetasDisponiblesDe(Paciente $paciente, User $usuario): array
     {
-        $recetas = $usuario->recetas()->get();
-
-        if ($recetas->isEmpty() && ! $usuario->cuentasMail()->exists()) {
-            return null;
-        }
-
-        $disponibles = $recetas
-            ->filter(fn (Receta $receta): bool => $receta->estaDisponible())
-            ->sortBy(fn (Receta $receta): int => $receta->vence()->getTimestamp())
+        $disponibles = $paciente->recetasMedicas()
+            ->with('medicamento')
+            ->get()
+            ->filter(fn (RecetaMedica $receta): bool => $receta->estaDisponible($usuario))
+            ->sortBy(fn (RecetaMedica $receta): string => $receta->vence()->format('Ymd'))
             ->values();
 
         return [
             'total' => $disponibles->count(),
             'filas' => array_values($disponibles
                 ->take(self::FILAS)
-                ->map(fn (Receta $receta): array => [
+                ->map(fn (RecetaMedica $receta): array => [
                     'id' => $receta->id,
-                    'asunto' => $receta->asunto,
-                    'venceVisible' => ($usuario->enSuZona($receta->vence()) ?? $receta->vence())->format('d/m/Y'),
+                    'titulo' => $receta->medicamento?->nombreVisible() ?? $receta->detalle ?? 'Receta',
+                    // Fecha de calendario: sin zona, o se corre un día.
+                    'venceVisible' => $receta->vence()->format('d/m/Y'),
                 ])
                 ->all()),
         ];

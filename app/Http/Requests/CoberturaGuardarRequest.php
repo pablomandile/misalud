@@ -8,6 +8,7 @@ use App\Enums\TipoCobertura;
 use App\Models\Cobertura;
 use App\Models\Paciente;
 use App\Rules\IndiceCiegoUnico;
+use App\Services\AdjuntadorDeArchivos;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -82,6 +83,10 @@ class CoberturaGuardarRequest extends FormRequest
             'vigencia_hasta' => ['nullable', 'date', 'after_or_equal:vigencia_desde'],
             'activa' => ['nullable', 'boolean'],
             'notas' => ['nullable', 'string', 'max:2000'],
+
+            // La credencial en el mismo alta, opcional. Al editar no llega:
+            // para sumar o cambiar la foto está la subida del panel.
+            ...AdjuntadorDeArchivos::reglasOpcionales(),
         ];
     }
 

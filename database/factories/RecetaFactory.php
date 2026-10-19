@@ -28,7 +28,6 @@ class RecetaFactory extends Factory
     {
         return [
             'usuario_id' => User::factory(),
-            'cuenta_mail_id' => null,
             // Único por fila: de él cuelga el UNIQUE que evita reimportar.
             'message_id' => '<'.$this->faker->unique()->uuid().'@ejemplo.test>',
             'remitente' => 'recetas@farmacia.com.ar',

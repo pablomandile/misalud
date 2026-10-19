@@ -2,7 +2,6 @@ import {
     Activity,
     BookUser,
     Building2,
-    FileText,
     KeyRound,
     LayoutGrid,
     Mail,
@@ -13,13 +12,12 @@ import {
     Users,
 } from '@lucide/vue';
 import CentroController from '@/actions/App/Http/Controllers/CentroController';
+import CasillaController from '@/actions/App/Http/Controllers/CasillaController';
 import ClaveController from '@/actions/App/Http/Controllers/ClaveController';
 import ContactoController from '@/actions/App/Http/Controllers/ContactoController';
-import CuentaMailController from '@/actions/App/Http/Controllers/CuentaMailController';
 import MedicamentoController from '@/actions/App/Http/Controllers/MedicamentoController';
 import MedicoController from '@/actions/App/Http/Controllers/MedicoController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
-import RecetaController from '@/actions/App/Http/Controllers/RecetaController';
 import TipoMedicionController from '@/actions/App/Http/Controllers/TipoMedicionController';
 import VacunaController from '@/actions/App/Http/Controllers/VacunaController';
 import { dashboard } from '@/routes';
@@ -53,16 +51,11 @@ export const destinosPrincipales: NavItem[] = [
         tono: 'rosa',
     },
     /*
-     * La bandeja de recetas va arriba, al lado de Pacientes: se abre en el
-     * mostrador de la farmacia. La casilla que la alimenta va abajo, con los
-     * ajustes, porque se configura una vez.
+     * La bandeja de recetas ya no está en el menú: lo que llega por mail se
+     * guarda en la ficha de cada paciente (Recetas, Órdenes, Estudios). La
+     * casilla queda abajo, con los ajustes: explica a qué dirección reenviar y
+     * muestra lo que quedó por revisar.
      */
-    {
-        title: 'Recetas',
-        href: RecetaController.index(),
-        icon: FileText,
-        tono: 'durazno',
-    },
     /*
      * La libreta y, en la misma pantalla, lo que se le mandó a cada uno. Un
      * envío no arranca desde acá sino desde un documento ("Enviar" al lado de
@@ -134,7 +127,7 @@ export const destinosPrincipales: NavItem[] = [
 export const destinosSecundarios: NavItem[] = [
     {
         title: 'Casilla de recetas',
-        href: CuentaMailController.index(),
+        href: CasillaController.index(),
         icon: Mail,
         tono: 'durazno',
     },

@@ -114,16 +114,16 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     }
 
     /**
-     * Las casillas de correo de las que se importan recetas.
+     * Lo que llegó al buzón desde el correo de esta cuenta y no se pudo
+     * guardar solo (ver `DocumentoPorRevisar`). Lo que se sabe de qué ficha es
+     * cuelga además del paciente: `DocumentoPorRevisar::visiblesPara()` junta
+     * las dos cosas.
      *
-     * Cuelgan del usuario y no de un paciente: es una sola casilla y de ahí
-     * salen las recetas de toda la familia que uno administra.
-     *
-     * @return HasMany<CuentaMail, $this>
+     * @return HasMany<DocumentoPorRevisar, $this>
      */
-    public function cuentasMail(): HasMany
+    public function documentosPorRevisar(): HasMany
     {
-        return $this->hasMany(CuentaMail::class, 'usuario_id');
+        return $this->hasMany(DocumentoPorRevisar::class, 'usuario_id');
     }
 
     /**

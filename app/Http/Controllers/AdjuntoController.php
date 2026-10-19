@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Contracts\TieneArchivos;
 use App\Enums\TipoAdjunto;
+use App\Http\Requests\AdjuntoActualizarRequest;
 use App\Http\Requests\AdjuntoStoreRequest;
 use App\Http\Requests\AudioStoreRequest;
 use App\Models\Adjunto;
@@ -147,12 +148,14 @@ class AdjuntoController extends Controller
         Gate::authorize('update', $duenio);
 
         $descripcion = $peticion->input('descripcion');
+        $titulo = $peticion->input('titulo');
 
         $subidos = $this->adjuntador->adjuntar(
             $duenio,
             $peticion->file('archivos', []),
             $peticion->tipo(),
             is_string($descripcion) ? $descripcion : null,
+            is_string($titulo) ? $titulo : null,
         );
 
         return back()->with('exito', $subidos === 1
@@ -284,6 +287,19 @@ class AdjuntoController extends Controller
     /**
      * Borra el archivo y su registro.
      */
+    /**
+     * El nombre y la descripción de un documento ya subido. El archivo no se
+     * toca. Pide `update` del adjunto, que delega en su dueño.
+     */
+    public function update(AdjuntoActualizarRequest $peticion, Adjunto $adjunto): RedirectResponse
+    {
+        Gate::authorize('update', $adjunto);
+
+        $adjunto->update($peticion->validated());
+
+        return back()->with('exito', 'Se guardaron los cambios.');
+    }
+
     public function destroy(Adjunto $adjunto): RedirectResponse
     {
         Gate::authorize('delete', $adjunto);

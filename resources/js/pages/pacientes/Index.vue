@@ -70,6 +70,11 @@ type DocumentoDePaciente = DocumentoVisible & {
     id: number;
     tamanio: number;
     tipo: string;
+    /** Solo en Documentos: el nombre que le puso la persona, si le puso uno. */
+    titulo?: string | null;
+    descripcion?: string | null;
+    /** El nombre del archivo, para mostrarlo cuando hay un título. */
+    archivo?: string;
 };
 
 export type CoberturaMedica = {
@@ -187,6 +192,7 @@ const pacienteDeCompartir = computed(
  * documentos de la lista.
  */
 const documentoAbierto = ref<DocumentoVisible | null>(null);
+const documentoAEditar = ref<DocumentoDePaciente | null>(null);
 
 function pesoLegible(bytes: number): string {
     return bytes < 1024 * 1024
@@ -845,8 +851,16 @@ function dniVisible(dni: string): string {
                                     class="size-5 shrink-0 text-muted-foreground"
                                 />
                                 <span class="min-w-0">
-                                    <span class="block truncate text-sm">
+                                    <span
+                                        class="block text-sm font-medium wrap-break-word"
+                                    >
                                         {{ documento.nombre }}
+                                    </span>
+                                    <span
+                                        v-if="documento.descripcion"
+                                        class="block text-sm wrap-break-word"
+                                    >
+                                        {{ documento.descripcion }}
                                     </span>
                                     <span
                                         class="block text-sm text-muted-foreground"
@@ -854,8 +868,25 @@ function dniVisible(dni: string): string {
                                         {{ documento.tipo }} ·
                                         {{ pesoLegible(documento.tamanio) }}
                                     </span>
+                                    <span
+                                        v-if="documento.titulo"
+                                        class="block truncate text-sm text-muted-foreground"
+                                    >
+                                        {{ documento.archivo }}
+                                    </span>
                                 </span>
                             </button>
+
+                            <Button
+                                v-if="pacienteDeDocumentos.puedeEditar"
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                :aria-label="`Editar ${documento.nombre}`"
+                                @click="documentoAEditar = documento"
+                            >
+                                Editar
+                            </Button>
 
                             <Form
                                 v-if="pacienteDeDocumentos.puedeEditar"
@@ -923,6 +954,40 @@ function dniVisible(dni: string): string {
                             <InputError :message="errors.tipo" />
                         </div>
 
+                        <div class="grid gap-2">
+                            <Label for="titulo-adjunto">
+                                Nombre (opcional)
+                            </Label>
+                            <input
+                                id="titulo-adjunto"
+                                name="titulo"
+                                type="text"
+                                placeholder="Por ejemplo: Análisis de marzo"
+                                aria-describedby="titulo-adjunto-ayuda"
+                                :class="campoUnaLinea"
+                            />
+                            <p
+                                id="titulo-adjunto-ayuda"
+                                class="text-sm text-muted-foreground"
+                            >
+                                Si lo dejás vacío, se ve el nombre del archivo.
+                            </p>
+                            <InputError :message="errors.titulo" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="descripcion-adjunto">
+                                Descripción (opcional)
+                            </Label>
+                            <textarea
+                                id="descripcion-adjunto"
+                                name="descripcion"
+                                rows="2"
+                                :class="campoTexto"
+                            ></textarea>
+                            <InputError :message="errors.descripcion" />
+                        </div>
+
                         <SubirArchivo
                             name="archivos[]"
                             multiple
@@ -941,6 +1006,74 @@ function dniVisible(dni: string): string {
                 </div>
             </SheetContent>
         </Sheet>
+
+        <!--
+            Editar el nombre y la descripción de un documento ya subido. Va por
+            PUT y sin archivo: el archivo no se toca.
+        -->
+        <Dialog
+            :open="!!documentoAEditar"
+            @update:open="
+                (v) => {
+                    if (!v) documentoAEditar = null;
+                }
+            "
+        >
+            <DialogContent v-if="documentoAEditar">
+                <Form
+                    v-bind="
+                        AdjuntoController.update.form({
+                            adjunto: documentoAEditar.id,
+                        })
+                    "
+                    :options="{ preserveScroll: true }"
+                    v-slot="{ errors, processing }"
+                    class="space-y-4"
+                    @success="documentoAEditar = null"
+                >
+                    <DialogHeader class="space-y-3">
+                        <DialogTitle>Nombre y descripción</DialogTitle>
+                        <DialogDescription class="break-all">
+                            {{ documentoAEditar.archivo }}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div class="grid gap-2">
+                        <Label for="titulo-editar">Nombre</Label>
+                        <input
+                            id="titulo-editar"
+                            name="titulo"
+                            type="text"
+                            :value="documentoAEditar.titulo ?? ''"
+                            :class="campoUnaLinea"
+                        />
+                        <InputError :message="errors.titulo" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="descripcion-editar">Descripción</Label>
+                        <textarea
+                            id="descripcion-editar"
+                            name="descripcion"
+                            rows="3"
+                            :class="campoTexto"
+                            >{{ documentoAEditar.descripcion ?? '' }}</textarea>
+                        <InputError :message="errors.descripcion" />
+                    </div>
+
+                    <DialogFooter class="gap-2">
+                        <DialogClose as-child>
+                            <Button type="button" variant="secondary">
+                                Cancelar
+                            </Button>
+                        </DialogClose>
+                        <Button type="submit" :disabled="processing">
+                            Guardar
+                        </Button>
+                    </DialogFooter>
+                </Form>
+            </DialogContent>
+        </Dialog>
 
         <!-- Borrar -->
         <Dialog

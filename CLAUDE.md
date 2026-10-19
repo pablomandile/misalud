@@ -24,7 +24,7 @@ Rutas tipadas con **Wayfinder**, no con Ziggy.
 Tests con **Pest 4** (PHPUnit 12 — no subir a Pest 5, que exige PHPUnit 13 y rompe el kit).
 PHPStan nivel 7 con Larastan.
 IMAP con **`webklex/laravel-imap`**, con su `config/imap.php` **sin publicar** a propósito
-(ver "Casilla de recetas"). No hace falta `ext-imap`: el paquete habla el protocolo por sockets.
+(ver "Buzón de documentos"). No hace falta `ext-imap`: el paquete habla el protocolo por sockets.
 
 Sin Pinia ni Vue Router: el estado viaja en props de Inertia y las rutas las define Laravel.
 
@@ -611,6 +611,7 @@ misalud@pablomandile.com.ar** (decidido por el usuario).
 | Todo el contenido clínico cifrado, **salvo las grabaciones**   | `CifraDatos`, `ArchivoService`, `seGuardaCifrado()`        |
 | Los avisos dicen cuándo y no qué                               | `TipoRecordatorio::asunto()`, la vista del mail            |
 | Para ver una clave guardada se pide la contraseña de tu cuenta | `ConfirmarClaveSiLaTiene` en `claves.revelar`              |
+| El registro de los mails del buzón se borra a los **90 días**  | `VaciarPapelera::DIAS_MAILS_RECIBIDOS`                     |
 
 Los tests atan las dos puntas: el plazo del texto contra la constante, la frase "Descargar mis
 datos" contra el botón, el `!respuesta.redirected` del service worker.
@@ -1966,314 +1967,106 @@ generador no escribe nada si la fecha no cambió, así que es barato e idempoten
 "Posterior" desempata por `id` cuando dos dosis comparten fecha: sin eso, se apagarían la una
 a la otra y no avisaría ninguna. La pantalla toma "la próxima" con el mismo criterio.
 
-## Casilla de recetas (IMAP)
-
-`cuentas_mail` es la casilla de la que se importan las recetas que llegan por mail. Cuelga
-del **usuario** como un catálogo —es una sola y de ahí salen las recetas de toda la familia
-que uno administra—, pero no es un catálogo: no tiene semillas y no puede tenerlas, porque una
-semilla compartida sería la contraseña de alguien en el listado de otro. Por eso tiene su
-`CuentaMailPolicy` propia en vez de colgarse de `CatalogoPolicy`, cuya mitad de reglas sobre
-semillas no significaría nada acá.
-
-### ⚠️ Sin soft deletes, y es una decisión de seguridad
-
-Es la primera tabla que se aparta de "soft deletes en las entidades principales". Acá vive una
-**contraseña**: con `deleted_at`, borrar la casilla la dejaría guardada para siempre, que es lo
-contrario de lo que espera quien la da de baja. **Borrar borra.** Las recetas ya importadas no
-se van con ella —son documentos de la persona— y por eso la FK del paso 12.2 va con
-`nullOnDelete`.
-
-### ⚠️ `direccion` y no `usuario`: un atributo tapa a una relación
-
-El plan llamaba `usuario` a la columna del login. No se puede: el modelo ya tiene una relación
-`usuario()` hacia su dueño —el nombre que usan los cinco catálogos para lo mismo— y en Eloquent
-**un atributo con el nombre de una relación la tapa**. `$cuenta->usuario` devolvería el string
-del login en vez del `User`, y sin ningún error. Renombrar la columna es más seguro que
-renombrar una convención que ya se repite cinco veces.
-
-`direccion` además es lo que la pantalla necesita decir, y se valida como mail: en Gmail,
-Outlook y cualquier casilla de hosting el usuario de IMAP **es** la dirección, así que exigirlo
-atrapa el tipeo en el campo en vez de en un login rechazado.
-
-### ⚠️ La contraseña es de SOLO ESCRITURA, y de ahí sale el resto del diseño
-
-No viaja al navegador: ni enmascarada, ni con su largo real. El único motivo para mandarla
-sería precargar el formulario de edición, y eso la pone en un HTML que queda en la caché del
-navegador. Tres consecuencias que si no, parecen arbitrarias:
-
-- **Al editar, el campo vacío significa "dejá la que está"** —lo valida el FormRequest
-  (`required` al crear, `nullable` al editar) y `update()` saca la clave del array—. Si fuera
-  obligatoria siempre, cambiar la carpeta obligaría a volver a tipear la contraseña de
-  aplicación.
-- **La prueba de conexión se hace sobre lo GUARDADO**, no sobre el formulario. Probar el
-  formulario sería más cómodo, pero el de edición no tiene la contraseña: probaría una casilla
-  sin credenciales. Y probar lo guardado es lo que sirve dentro de seis meses, cuando la
-  pregunta ya no es "¿lo escribí bien?" sino "¿sigue andando?".
-- El modelo lleva `$hidden = ['password']` como red por si alguna respuesta futura serializa el
-  modelo entero por descuido.
-
-### La encriptación sale del puerto, así que los puertos son dos
-
-993 es IMAP sobre TLS y 143 es STARTTLS: `CuentaMail::encriptacion()` lo deduce, y la
-validación acepta **solo esos dos** justamente para que la deducción no tenga casos raros. Un
-desplegable de "método de encriptación" es una pregunta que quien configura su casilla no puede
-contestar. No hay forma de pedir "sin encriptación", ni de desactivar `validate_cert`: por esa
-conexión viaja la contraseña.
-
-### Configuración sí, estado no
-
-La línea que separa el 12.1 del 12.2. `cuentas_mail` tiene los datos con los que **conectarse**;
-`sincronizado_hasta` —que es lo que el comando de sincronización produce— no se creó todavía,
-porque sería una columna que ninguna línea escribe y que la pantalla mostraría siempre en
-"nunca". Mismo criterio que `ordenes_estudio.estudio_id` en el 9.1.
-
-Lo mismo, por otro motivo, con el resultado de la prueba: **no se guarda en ninguna parte.** Un
-"última prueba: anduvo" envejece solo —una contraseña de aplicación se revoca— y la pantalla lo
-mostraría en verde justo cuando dejó de ser cierto.
-
-### El paquete: `webklex/laravel-imap`, sin publicar su config
-
-⚠️ **`ClientManager` NO se resuelve del contenedor.** El binding que registra el paquete hace
-`new ClientManager(config('imap'))`, y como este proyecto **no publica** `config/imap.php` eso
-pasa `null` a un parámetro que no lo acepta. `ProbadorDeCasilla` lo construye con un array
-vacío —ahí el paquete carga sus propios defaults— y manda explícito en `make()` todo lo que
-importa, al lado del comentario que explica cada elección. Es justo el tipo de cosa que alguien
-"limpia" convirtiéndola en inyección por constructor.
-
-`timeout` va en **10 segundos** y no en el default de 30: esto corre dentro de una petición web
-con alguien mirando la pantalla, y dos esperas de 30 (socket y login) se pasan del tope de
-ejecución de PHP — la persona vería un error del servidor en vez del resultado de la prueba.
-
-### ⚠️ Los tres fallos son tres cosas distintas: por eso `EstadoDeConexion` no es un booleano
-
-| Falló…     | Qué significa de verdad                   |
-| ---------- | ----------------------------------------- |
-| el socket  | el host, el puerto o la red del servidor  |
-| el login   | la dirección o la contraseña              |
-| la carpeta | todo anda, pero se va a importar **nada** |
-
-El tercero es el que más vale y el que un booleano no puede decir: **una carpeta mal escrita
-deja la sincronización en verde encontrando cero mensajes, para siempre y sin ningún síntoma.**
-Y es fácil de escribir mal, porque el separador lo elige cada servidor: la misma carpeta es
-`INBOX/Recetas` en uno y `INBOX.Recetas` en otro. Por eso ese caso lista **las carpetas que sí
-hay**, que es lo que resuelve el problema en un intento en vez de en cinco.
-
-Un "no se pudo conectar" genérico manda a revisar la contraseña cuando el problema es la
-carpeta, y ahí la persona cambia lo único que estaba bien.
-
-### ⚠️ La excepción de "contraseña equivocada" NO es `AuthFailedException`
-
-Medido contra `imap.gmail.com` con credenciales inventadas: lo que llega es
-**`ImapServerErrorException`** con el mensaje `NO [AUTHENTICATIONFAILED] Invalid credentials`.
-`AuthFailedException` es la que dice el nombre y la que uno atrapa por reflejo, pero el paquete
-solo la usa en un camino que un servidor real no toma. Atrapar únicamente la "obvia" dejaba un
-login rechazado cayendo en "error inesperado" —el peor lugar, porque ese mensaje no nombra la
-contraseña, que es justo lo que hay que arreglar—.
-
-Esto se encontró **probando contra un servidor real antes de escribir la pantalla**, no leyendo
-el `@throws` del paquete, que decía otra cosa.
-
-⚠️ **Y por eso `conectarYRevisar()` tiene DOS `try` separados, que no es prolijidad.**
-`ImapServerErrorException` la tira **cualquier** comando que el servidor conteste con `NO`. El
-mapeo "un `NO` es un rechazo de credenciales" solo es correcto en el primer bloque, donde el
-único comando que se manda después del saludo es el LOGIN. Con un solo `try` envolviendo todo,
-un `NO` al abrir la carpeta se leería como "contraseña equivocada".
-
-### ⚠️ La contraseña no puede terminar en un log ni en un toast
-
-Los mensajes de error de IMAP vienen del servidor y pueden traer partes del comando que los
-provocó —y el comando que nos interesa es `LOGIN`—. Todo texto que salga de una excepción pasa
-por `queDijoElServidor()`, que borra la contraseña **antes de que el string exista para
-cualquier otro uso**: la misma función alimenta el aviso en pantalla y el log, así que no hay un
-camino donde uno esté saneado y el otro no. Al log van además solo ids, nunca la dirección —
-misma regla que los errores de Socialite y de `misalud:enviar-recordatorios`.
-
-El caso de credenciales rechazadas va **sin detalle a propósito**: lo que contesta el servidor
-no agrega nada a "rechazó la dirección o la contraseña", viene en inglés, y es el mensaje con
-más chances de traer el LOGIN adentro.
-
-### Los filtros: una dirección o un dominio por línea
-
-Vacío significa **todo lo que haya en la carpeta**, y es una opción válida: quien ya armó una
-regla en su correo para que las recetas caigan en una carpeta propia filtró antes que nosotros.
-Se acepta un dominio suelto además de una dirección entera porque una obra social manda desde
-`noreply@` hoy y desde `avisos@` el mes que viene.
-
-Llegan de un `<textarea>` —un campo de a una línea es lo que una persona puede leer y corregir;
-un array de inputs con botoncitos de "+" y "−" es lo contrario de lo que esta app necesita— y el
-FormRequest los parte **antes** de validar, igual que `NormalizaDecimales` con la coma: si la
-regla `array` viera el string crudo, rechazaría algo perfectamente escrito. Se parte por líneas
-**y por comas**, y se normaliza a minúsculas.
-
-### La importación: `misalud:sincronizar-recetas`
-
-Cada hora por el scheduler, más el botón **"Importar ahora"** en la pantalla de la casilla —que
-no es un lujo: sin él, comprobar que una casilla recién configurada importa de verdad obliga a
-esperar hasta una hora o a entrar por SSH—.
-
-Una receta **es su archivo**. La fila de `recetas` es la ficha del mail del que salió y el PDF
-cuelga como un `Adjunto` de tipo `Receta`: `Receta` es el **séptimo dueño de archivos** y
-declaró `TieneArchivos` sin tocar nada de autorización, igual que los seis anteriores.
-
-### ⚠️ La separación que hace testeable el paso entero
-
-Es la decisión de arquitectura del 12.2, y sin ella no habría tests de nada:
-
-| Pieza                                 | Qué hace                                                        |
-| ------------------------------------- | --------------------------------------------------------------- |
-| `LectorDeCasilla`                     | **Lo único que habla IMAP.** Traduce mensajes a DTOs y nada más |
-| `MensajeDeCasilla`/`AdjuntoDeCasilla` | Los DTOs: no saben nada de IMAP                                 |
-| `SincronizadorDeRecetas`              | **Todas las decisiones**: ventana, filtros, dedupe, qué adjunto |
-| `SincronizarRecetas`                  | El comando: recorre casillas y aísla los fallos                 |
-
-El lector es tonto **a propósito**, porque es la única pieza que no puede tener tests
-automáticos —necesitaría un servidor de verdad—. Todo lo que decide algo está del otro lado de
-los DTOs, y los 27 tests del sincronizador corren **sin red**, reemplazando el lector por un
-doble. Sin esta costura, probar "una receta no se importa dos veces" habría necesitado una
-casilla real con un mail puesto a mano, y nadie lo habría escrito.
-
-Lo que se paga: el lector queda cubierto solo por verificación a mano. Por eso las dos reglas
-sueltas que sí viven ahí —descartar adjuntos `inline` y el reemplazo del `Message-ID`— están una
-documentada con su motivo y la otra **extraída a una función pura**
-(`MensajeDeCasilla::identificadorPara()`) justamente para poder probarla.
-
-### ⚠️ La ventana NO es "desde el día 1 del mes"
-
-Era lo que decía el plan original, y tiene un agujero: una receta que llegó el 31 de enero
-desaparece el 1 de febrero aunque nadie la haya usado. El contador del mes de la bandeja es una
-**vista sobre lo importado**, no el criterio con el que se importa.
-
-- **Primera corrida** (`sincronizado_hasta` en `null`): `misalud.recetas.dias_iniciales` hacia
-  atrás, 60 por defecto y configurable por `RECETAS_DIAS_INICIALES`.
-- **Después**: desde `sincronizado_hasta` **menos 7 días de solapamiento**.
-
-El solapamiento no es paranoia: **el `SINCE` de IMAP compara fechas, no instantes** —es por día,
-contra la fecha interna del servidor, y es `>=`—, y un mail puede entregarse tarde o aparecer
-fuera de orden. Reimportar es gratis (lo frena el UNIQUE del índice ciego), así que de más no
-cuesta nada y de menos sería un agujero que nadie nota.
-
-### ⚠️ Hasta dónde avanza la marca, y por qué no siempre a `now()`
-
-| Situación                           | La marca va a…                            |
-| ----------------------------------- | ----------------------------------------- |
-| se vio la ventana entera            | el instante en que **arrancó** la corrida |
-| se truncó por el tope de la corrida | la fecha del **último mail mirado**       |
-
-El primero es al inicio y no a `now()` porque un mail que llegó mientras corríamos no puede
-quedar del lado ya revisado.
-
-El segundo es lo que hace avanzar a una casilla con mucho correo acumulado: si la marca fuera al
-inicio de la corrida, todo lo que quedó sin mirar caería fuera de la próxima ventana y **se
-perdería**; y si no se moviera, la corrida siguiente traería los mismos cincuenta y la casilla no
-avanzaría nunca. De ahí también que el lector devuelva los mensajes **en orden ascendente**: no
-es cosmético, la marca depende de eso.
-
-⚠️ **Y nunca va hacia atrás.** Cuando todos los mails de la ventana caen en la zona de
-solapamiento, la fecha del último es anterior a la marca actual: moverla ahí agrandaría la
-ventana en cada corrida hasta volver a mirar la casilla entera.
-
-El tope existe porque cada mensaje se trae con su cuerpo y sus adjuntos **en memoria**, y una
-casilla sin filtros apuntada a la bandeja de entrada puede tener miles de mails en la ventana
-inicial: sin tope, esa primera corrida se muere por tiempo de ejecución y no termina nunca.
-
-### ⚠️ Qué mail se convierte en receta
-
-Tres cortes, y los tres descartan en silencio porque ninguno es un error:
-
-1. **El remitente tiene que pasar el filtro.** Sin filtros pasa todo —quien ya armó una regla en
-   su correo para que las recetas caigan en una carpeta propia filtró antes que nosotros—. Un
-   filtro de dominio acepta subdominios (`osde.com.ar` vale para `avisos.osde.com.ar`), pero no
-   un dominio que apenas termina parecido (`no-osde.com.ar` no entra).
-2. **Tiene que traer al menos un archivo servible.** "Tu receta está lista, entrá a nuestro
-   sitio" no trae ninguna, y guardar una fila por ese mail llenaría la bandeja de recetas que no
-   se pueden mostrar.
-3. **No tiene que estar ya importado.**
-
-⚠️ Los adjuntos se descartan **de a uno, no de a mail entero**: que uno se pase de los 12 MB o
-sea un `.docx` es un resultado normal. Si el mail trae la receta en PDF y además un instructivo
-en Word, se importa la receta.
-
-⚠️ **Se descartan los adjuntos `inline`, que son el logo de la firma.** Media empresa manda
-mails con firma en HTML y cada imagen de esa firma viaja como adjunto: sin este filtro, una
-casilla sin filtros de remitente importa el logotipo de la farmacia como si fuera una receta —un
-JPG de 4 KB que pasa la lista blanca sin problema—. Lo que los distingue es el
-`Content-Disposition`. Un adjunto **sin** disposición declarada se acepta: hay clientes que no
-la mandan, y rechazarlo perdería recetas de verdad.
-
-⚠️ **El mime se deduce del contenido con finfo, nunca del `Content-Type` del mail**, que lo
-escribe alguien de afuera. Es la misma regla que `getMimeType()` vs `getClientMimeType()`, y acá
-pesa más. Para eso `ArchivoService` ganó `mimeAceptado()` —que pregunta sin escribir nada, lo que
-permite descartar el logo **antes** de abrir una transacción— y `guardarContenido()`, para
-archivos que nunca fueron un `UploadedFile`.
-
-### ⚠️ El UNIQUE de deduplicación va por USUARIO, no global
-
-El plan pedía `message_id_hash UNIQUE` a secas, y eso tiene un bug concreto: el `Message-ID` es
-único **del mensaje**, así que si la farmacia le manda el mismo mail a dos personas que las dos
-usan MiSalud, la segunda no podría importarlo nunca —y en silencio, porque parece "ya estaba"—.
-
-Por usuario además sobrevive a que alguien borre y vuelva a configurar la casilla, y deduplica
-cuando dos casillas de la misma persona reciben el mismo mail por un alias.
-
-⚠️ **La consulta de deduplicación va con `withTrashed()`.** El UNIQUE de la base no sabe de soft
-deletes: una receta en la papelera sigue ocupando su hash, así que sin eso el `create()` se
-estrellaría contra la base en vez de contarse como repetida. Y es el comportamiento correcto:
-esa receta todavía existe y se puede restaurar.
-
-⚠️ **Un mail sin `Message-ID` necesita un reemplazo determinístico.** Es raro pero existe, y sin
-eso su hash queda nulo —y en MySQL un UNIQUE admite todos los nulos que quiera—: ese mail se
-reimportaría **en cada corrida, para siempre**, escribiendo otra copia cifrada de su adjunto cada
-hora. Es el peor tipo de bug: crece solo y nadie lo mira.
-
-### Aislamiento de fallos, en dos niveles
-
-- **Por casilla**, en el comando: una contraseña de aplicación revocada es el caso más probable
-  de todos —se revocan solas cuando alguien cambia la clave de su cuenta de Google— y no tiene
-  por qué dejar sin importar a las otras casillas. El comando devuelve `FAILURE` si alguna falló,
-  pero las demás ya importaron.
-- **Por mensaje**, en el sincronizador: un mail roto no se lleva la tanda de su propia casilla.
-
-⚠️ **El mensaje de la excepción no se imprime ni se muestra en pantalla.** Puede venir del
-servidor IMAP y traer partes del comando que lo provocó (ver `ProbadorDeCasilla`). Tanto el
-comando como el toast mandan a **probar la conexión**, que es la pantalla que traduce el fallo a
-algo que se entiende y se puede arreglar.
-
-⚠️ **Si la transacción se cae hay que borrar del disco lo que ya se escribió.** Un rollback
-deshace las filas pero no los archivos, y un archivo cifrado que nada referencia es invisible y
-para siempre. Para eso existe `ArchivoService::borrarRuta()`.
-
-### Lo que queda afuera del 12.2, y por qué
-
-La regla de este paso: **entra la columna que la importación escribe.**
-
-- **`recetas.paciente_id` NO existe.** El plan la ponía y no se puede escribir: un mail de la
-  farmacia **no dice de quién es la receta**, y adivinarlo sería cargársela a un familiar
-  equivocado. Peor: una `paciente_id` nullable rompería el invariante de `RegistroClinicoPolicy`
-  —"un paciente nulo es NO"— y obligaría a inventar un camino de autorización para un estado que
-  ninguna pantalla puede producir. Así que la receta pertenece a **quien administra la casilla**
-  (`usuario_id`, no fillable), que es lo verdadero: el mail llegó a su correo.
-  ⚠️ **El día que una receta se pueda asignar a un paciente hay que contestar si un cuidador de
-  esa ficha puede verla.** Hoy la respuesta es que no.
-- **`fecha_uso` tampoco.** La escribe la misma acción que pone `EstadoReceta::Usada`, que es la
-  bandeja del 12.3.
-- **"Vencida" no es un estado guardado**: se deriva de `fecha_recepcion + vigencia_dias`
-  (`Receta::estaVencida()`), igual que la edad sale de la fecha de nacimiento (regla 4).
-  Guardarla obligaría a un segundo comando del scheduler cuyo único trabajo sería corregir una
-  cuenta que se hace sola, y entre que vence y que ese comando corre la pantalla mostraría como
-  "disponible" una receta que ya no sirve.
-
-El vencimiento se cuenta **desde que llegó el mail**, no desde que se importó: si el servidor
-estuvo caído tres días, la receta no gana tres días de vida.
-
-### Qué NO se le toca a la casilla
-
-La pantalla promete "solo lee: no manda mails ni borra nada", y eso lo cumplen dos cosas
-explícitas en `LectorDeCasilla`: **`FT_PEEK`** (traer el mensaje sin ponerle la marca `\Seen`) y
-**`leaveUnread()`** en la consulta. `FT_PEEK` ya es el default del paquete y va escrito igual: si
-algún día cambia, el síntoma sería que la app le marca como leídos los mails a alguien, y eso no
-lo descubre ningún test.
+## Buzón de documentos (IMAP)
+
+Un solo buzón de la app, configurado en el `.env` del server (`BUZON_*`, ver `config/misalud.php`).
+La persona **reenvía** la receta, la orden o el estudio desde su propio correo, con **Receta,
+Orden o Estudio** en el asunto, y `misalud:procesar-buzon` (cada 5 minutos) lo guarda en la ficha
+que corresponde: Recetas, Órdenes o Estudios. Reemplazó a la casilla que configuraba cada persona
+(host, puerto, contraseña de aplicación), que se fue con sus contraseñas guardadas.
+
+| Pieza                     | Qué hace                                                                    |
+| ------------------------- | --------------------------------------------------------------------------- |
+| `LectorDeCasilla`         | **Lo único que habla IMAP.** Trae DTOs con los encabezados crudos y mueve   |
+| `CabecerasDelMail`        | Lee los encabezados crudos: el `Authentication-Results`, si es automático   |
+| `AutenticidadDelMail`     | Si el servidor confirmó que el mail es de ese dominio (SPF, DKIM, DMARC)    |
+| `AsuntoDeDocumento`       | Tipo por palabra entera, sin tildes ni mayúsculas, y el resto del asunto    |
+| `IdentificadorDePaciente` | De remitente a ficha: el correo de la ficha o el de la cuenta que la edita  |
+| `ProcesadorDeBuzon`       | **Todas las decisiones**, probadas sin red con un doble del lector          |
+| `RegistradorDeDocumento`  | Crea la receta, la orden o el estudio. Lo usan el buzón y "Guardar en…"     |
+| `DocumentoPorRevisar`     | Lo que no se pudo guardar solo. Décimo dueño de archivos, con Policy propia |
+| `MailRecibido`            | Deduplicación (`message_id_hash`) y registro. Se borra a los 90 días        |
+
+### Qué pasa con cada mail
+
+1. **Ya procesado** → se saltea (y se saca del INBOX).
+2. **Automático** (rebote, vacaciones, listas) → sin contestar: dos respuestas automáticas
+   contestándose arman un bucle.
+3. **Remitente desconocido** → se descarta **en silencio**, y de él no se guarda ni la dirección
+   ni el asunto. Contestarle confirmaría que el buzón existe.
+4. **Más de 20 mails del mismo remitente en un día** → se descarta sin contestar.
+5. **Sin archivos que sirvan** → se le contesta. Mismos cortes que siempre: sin adjuntos `inline`
+   (el logo de la firma), mime por finfo, 12 MB, hasta 10.
+6. **Auténtico + tipo + ficha** → directo a la ficha, con «Llegó por mail el …» en el adjunto.
+   **Si falta cualquiera de los tres → Por revisar** (`MotivoDeRevision`).
+7. Se le contesta al remitente reconocido: texto plano, sin `ShouldQueue`, asunto sin nombres.
+
+### ⚠️ El `From` de un mail lo escribe cualquiera
+
+Por eso el remitente solo no alcanza para meter un documento en una ficha: tiene que pasar la
+verificación que hizo **nuestro** servidor al recibirlo. `CabecerasDelMail::autenticacion()` lee
+el `Authentication-Results` **de más arriba**: uno que aparece más abajo ya venía en el mail y lo
+pudo escribir quien suplanta. Pasa con `dmarc=pass`, o con `dkim`/`spf` `pass` **alineado** al
+dominio del remitente (modo relajado: el mismo dominio o un subdominio, nunca uno que apenas termina
+parecido). Un `spf=pass` de otro dominio no dice nada: cualquiera tiene SPF para su propio
+servidor. Si no pasa, el documento no entra solo: queda **por revisar**, y la respuesta le avisa
+al dueño real de la dirección.
+
+⚠️ **Escrito contra el formato estándar (RFC 8601), sin medir todavía qué escribe el servidor de
+Hostinger.** Hay que mandar un mail real de Gmail y leer el encabezado antes de darlo por bueno
+(ver "Estado").
+
+### De quién es un mail
+
+- **El correo de la ficha** (`pacientes.email`, por su índice ciego `email_hash`, sin UNIQUE: dos
+  fichas de la misma persona en dos familias pueden repetirlo).
+- **El de la cuenta**, solo con el mail **verificado** y solo las fichas donde puede editar
+  (propietario o cuidador). Un lector no carga datos.
+- Con varios candidatos decide **el nombre en el asunto** («Receta Marta»): alguna palabra del
+  nombre (de 3 letras o más) entre las del asunto. Sin una coincidencia única, no se adivina.
+- Si queda ambiguo **sin una cuenta** (el correo de un paciente cargado en dos familias), queda un
+  «por revisar» **para cada ficha**: cada familia resuelve el suyo y ninguna ve el de la otra.
+
+### Por revisar
+
+`documentos_por_revisar` tiene `paciente_id` y `usuario_id`, ninguno fillable (de ellos cuelga quién
+lo ve), y **no implementa `PerteneceAPaciente`**: puede no saberse de qué ficha es, y
+`RegistroClinicoPolicy` niega un paciente nulo. Lo ven la cuenta de la que vino y quien puede editar
+la ficha (`DocumentoPorRevisar::visiblesPara()` y `DocumentoPorRevisarPolicy`, el mismo criterio).
+
+- **«Guardar en…»** crea el registro con `RegistradorDeDocumento` y **traspasa** los adjuntos
+  (`AdjuntadorDeArchivos::traspasar()`, por `associate()`): no copia el archivo cifrado, cambia de
+  quién cuelga. La ficha elegida tiene que ser una que la persona puede editar (`Rule::in`, y además
+  `crearEn`).
+- **Descartar** borra de verdad: primero el disco, después la fila.
+
+### La página de la casilla
+
+`/casilla` (en el menú, abajo) ya no configura nada: dice a qué dirección reenviar (con «Copiar»),
+cómo escribir el asunto, desde qué correos te reconoce (el tuyo y el de cada ficha) y lista lo que
+quedó por revisar. La bandeja de recetas importadas antes **salió del menú**, y se llega desde acá
+si hay alguna.
+
+### Detalles del lector que siguen valiendo
+
+- ⚠️ **`ClientManager` NO se resuelve del contenedor**: el binding del paquete hace
+  `new ClientManager(config('imap'))` y este proyecto no publica `config/imap.php`. Se construye con
+  un array vacío y todo lo que importa va explícito en `make()`.
+- ⚠️ **Los encabezados van crudos en el DTO**: el parser del paquete parte mal los de varias líneas,
+  y `Authentication-Results` casi siempre ocupa varias.
+- **Un mail sin `Message-ID` necesita un reemplazo determinístico**
+  (`MensajeDeCasilla::identificadorPara()`): sin él, su hash queda nulo y se reprocesaría siempre.
+- Lo procesado se **mueve a `Procesados`** (se crea si no existe). Si el servidor no deja, no pasa
+  nada: `mails_recibidos` lo frena igual. Lo que da error se queda en el INBOX, para mirarlo.
+- Al log van ids y la clase de la excepción, **nunca** el remitente, el asunto ni el mensaje de la
+  excepción (puede venir del servidor IMAP y traer el LOGIN).
+- ⚠️ **Una propiedad pública de un mailable pisa la variable de la vista con el mismo nombre**:
+  `RespuestaDelBuzon` tenía `$tipo` (el enum) y la vista recibía el enum en vez de la etiqueta.
 
 ### La bandeja de recetas (paso 12.3)
+
+> Ya no entra nada nuevo: es lo que se importó con la casilla de antes. Lo de abajo describe esa
+> pantalla, que sigue existiendo fuera del menú.
 
 `/recetas` contesta **una sola pregunta: ¿qué receta puedo usar hoy?** Va arriba en el menú, al
 lado de Pacientes —se abre en el mostrador de la farmacia—, y la casilla que la alimenta queda
@@ -2605,8 +2398,9 @@ Las recetas de **medicamentos** que firma el médico, en la ficha
 (`/pacientes/{paciente}/recetas-medicas`, baldosa «Recetas»). Tabla `recetas_medicas`, modelo
 `RecetaMedica`, noveno dueño de archivos.
 
-⚠️ **No es la tabla `recetas`**, que es la bandeja de lo que llega por mail y cuelga del USUARIO
-(un mail no dice de quién es la receta). Esta la carga alguien sabiendo para quién es, así que
+⚠️ **No es la tabla `recetas`**, que es la bandeja de lo que llegaba por mail con la casilla de
+antes y cuelga del USUARIO. Desde el buzón único, lo que llega por mail con «Receta» en el asunto
+se guarda **acá**, en la ficha. Esta la carga alguien sabiendo para quién es, así que
 cuelga del PACIENTE y la autoriza el pivote, como el resto de la historia clínica. Tampoco es una
 orden: la orden es para hacerse un estudio, la receta para comprar un remedio.
 
@@ -3054,8 +2848,7 @@ npm run revisar:visor     # sube un PDF y verifica que pdf.js lo dibuje de verda
 npm run generar:iconos    # íconos de la PWA, favicons y logo oscuro desde public/img/
 
 php artisan misalud:enviar-recordatorios --seco   # qué avisos saldrían, sin mandar nada
-php artisan misalud:sincronizar-recetas --seco    # qué recetas entrarían, sin guardar nada
-php artisan misalud:sincronizar-recetas --casilla=3   # una sola casilla
+php artisan misalud:procesar-buzon --seco    # qué haría con cada mail, sin guardar ni contestar
 php artisan misalud:sonda-imap   # ¿sale el 993 desde acá?
 php artisan misalud:recifrar     # rotar APP_KEY (--seco para ensayar)
 php artisan wayfinder:generate --with-form   # SIEMPRE con --with-form
@@ -3618,4 +3411,7 @@ El ingreso con Google está **encendido en producción**: el botón aparece y Go
 redirect sin `redirect_uri_mismatch`. El cron de `schedule:run` está creado en hPanel, y el
 usuario probó la app en un iPhone real (16.0).
 
-Pendiente del 15.4: probar la casilla de recetas real desde producción ("Importar ahora").
+**Buzón único** (reemplaza la casilla de cada persona): ver "Buzón de documentos". ⚠️ **Falta
+medir contra el buzón real**: cargar `BUZON_DIRECCION` y `BUZON_PASSWORD` en el `.env` del server,
+mandar un mail desde Gmail y leer el `Authentication-Results` que escribe Hostinger, para confirmar
+`AutenticidadDelMail` antes de confiar en el guardado directo.

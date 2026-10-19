@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Enums\TipoAdjunto;
 use App\Http\Requests\CoberturaGuardarRequest;
 use App\Models\Cobertura;
 use App\Models\Paciente;
+use App\Services\AdjuntadorDeArchivos;
 use App\Services\ArchivoService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -20,16 +23,27 @@ use Illuminate\Support\Facades\Gate;
  */
 class CoberturaController extends Controller
 {
+    public function __construct(private readonly AdjuntadorDeArchivos $adjuntador) {}
+
+    /**
+     * La cobertura y, si vino, la foto de la credencial (frente y dorso) en el
+     * mismo paso: es lo primero que se tiene en la mano al cargarla. Juntas o
+     * nada, como el alta de una orden con su papel.
+     */
     public function store(CoberturaGuardarRequest $peticion, Paciente $paciente): RedirectResponse
     {
         Gate::authorize('crearEn', [Cobertura::class, $paciente]);
 
-        $paciente->coberturas()->create([
-            ...$peticion->validated(),
-            // Ausente cuando el checkbox llega destildado: un checkbox HTML
-            // sin marcar no manda el campo, no manda "false".
-            'activa' => $peticion->boolean('activa', true),
-        ]);
+        DB::transaction(function () use ($peticion, $paciente): void {
+            $cobertura = $paciente->coberturas()->create([
+                ...$peticion->safe()->except('archivos'),
+                // Ausente cuando el checkbox llega destildado: un checkbox HTML
+                // sin marcar no manda el campo, no manda "false".
+                'activa' => $peticion->boolean('activa', true),
+            ]);
+
+            $this->adjuntador->adjuntar($cobertura, $peticion->file('archivos', []), TipoAdjunto::Credencial);
+        });
 
         return back()->with('exito', 'Se agregó la cobertura.');
     }
@@ -39,7 +53,7 @@ class CoberturaController extends Controller
         Gate::authorize('update', $cobertura);
 
         $cobertura->update([
-            ...$peticion->validated(),
+            ...$peticion->safe()->except('archivos'),
             'activa' => $peticion->boolean('activa'),
         ]);
 

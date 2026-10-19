@@ -34,6 +34,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property TipoAdjunto $tipo
  * @property string $ruta
  * @property string $nombre_original
+ * @property string|null $titulo
  * @property string|null $descripcion
  * @property string $mime
  * @property int $tamanio_bytes
@@ -63,13 +64,14 @@ class Adjunto extends Model implements CifraDatos
      *
      * `ruta`, `mime` y `tamanio_bytes` sí lo son, pero nunca salen de la
      * entrada del usuario: los compone `ArchivoService` a partir del archivo
-     * real. El FormRequest de cada pantalla valida `archivo`, `tipo` y
-     * `descripcion`, y nada más.
+     * real. El FormRequest de cada pantalla valida `archivo`, `tipo`, `titulo`
+     * y `descripcion`, y nada más.
      */
     protected $fillable = [
         'tipo',
         'ruta',
         'nombre_original',
+        'titulo',
         'descripcion',
         'mime',
         'tamanio_bytes',
@@ -84,6 +86,7 @@ class Adjunto extends Model implements CifraDatos
         return [
             'tipo' => TipoAdjunto::class,
             'nombre_original' => 'encrypted',
+            'titulo' => 'encrypted',
             'descripcion' => 'encrypted',
             'tamanio_bytes' => 'integer',
             'duracion_segundos' => 'integer',
@@ -106,5 +109,16 @@ class Adjunto extends Model implements CifraDatos
     public function esPdf(): bool
     {
         return $this->mime === 'application/pdf';
+    }
+
+    /**
+     * Cómo se lo nombra en pantalla: el nombre que le puso la persona, o el del
+     * archivo si no le puso ninguno.
+     */
+    public function nombreVisible(): string
+    {
+        $titulo = trim((string) $this->titulo);
+
+        return $titulo !== '' ? $titulo : $this->nombre_original;
     }
 }
