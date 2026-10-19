@@ -355,7 +355,7 @@ function pesoLegible(bytes: number): string {
                             }}
                         </SheetTitle>
                         <SheetDescription v-if="!ordenAEditar">
-                            El papel se sube después de guardarla.
+                            Podés subir el papel ahora o más tarde.
                         </SheetDescription>
                     </SheetHeader>
 
@@ -437,6 +437,20 @@ function pesoLegible(bytes: number): string {
                                 >{{ ordenAEditar?.notas }}</textarea>
                             <InputError :message="errors.notas" />
                         </div>
+
+                        <!--
+                            Solo en el alta: la edición va por PUT, y PHP no
+                            parsea un cuerpo multipart de un PUT (el archivo
+                            se perdería en silencio). Para sumar otro después
+                            está «Agregar otra foto».
+                        -->
+                        <SubirArchivo
+                            v-if="!ordenAEditar"
+                            name="archivos[]"
+                            multiple
+                            etiqueta="Foto o PDF de la orden (opcional)"
+                            :error="errors['archivos.0'] ?? errors.archivos"
+                        />
                     </div>
 
                     <SheetFooter>

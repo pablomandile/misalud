@@ -33,9 +33,12 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property int $id
  * @property int $usuario_id
  * @property string $nombre
+ * @property string|null $dni
  * @property CarbonImmutable|null $fecha_nacimiento
  * @property string|null $sexo
  * @property string|null $grupo_sanguineo
+ * @property string|null $telefono
+ * @property string|null $email
  * @property string|null $notas
  * @property-read int|null $edad
  */
@@ -65,9 +68,12 @@ class Paciente extends Model implements CifraDatos, TieneArchivos
     protected $fillable = [
         'usuario_id',
         'nombre',
+        'dni',
         'fecha_nacimiento',
         'sexo',
         'grupo_sanguineo',
+        'telefono',
+        'email',
         'notas',
     ];
 
@@ -79,7 +85,10 @@ class Paciente extends Model implements CifraDatos, TieneArchivos
         return [
             'fecha_nacimiento' => 'date',
             'nombre' => 'encrypted',
+            'dni' => 'encrypted',
             'grupo_sanguineo' => 'encrypted',
+            'telefono' => 'encrypted',
+            'email' => 'encrypted',
             'notas' => 'encrypted',
         ];
     }
@@ -196,6 +205,27 @@ class Paciente extends Model implements CifraDatos, TieneArchivos
     public function consultas(): HasMany
     {
         return $this->hasMany(Consulta::class);
+    }
+
+    /**
+     * Las recetas de medicamentos que le firmó el médico. No es la bandeja de
+     * `Receta` (lo que llega por mail), que cuelga del usuario.
+     *
+     * @return HasMany<RecetaMedica, $this>
+     */
+    public function recetasMedicas(): HasMany
+    {
+        return $this->hasMany(RecetaMedica::class);
+    }
+
+    /**
+     * Usuario y contraseña de los sitios de salud de esta persona.
+     *
+     * @return HasMany<Clave, $this>
+     */
+    public function claves(): HasMany
+    {
+        return $this->hasMany(Clave::class);
     }
 
     /**

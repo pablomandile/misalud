@@ -17,6 +17,8 @@ use App\Models\Medicamento;
 use App\Models\OrdenEstudio;
 use App\Models\Paciente;
 use App\Models\PrescripcionOcular;
+use App\Models\RecetaMedica;
+use App\Services\AdjuntadorDeArchivos;
 use App\Services\ArchivoService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
@@ -32,7 +34,10 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class AdjuntoController extends Controller
 {
-    public function __construct(private readonly ArchivoService $archivos) {}
+    public function __construct(
+        private readonly ArchivoService $archivos,
+        private readonly AdjuntadorDeArchivos $adjuntador,
+    ) {}
 
     /**
      * Sube uno o varios archivos a la ficha de un paciente.
@@ -79,6 +84,14 @@ class AdjuntoController extends Controller
     public function storeParaOrden(AdjuntoStoreRequest $peticion, OrdenEstudio $orden): RedirectResponse
     {
         return $this->guardarEn($peticion, $orden);
+    }
+
+    /**
+     * El papel o el PDF de una receta de medicamentos. Noveno dueño.
+     */
+    public function storeParaRecetaMedica(AdjuntoStoreRequest $peticion, RecetaMedica $recetaMedica): RedirectResponse
+    {
+        return $this->guardarEn($peticion, $recetaMedica);
     }
 
     /**
@@ -133,24 +146,14 @@ class AdjuntoController extends Controller
     ): RedirectResponse {
         Gate::authorize('update', $duenio);
 
-        $tipo = $peticion->tipo();
         $descripcion = $peticion->input('descripcion');
-        $subidos = 0;
 
-        foreach ($peticion->file('archivos', []) as $archivo) {
-            $datos = $this->archivos->guardar($archivo, $duenio->carpetaDeArchivos());
-
-            /*
-             * Por la relación y no armando `adjuntable_*` a mano: de esa
-             * referencia cuelga toda la autorización, y por eso no es fillable.
-             */
-            $duenio->adjuntos()->create($datos + [
-                'tipo' => $tipo,
-                'descripcion' => $descripcion,
-            ]);
-
-            $subidos++;
-        }
+        $subidos = $this->adjuntador->adjuntar(
+            $duenio,
+            $peticion->file('archivos', []),
+            $peticion->tipo(),
+            is_string($descripcion) ? $descripcion : null,
+        );
 
         return back()->with('exito', $subidos === 1
             ? 'Se guardó el documento.'

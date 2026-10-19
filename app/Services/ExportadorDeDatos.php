@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Contracts\TieneArchivos;
 use App\Models\Adjunto;
 use App\Models\Centro;
+use App\Models\Clave;
 use App\Models\Medicamento;
 use App\Models\Medico;
 use App\Models\Paciente;
@@ -53,6 +54,7 @@ final class ExportadorDeDatos
         'tratamientos' => [],
         'aplicacionesVacuna' => [],
         'ordenesEstudio' => [],
+        'recetasMedicas' => [],
         'estudios' => ['resultados'],
         'prescripcionesOculares' => ['graduaciones'],
         'consultas' => [],
@@ -161,6 +163,16 @@ final class ExportadorDeDatos
             })->all();
         }
 
+        /*
+         * Las claves de los sitios de salud, CON la contraseña: son datos de la
+         * persona y la exportación promete todo descifrado. Van aparte del
+         * recorrido de arriba porque `fila()` respeta el `$hidden` del modelo,
+         * que existe justamente para que la clave no salga por descuido.
+         */
+        $ficha['claves'] = $paciente->claves()->get()
+            ->map(fn (Clave $clave): array => [...$this->fila($clave), 'clave' => $clave->clave])
+            ->all();
+
         return $ficha;
     }
 
@@ -267,7 +279,8 @@ final class ExportadorDeDatos
             datos.json
               Todo lo que cargaste: tu cuenta, cada ficha de la que sos dueño con su
               historial (coberturas, alergias, enfermedades, mediciones, tratamientos,
-              vacunas, órdenes, estudios, salud ocular, consultas y turnos), tu
+              vacunas, órdenes, estudios, salud ocular, consultas, turnos y las
+              claves de sus sitios de salud), tu
               catálogo (médicos, centros, medicamentos, vacunas y variables), tus
               recetas, contactos y envíos. Las fechas están en UTC.
 
@@ -283,8 +296,9 @@ final class ExportadorDeDatos
               - lo que mandaste a la papelera;
               - la contraseña de tu casilla de recetas.
 
-            Este archivo tiene tu historia clínica sin cifrar: guardalo en un lugar
-            seguro y no lo compartas.
+            Este archivo tiene tu historia clínica sin cifrar, y también las
+            contraseñas que guardaste en Claves: guardalo en un lugar seguro y no
+            lo compartas.
             TXT;
     }
 }

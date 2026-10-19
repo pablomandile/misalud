@@ -116,3 +116,81 @@ it('el flash de éxito llega con el nombre del paciente', function (): void {
 
     expect($respuesta->getSession()->get('exito'))->toContain('Carla');
 });
+
+it('guarda el DNI solo con los dígitos y el correo en minúsculas', function (): void {
+    $usuario = User::factory()->create();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.store'), [
+            'nombre' => 'María López',
+            'dni' => '12.345.678',
+            'telefono' => '+54 11 4567-8901',
+            'email' => '  Maria.Lopez@Ejemplo.com ',
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    $paciente = Paciente::first();
+
+    expect($paciente->dni)->toBe('12345678')
+        ->and($paciente->telefono)->toBe('+54 11 4567-8901')
+        ->and($paciente->email)->toBe('maria.lopez@ejemplo.com');
+});
+
+it('guarda DNI, teléfono y correo cifrados', function (): void {
+    $paciente = Paciente::factory()->create([
+        'dni' => '12345678',
+        'telefono' => '1145678901',
+        'email' => 'maria@ejemplo.com',
+    ]);
+
+    $fila = DB::table('pacientes')->where('id', $paciente->id)->first();
+
+    expect($fila->dni)->not->toContain('12345678')
+        ->and($fila->telefono)->not->toContain('1145678901')
+        ->and($fila->email)->not->toContain('maria@ejemplo.com');
+});
+
+it('rechaza un DNI que no es un número de documento', function (string $dni): void {
+    $usuario = User::factory()->create();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.store'), ['nombre' => 'Ana', 'dni' => $dni])
+        ->assertSessionHasErrors('dni');
+})->with(['12a45678', '123', '1234567890']);
+
+it('rechaza un teléfono con letras y un correo mal escrito', function (): void {
+    $usuario = User::factory()->create();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.store'), [
+            'nombre' => 'Ana',
+            'telefono' => 'llamar a la tarde',
+            'email' => 'ana@',
+        ])
+        ->assertSessionHasErrors(['telefono', 'email']);
+});
+
+it('los datos de contacto son opcionales y se pueden borrar al editar', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create([
+        'dni' => '12345678',
+        'telefono' => '1145678901',
+        'email' => 'ana@ejemplo.com',
+    ]);
+
+    $this->actingAs($usuario)
+        ->put(route('pacientes.update', $paciente), [
+            'nombre' => 'Ana',
+            'dni' => '',
+            'telefono' => '',
+            'email' => '',
+        ])
+        ->assertSessionHasNoErrors();
+
+    $paciente->refresh();
+
+    expect($paciente->dni)->toBeNull()
+        ->and($paciente->telefono)->toBeNull()
+        ->and($paciente->email)->toBeNull();
+});

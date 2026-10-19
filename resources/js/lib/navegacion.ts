@@ -3,6 +3,7 @@ import {
     BookUser,
     Building2,
     FileText,
+    KeyRound,
     LayoutGrid,
     Mail,
     Pill,
@@ -12,6 +13,7 @@ import {
     Users,
 } from '@lucide/vue';
 import CentroController from '@/actions/App/Http/Controllers/CentroController';
+import ClaveController from '@/actions/App/Http/Controllers/ClaveController';
 import ContactoController from '@/actions/App/Http/Controllers/ContactoController';
 import CuentaMailController from '@/actions/App/Http/Controllers/CuentaMailController';
 import MedicamentoController from '@/actions/App/Http/Controllers/MedicamentoController';
@@ -71,6 +73,17 @@ export const destinosPrincipales: NavItem[] = [
         href: ContactoController.index(),
         icon: BookUser,
         tono: 'celeste',
+    },
+    /*
+     * Usuario y contraseña de los sitios de salud de cada ficha. Va acá arriba
+     * y no adentro de la ficha porque se busca apurado ("¿cuál era la clave del
+     * portal de OSDE de mamá?"), y desde acá están las de toda la familia.
+     */
+    {
+        title: 'Claves',
+        href: ClaveController.index(),
+        icon: KeyRound,
+        tono: 'limon',
     },
     /*
      * Los catálogos son del USUARIO, no de un paciente: por eso van al mismo

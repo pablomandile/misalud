@@ -10,9 +10,11 @@ import {
     FileText,
     HeartPulse,
     Pill,
+    ReceiptText,
     Plus,
     Stethoscope,
     Syringe,
+    KeyRound,
     Trash2,
     UserRound,
     Users,
@@ -20,12 +22,14 @@ import {
 import type { LucideIcon } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
+import ClaveController from '@/actions/App/Http/Controllers/ClaveController';
 import EnfermedadController from '@/actions/App/Http/Controllers/EnfermedadController';
 import EstudioController from '@/actions/App/Http/Controllers/EstudioController';
 import MedicionController from '@/actions/App/Http/Controllers/MedicionController';
 import OrdenEstudioController from '@/actions/App/Http/Controllers/OrdenEstudioController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
 import PrescripcionOcularController from '@/actions/App/Http/Controllers/PrescripcionOcularController';
+import RecetaMedicaController from '@/actions/App/Http/Controllers/RecetaMedicaController';
 import TurnoController from '@/actions/App/Http/Controllers/TurnoController';
 import ConsultaController from '@/actions/App/Http/Controllers/ConsultaController';
 import AplicacionVacunaController from '@/actions/App/Http/Controllers/AplicacionVacunaController';
@@ -98,10 +102,14 @@ export type Acceso = {
 export type Paciente = {
     id: number;
     nombre: string;
+    /** Solo los dígitos: los puntos los pone `dniVisible()`. */
+    dni: string | null;
     fecha_nacimiento: string | null;
     edad: number | null;
     sexo: string | null;
     grupo_sanguineo: string | null;
+    telefono: string | null;
+    email: string | null;
     notas: string | null;
     puedeEditar: boolean;
     esPropietario: boolean;
@@ -240,6 +248,13 @@ const seccionesDeLaFicha: Array<{
         ruta: (paciente) => OrdenEstudioController.index({ paciente }),
     },
     {
+        // Las de medicamentos, con su papel. No es la bandeja del menú.
+        titulo: 'Recetas',
+        icon: ReceiptText,
+        tono: 'durazno',
+        ruta: (paciente) => RecetaMedicaController.index({ paciente }),
+    },
+    {
         titulo: 'Estudios',
         icon: FlaskConical,
         tono: 'turquesa',
@@ -251,6 +266,17 @@ const seccionesDeLaFicha: Array<{
         tono: 'celeste',
         ruta: (paciente) => PrescripcionOcularController.index({ paciente }),
     },
+    {
+        titulo: 'Claves',
+        icon: KeyRound,
+        tono: 'limon',
+        // Las claves viven en una pantalla para toda la familia: se llega a la
+        // tarjeta de esta ficha por el ancla.
+        ruta: (paciente) => ({
+            url: `${ClaveController.index.url()}#paciente-${paciente}`,
+            method: 'get',
+        }),
+    },
 ];
 
 const baldosa =
@@ -260,6 +286,11 @@ const contador =
 
 function edadTexto(p: Paciente): string {
     return p.edad === null ? '' : `${p.edad} años`;
+}
+
+/** "12345678" → "12.345.678", como figura en el documento. */
+function dniVisible(dni: string): string {
+    return dni.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 </script>
 
@@ -339,6 +370,24 @@ function edadTexto(p: Paciente): string {
                             class="text-sm text-muted-foreground"
                         >
                             Grupo {{ paciente.grupo_sanguineo }}
+                        </p>
+                        <p
+                            v-if="paciente.dni"
+                            class="text-sm text-muted-foreground"
+                        >
+                            DNI {{ dniVisible(paciente.dni) }}
+                        </p>
+                        <p
+                            v-if="paciente.telefono"
+                            class="text-sm text-muted-foreground"
+                        >
+                            Tel. {{ paciente.telefono }}
+                        </p>
+                        <p
+                            v-if="paciente.email"
+                            class="text-sm break-all text-muted-foreground"
+                        >
+                            {{ paciente.email }}
                         </p>
                     </div>
                     <div class="ml-auto flex shrink-0 gap-1">
@@ -492,6 +541,20 @@ function edadTexto(p: Paciente): string {
                         </div>
 
                         <div class="grid gap-2">
+                            <Label for="dni-crear">DNI</Label>
+                            <input
+                                id="dni-crear"
+                                name="dni"
+                                type="text"
+                                inputmode="numeric"
+                                autocomplete="off"
+                                placeholder="Por ejemplo: 12.345.678"
+                                :class="campoUnaLinea"
+                            />
+                            <InputError :message="errors.dni" />
+                        </div>
+
+                        <div class="grid gap-2">
                             <Label for="fecha_nacimiento-crear">
                                 Fecha de nacimiento
                             </Label>
@@ -531,6 +594,30 @@ function edadTexto(p: Paciente): string {
                                 :class="campoUnaLinea"
                             />
                             <InputError :message="errors.grupo_sanguineo" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="telefono-crear">Teléfono</Label>
+                            <input
+                                id="telefono-crear"
+                                name="telefono"
+                                type="tel"
+                                autocomplete="off"
+                                :class="campoUnaLinea"
+                            />
+                            <InputError :message="errors.telefono" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="email-crear">Correo electrónico</Label>
+                            <input
+                                id="email-crear"
+                                name="email"
+                                type="email"
+                                autocomplete="off"
+                                :class="campoUnaLinea"
+                            />
+                            <InputError :message="errors.email" />
                         </div>
 
                         <div class="grid gap-2">
@@ -601,6 +688,25 @@ function edadTexto(p: Paciente): string {
                         </div>
 
                         <div class="grid gap-2">
+                            <Label for="dni-editar">DNI</Label>
+                            <input
+                                id="dni-editar"
+                                name="dni"
+                                type="text"
+                                inputmode="numeric"
+                                autocomplete="off"
+                                placeholder="Por ejemplo: 12.345.678"
+                                :value="
+                                    pacienteAEditar.dni
+                                        ? dniVisible(pacienteAEditar.dni)
+                                        : ''
+                                "
+                                :class="campoUnaLinea"
+                            />
+                            <InputError :message="errors.dni" />
+                        </div>
+
+                        <div class="grid gap-2">
                             <Label for="fecha_nacimiento-editar">
                                 Fecha de nacimiento
                             </Label>
@@ -642,6 +748,32 @@ function edadTexto(p: Paciente): string {
                                 :class="campoUnaLinea"
                             />
                             <InputError :message="errors.grupo_sanguineo" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="telefono-editar">Teléfono</Label>
+                            <input
+                                id="telefono-editar"
+                                name="telefono"
+                                type="tel"
+                                autocomplete="off"
+                                :value="pacienteAEditar.telefono"
+                                :class="campoUnaLinea"
+                            />
+                            <InputError :message="errors.telefono" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="email-editar">Correo electrónico</Label>
+                            <input
+                                id="email-editar"
+                                name="email"
+                                type="email"
+                                autocomplete="off"
+                                :value="pacienteAEditar.email"
+                                :class="campoUnaLinea"
+                            />
+                            <InputError :message="errors.email" />
                         </div>
 
                         <div class="grid gap-2">

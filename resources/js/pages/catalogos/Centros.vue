@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { Form, Head } from '@inertiajs/vue3';
-import { Building2, Copy, Plus, Trash2 } from '@lucide/vue';
+import {
+    Building2,
+    Copy,
+    Globe,
+    Mail,
+    MessageCircle,
+    Plus,
+    Trash2,
+} from '@lucide/vue';
 import { ref } from 'vue';
 import CentroController from '@/actions/App/Http/Controllers/CentroController';
 import Heading from '@/components/Heading.vue';
@@ -46,6 +54,12 @@ type Centro = {
     tipoEtiqueta: string;
     direccion: string | null;
     telefono: string | null;
+    whatsapp: string | null;
+    /** Armado por el servidor (`Centro::enlaceWhatsapp()`), con el 549 delante. */
+    whatsappEnlace: string | null;
+    email: string | null;
+    web: string | null;
+    horarios: string | null;
     notas: string | null;
     esSemilla: boolean;
     medicos: MedicoDisponible[];
@@ -123,6 +137,72 @@ function estaVinculado(centro: Centro, medicoId: number): boolean {
                         >
                             Tel. {{ centro.telefono }}
                         </p>
+                        <p
+                            v-if="centro.whatsapp"
+                            class="text-sm text-muted-foreground"
+                        >
+                            WhatsApp {{ centro.whatsapp }}
+                        </p>
+                        <p
+                            v-if="centro.horarios"
+                            class="text-sm whitespace-pre-line text-muted-foreground"
+                        >
+                            {{ centro.horarios }}
+                        </p>
+                        <!--
+                            Escribir, mandar un correo o abrir la web, a un
+                            toque: con texto al lado del ícono y a 44 px.
+                        -->
+                        <div
+                            v-if="
+                                centro.whatsappEnlace ||
+                                centro.email ||
+                                centro.web
+                            "
+                            class="flex flex-wrap gap-2 pt-1"
+                        >
+                            <Button
+                                v-if="centro.whatsappEnlace"
+                                variant="outline"
+                                size="sm"
+                                as-child
+                            >
+                                <a
+                                    :href="centro.whatsappEnlace"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    <MessageCircle />
+                                    WhatsApp
+                                </a>
+                            </Button>
+                            <Button
+                                v-if="centro.email"
+                                variant="outline"
+                                size="sm"
+                                as-child
+                            >
+                                <a :href="`mailto:${centro.email}`">
+                                    <Mail />
+                                    Correo
+                                </a>
+                            </Button>
+                            <Button
+                                v-if="centro.web"
+                                variant="outline"
+                                size="sm"
+                                as-child
+                            >
+                                <a
+                                    :href="centro.web"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    <Globe />
+                                    Web
+                                </a>
+                            </Button>
+                        </div>
                         <p
                             v-if="centro.medicos.length > 0"
                             class="text-sm text-muted-foreground"
@@ -261,6 +341,67 @@ function estaVinculado(centro: Centro, medicoId: number): boolean {
                         </div>
 
                         <div class="grid gap-2">
+                            <Label for="whatsapp-crear">WhatsApp</Label>
+                            <input
+                                id="whatsapp-crear"
+                                name="whatsapp"
+                                type="tel"
+                                inputmode="tel"
+                                placeholder="Por ejemplo: 11 2345 6789"
+                                aria-describedby="whatsapp-crear-ayuda"
+                                :class="campoUnaLinea"
+                            />
+                            <p
+                                id="whatsapp-crear-ayuda"
+                                class="text-sm text-muted-foreground"
+                            >
+                                Con el código de área, sin el 0 ni el 15.
+                            </p>
+                            <InputError :message="errors.whatsapp" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="email-crear">Correo electrónico</Label>
+                            <input
+                                id="email-crear"
+                                name="email"
+                                type="email"
+                                inputmode="email"
+                                autocomplete="off"
+                                :class="campoUnaLinea"
+                            />
+                            <InputError :message="errors.email" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="web-crear">Página web</Label>
+                            <input
+                                id="web-crear"
+                                name="web"
+                                type="text"
+                                inputmode="url"
+                                autocapitalize="off"
+                                placeholder="Por ejemplo: www.hospital.com.ar"
+                                :class="campoUnaLinea"
+                            />
+                            <InputError :message="errors.web" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="horarios-crear"
+                                >Horarios de atención</Label
+                            >
+                            <textarea
+                                id="horarios-crear"
+                                name="horarios"
+                                rows="3"
+                                placeholder="Por ejemplo: lunes a viernes de 8 a 20"
+                                :class="campoTexto"
+                            ></textarea>
+                            <InputError :message="errors.horarios" />
+                        </div>
+
+                        <div class="grid gap-2">
                             <Label for="notas-crear">Notas</Label>
                             <textarea
                                 id="notas-crear"
@@ -393,6 +534,70 @@ function estaVinculado(centro: Centro, medicoId: number): boolean {
                                 :class="campoUnaLinea"
                             />
                             <InputError :message="errors.telefono" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="whatsapp-editar">WhatsApp</Label>
+                            <input
+                                id="whatsapp-editar"
+                                name="whatsapp"
+                                type="tel"
+                                inputmode="tel"
+                                placeholder="Por ejemplo: 11 2345 6789"
+                                aria-describedby="whatsapp-editar-ayuda"
+                                :value="centroAEditar.whatsapp"
+                                :class="campoUnaLinea"
+                            />
+                            <p
+                                id="whatsapp-editar-ayuda"
+                                class="text-sm text-muted-foreground"
+                            >
+                                Con el código de área, sin el 0 ni el 15.
+                            </p>
+                            <InputError :message="errors.whatsapp" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="email-editar">Correo electrónico</Label>
+                            <input
+                                id="email-editar"
+                                name="email"
+                                type="email"
+                                inputmode="email"
+                                autocomplete="off"
+                                :value="centroAEditar.email"
+                                :class="campoUnaLinea"
+                            />
+                            <InputError :message="errors.email" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="web-editar">Página web</Label>
+                            <input
+                                id="web-editar"
+                                name="web"
+                                type="text"
+                                inputmode="url"
+                                autocapitalize="off"
+                                placeholder="Por ejemplo: www.hospital.com.ar"
+                                :value="centroAEditar.web"
+                                :class="campoUnaLinea"
+                            />
+                            <InputError :message="errors.web" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="horarios-editar"
+                                >Horarios de atención</Label
+                            >
+                            <textarea
+                                id="horarios-editar"
+                                name="horarios"
+                                rows="3"
+                                placeholder="Por ejemplo: lunes a viernes de 8 a 20"
+                                :class="campoTexto"
+                                >{{ centroAEditar.horarios }}</textarea>
+                            <InputError :message="errors.horarios" />
                         </div>
 
                         <div class="grid gap-2">

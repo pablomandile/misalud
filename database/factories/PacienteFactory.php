@@ -23,6 +23,9 @@ class PacienteFactory extends Factory
             'fecha_nacimiento' => fake()->dateTimeBetween('-90 years', '-1 year')->format('Y-m-d'),
             'sexo' => fake()->randomElement(['femenino', 'masculino', 'otro']),
             'grupo_sanguineo' => fake()->randomElement(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']),
+            'dni' => null,
+            'telefono' => null,
+            'email' => null,
             'notas' => null,
         ];
     }

@@ -110,7 +110,7 @@ class PacienteController extends Controller
     }
 
     /**
-     * @return array{id: int, nombre: string, fecha_nacimiento: string|null, edad: int|null, sexo: string|null, grupo_sanguineo: string|null, notas: string|null, puedeEditar: bool, esPropietario: bool}
+     * @return array{id: int, nombre: string, dni: string|null, fecha_nacimiento: string|null, edad: int|null, sexo: string|null, grupo_sanguineo: string|null, telefono: string|null, email: string|null, notas: string|null, puedeEditar: bool, esPropietario: bool}
      */
     private function serializar(Paciente $paciente): array
     {
@@ -119,10 +119,13 @@ class PacienteController extends Controller
         return [
             'id' => $paciente->id,
             'nombre' => $paciente->nombre,
+            'dni' => $paciente->dni,
             'fecha_nacimiento' => $paciente->fecha_nacimiento?->format('Y-m-d'),
             'edad' => $paciente->edad,
             'sexo' => $paciente->sexo,
             'grupo_sanguineo' => $paciente->grupo_sanguineo,
+            'telefono' => $paciente->telefono,
+            'email' => $paciente->email,
             'notas' => $paciente->notas,
             'puedeEditar' => $rol?->puedeEditar() ?? false,
             'esPropietario' => $rol === RolPaciente::Propietario,

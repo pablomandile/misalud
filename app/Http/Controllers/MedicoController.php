@@ -12,6 +12,7 @@ use App\Models\Estudio;
 use App\Models\Medico;
 use App\Models\OrdenEstudio;
 use App\Models\PrescripcionOcular;
+use App\Models\RecetaMedica;
 use App\Models\Tratamiento;
 use App\Models\Turno;
 use App\Support\UsoDeCatalogo;
@@ -83,6 +84,7 @@ class MedicoController extends CatalogoBaseController
             new UsoDeCatalogo('tratamiento', 'tratamientos', Tratamiento::class, 'medico_id'),
             new UsoDeCatalogo('orden de estudio', 'órdenes de estudio', OrdenEstudio::class, 'medico_id'),
             new UsoDeCatalogo('estudio', 'estudios', Estudio::class, 'medico_id'),
+            new UsoDeCatalogo('receta', 'recetas', RecetaMedica::class, 'medico_id'),
             new UsoDeCatalogo('receta de anteojos', 'recetas de anteojos', PrescripcionOcular::class, 'medico_id'),
             new UsoDeCatalogo('turno', 'turnos', Turno::class, 'medico_id'),
         ];

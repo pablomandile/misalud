@@ -73,6 +73,7 @@ const RUTAS = [
     '/recetas',
     '/casilla',
     '/contactos',
+    '/claves',
     '/settings/appearance',
 ];
 
@@ -91,6 +92,7 @@ const RUTAS_DE_FICHA = [
     'enfermedades',
     'tratamientos',
     'ordenes',
+    'recetas-medicas',
     'estudios',
     'salud-ocular',
     'turnos',

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Enums\EstadoOrdenEstudio;
+use App\Enums\TipoAdjunto;
 use App\Http\Requests\EstudioGuardarRequest;
 use App\Models\Adjunto;
 use App\Models\Centro;
@@ -14,10 +15,12 @@ use App\Models\Medico;
 use App\Models\OrdenEstudio;
 use App\Models\Paciente;
 use App\Models\ResultadoEstudio;
+use App\Services\AdjuntadorDeArchivos;
 use App\Services\SeriesDeResultados;
 use App\Support\CatalogoVisible;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -33,7 +36,10 @@ use Inertia\Response;
  */
 class EstudioController extends Controller
 {
-    public function __construct(private readonly SeriesDeResultados $series) {}
+    public function __construct(
+        private readonly SeriesDeResultados $series,
+        private readonly AdjuntadorDeArchivos $adjuntador,
+    ) {}
 
     public function index(Paciente $paciente): Response
     {
@@ -70,36 +76,46 @@ class EstudioController extends Controller
     {
         Gate::authorize('crearEn', [Estudio::class, $paciente]);
 
-        $estudio = $paciente->estudios()->create(
-            $peticion->safe(['medico_id', 'centro_id', 'enfermedad_id', 'tipo', 'fecha', 'notas']),
-        );
-
-        /*
-         * Cerrar el circuito orden → estudio: vincular implica `Hecha`. La
-         * validación ya garantizó que la orden es de este mismo paciente y
-         * que no estaba vinculada a otro estudio (ver `EstudioGuardarRequest`),
-         * así que acá no hace falta un `Gate::authorize` aparte -quien puede
-         * crear un estudio en esta ficha ya tiene el mismo nivel de acceso
-         * sobre cualquier registro de la misma ficha-.
-         */
-        $ordenIdValidado = $peticion->validated('orden_estudio_id');
-        $ordenId = is_numeric($ordenIdValidado) ? (int) $ordenIdValidado : null;
-
-        if ($ordenId !== null) {
-            $orden = OrdenEstudio::find($ordenId);
+        // El estudio, el vínculo con su orden y el informe juntos o nada.
+        DB::transaction(function () use ($peticion, $paciente): void {
+            $estudio = $paciente->estudios()->create(
+                $peticion->safe(['medico_id', 'centro_id', 'enfermedad_id', 'tipo', 'fecha', 'notas']),
+            );
 
             /*
-             * `setAttribute()` y no `update(['estudio_id' => ...])`:
-             * `estudio_id` NO es fillable -no lo escribe un formulario de
-             * la orden-, así que un `update()` masivo lo ignoraría en
-             * silencio y dejaría la orden sin vincular sin ningún error.
-             * Mismo camino que usa `CatalogoBaseController` para
-             * `usuario_id`.
+             * Cerrar el circuito orden → estudio: vincular implica `Hecha`. La
+             * validación ya garantizó que la orden es de este mismo paciente y
+             * que no estaba vinculada a otro estudio (ver `EstudioGuardarRequest`),
+             * así que acá no hace falta un `Gate::authorize` aparte -quien puede
+             * crear un estudio en esta ficha ya tiene el mismo nivel de acceso
+             * sobre cualquier registro de la misma ficha-.
              */
-            $orden?->setAttribute('estudio_id', $estudio->id);
-            $orden?->setAttribute('estado', EstadoOrdenEstudio::Hecha);
-            $orden?->save();
-        }
+            $ordenIdValidado = $peticion->validated('orden_estudio_id');
+            $ordenId = is_numeric($ordenIdValidado) ? (int) $ordenIdValidado : null;
+
+            if ($ordenId !== null) {
+                $orden = OrdenEstudio::find($ordenId);
+
+                /*
+                 * `setAttribute()` y no `update(['estudio_id' => ...])`:
+                 * `estudio_id` NO es fillable -no lo escribe un formulario de
+                 * la orden-, así que un `update()` masivo lo ignoraría en
+                 * silencio y dejaría la orden sin vincular sin ningún error.
+                 * Mismo camino que usa `CatalogoBaseController` para
+                 * `usuario_id`.
+                 */
+                $orden?->setAttribute('estudio_id', $estudio->id);
+                $orden?->setAttribute('estado', EstadoOrdenEstudio::Hecha);
+                $orden?->save();
+            }
+
+            /*
+             * El informe en el mismo alta. Si sube algo desde acá es el
+             * informe; una imagen suelta (la placa) va por la subida aparte,
+             * donde se elige el tipo.
+             */
+            $this->adjuntador->adjuntar($estudio, $peticion->file('archivos', []), TipoAdjunto::InformeEstudio);
+        });
 
         return back()->with('exito', 'Se agregó el estudio.');
     }

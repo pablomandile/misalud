@@ -369,3 +369,22 @@ it('exige sesión', function (): void {
 
     $this->get(route('pacientes.estudios.index', $paciente))->assertRedirect(route('login'));
 });
+
+it('sube el informe en el mismo alta del estudio', function (): void {
+    Storage::fake('local');
+    [$usuario, $paciente] = fichaConEstudios();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.estudios.store', $paciente), [
+            'tipo' => 'Análisis de sangre completo',
+            'fecha' => '2026-09-20',
+            'archivos' => [informeDePrueba()],
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    $estudio = $paciente->estudios()->sole();
+
+    expect($estudio->adjuntos()->count())->toBe(1)
+        ->and($estudio->adjuntos()->first()->tipo)->toBe(TipoAdjunto::InformeEstudio);
+});

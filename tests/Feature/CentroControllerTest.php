@@ -322,3 +322,55 @@ it('un médico se ve desde su propia relación centros()', function (): void {
 
     expect($medico->centros()->first()?->nombre)->toBe('Consultorio Central');
 });
+
+it('guarda WhatsApp, correo, web y horarios, cifrados', function (): void {
+    $usuario = User::factory()->create();
+
+    $this->actingAs($usuario)
+        ->post(route('centros.store'), [
+            'nombre' => 'Hospital de prueba',
+            'tipo' => TipoCentro::Hospital->value,
+            'whatsapp' => '11 2345 6789',
+            'email' => ' Turnos@Hospital.com.ar ',
+            'web' => 'www.hospital.com.ar',
+            'horarios' => "Lunes a viernes de 8 a 20\nSábados de 8 a 13",
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    $centro = Centro::where('usuario_id', $usuario->id)->sole();
+    $fila = (array) DB::table('centros')->where('id', $centro->id)->first();
+
+    expect($centro->email)->toBe('turnos@hospital.com.ar')
+        // Se escribe sin el https://, como se la lee; se lo agrega el request.
+        ->and($centro->web)->toBe('https://www.hospital.com.ar')
+        ->and($centro->horarios)->toContain('Sábados')
+        ->and($fila['whatsapp'])->not->toContain('2345')
+        ->and($fila['horarios'])->not->toContain('Lunes');
+});
+
+it('arma el enlace de WhatsApp con el 549 de un celular argentino', function (string $escrito, ?string $enlace): void {
+    $centro = Centro::factory()->make(['whatsapp' => $escrito]);
+
+    expect($centro->enlaceWhatsapp())->toBe($enlace);
+})->with([
+    'con código de área' => ['11 2345-6789', 'https://wa.me/5491123456789'],
+    'con el 0 adelante' => ['011 2345 6789', 'https://wa.me/5491123456789'],
+    'ya con el 54' => ['54 9 11 2345 6789', 'https://wa.me/5491123456789'],
+    'de otro país, con +' => ['+598 99 123 456', 'https://wa.me/59899123456'],
+    'vacío' => ['', null],
+]);
+
+it('rechaza un WhatsApp con letras, un correo y una web mal escritos', function (): void {
+    $usuario = User::factory()->create();
+
+    $this->actingAs($usuario)
+        ->post(route('centros.store'), [
+            'nombre' => 'Clínica',
+            'tipo' => TipoCentro::Clinica->value,
+            'whatsapp' => 'llamar a la mañana',
+            'email' => 'turnos@',
+            'web' => 'no es una web',
+        ])
+        ->assertSessionHasErrors(['whatsapp', 'email', 'web']);
+});

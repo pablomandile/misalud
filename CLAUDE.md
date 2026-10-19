@@ -602,14 +602,15 @@ misalud@pablomandile.com.ar** (decidido por el usuario).
 > una política de privacidad es peor que no tenerla. Cambiar un texto obliga a revisar el código
 > que lo sostiene —y al revés—, y si el cambio importa, a subir `config('legales.version')`.
 
-| Lo que promete el texto                                      | Lo que lo sostiene                                         |
-| ------------------------------------------------------------ | ---------------------------------------------------------- |
-| Eliminar la cuenta borra **en el momento y de verdad**       | `BorradorDeCuenta`                                         |
-| Lo que borrás se borra de verdad a los **30 días**           | `misalud:vaciar-papelera` (diario), `VaciarPapelera::DIAS` |
-| _Configuración → Perfil → **Descargar mis datos**_           | `ExportadorDeDatos`, el botón en `settings/Profile.vue`    |
-| Al salir se borran las credenciales del dispositivo          | `olvidarTodasLasCredenciales()` en las cuatro salidas      |
-| Todo el contenido clínico cifrado, **salvo las grabaciones** | `CifraDatos`, `ArchivoService`, `seGuardaCifrado()`        |
-| Los avisos dicen cuándo y no qué                             | `TipoRecordatorio::asunto()`, la vista del mail            |
+| Lo que promete el texto                                        | Lo que lo sostiene                                         |
+| -------------------------------------------------------------- | ---------------------------------------------------------- |
+| Eliminar la cuenta borra **en el momento y de verdad**         | `BorradorDeCuenta`                                         |
+| Lo que borrás se borra de verdad a los **30 días**             | `misalud:vaciar-papelera` (diario), `VaciarPapelera::DIAS` |
+| _Configuración → Perfil → **Descargar mis datos**_             | `ExportadorDeDatos`, el botón en `settings/Profile.vue`    |
+| Al salir se borran las credenciales del dispositivo            | `olvidarTodasLasCredenciales()` en las cuatro salidas      |
+| Todo el contenido clínico cifrado, **salvo las grabaciones**   | `CifraDatos`, `ArchivoService`, `seGuardaCifrado()`        |
+| Los avisos dicen cuándo y no qué                               | `TipoRecordatorio::asunto()`, la vista del mail            |
+| Para ver una clave guardada se pide la contraseña de tu cuenta | `ConfirmarClaveSiLaTiene` en `claves.revelar`              |
 
 Los tests atan las dos puntas: el plazo del texto contra la constante, la frase "Descargar mis
 datos" contra el botón, el `!respuesta.redirected` del service worker.
@@ -2597,6 +2598,111 @@ vieja: la cobertura recién agregada no aparecía hasta cerrarlo y reabrirlo. Me
 Los paneles que quedan abiertos mientras se trabaja (documentos, coberturas, compartir) guardan
 un **id** y buscan el paciente en las props con un `computed`. Es la misma lección que el
 `const` de la Etapa 8, en otra forma. Los sheets que se cierran en `@success` no la necesitan.
+
+## Recetas del paciente
+
+Las recetas de **medicamentos** que firma el médico, en la ficha
+(`/pacientes/{paciente}/recetas-medicas`, baldosa «Recetas»). Tabla `recetas_medicas`, modelo
+`RecetaMedica`, noveno dueño de archivos.
+
+⚠️ **No es la tabla `recetas`**, que es la bandeja de lo que llega por mail y cuelga del USUARIO
+(un mail no dice de quién es la receta). Esta la carga alguien sabiendo para quién es, así que
+cuelga del PACIENTE y la autoriza el pivote, como el resto de la historia clínica. Tampoco es una
+orden: la orden es para hacerse un estudio, la receta para comprar un remedio.
+
+- **El medicamento del catálogo o el texto, al menos uno** (`required_without` cruzado). El
+  catálogo trae el prospecto; el texto dice lo que el catálogo no ("2 cajas", "x 30 comprimidos").
+  Médico y medicamento son metadato (`nullOnDelete`) y figuran en los `usos()` de su catálogo.
+- **Misma lógica que la bandeja**: "vencida" no se guarda (`fecha + vigencia_dias`, 30 por
+  defecto, de 1 a 365), las disponibles arriba de la que vence primero, la separación la hace el
+  servidor, y el vencimiento se dice con palabras y sin color. Reusa `EstadoReceta`.
+- **«Ya la usé» es su propia ruta** (`recetas-medicas.uso`), y `estado` no es fillable: editar la
+  receta no puede reabrir una usada por accidente.
+- Se ofrece para **mandar** (a la farmacia) junto con lo demás de la ficha (`DocumentosEnviables`).
+
+## El PDF en el mismo alta
+
+Órdenes, estudios y recetas del paciente aceptan el archivo **en el formulario de alta**, opcional;
+la subida suelta queda para agregar otro después. Lo resuelve `AdjuntadorDeArchivos`, que salió del
+cuerpo de `AdjuntoController::guardarEn()`:
+
+- `reglasOpcionales()` son las mismas reglas que la subida suelta: un archivo no puede entrar por
+  un camino y rechazarse por el otro.
+- El registro y sus archivos van en **una transacción**, y si un archivo falla a mitad de camino el
+  servicio borra del disco lo ya escrito: ni una orden "sin papel" que la persona cree que subió,
+  ni un archivo cifrado que nada referencia.
+- ⚠️ **Solo en el alta, nunca en la edición**: el sheet es el mismo para las dos, y la edición va
+  por PUT, donde PHP no parsea el multipart (el archivo se perdería en silencio). El campo lleva
+  `v-if="!…AEditar"`.
+- El controlador guarda con `safe()->except('archivos')`.
+
+## Centros: cómo contactarlos
+
+WhatsApp, correo, web y horarios de atención, cifrados como el resto del catálogo. En la tarjeta
+van como **botones con texto** (WhatsApp, Correo, Web), no como datos para copiar.
+
+- ⚠️ **`wa.me` exige el número internacional sin `+`**, y la gente anota "11 2345 6789".
+  `Centro::enlaceWhatsapp()` antepone **549** (celular de Argentina) si no empieza con 54, y
+  respeta uno que viene con `+` de otro país. Por eso el formulario pide el número "con el código de
+  área, sin el 0 ni el 15": con el 15 adentro, el enlace no llega a nadie.
+- La web se escribe como se la lee ("www.hospital.com.ar"): el request le agrega `https://` antes
+  de que la regla `url` la mire.
+- ⚠️ `CentroController` guarda **una lista de campos** (`CAMPOS`), compartida por alta y edición.
+  Estaba copiada dos veces, y un campo nuevo sumado a una sola se perdía en silencio en la otra.
+
+## Claves
+
+Usuario y contraseña de los sitios de salud de cada ficha (el portal de la obra social, el
+laboratorio, la app de turnos), en `/claves`, en el menú general: se busca apurado y desde ahí
+están las de toda la familia. Cada ficha además tiene su baldosa, que lleva al ancla
+`#paciente-{id}`.
+
+| Pieza                      | Qué hace                                                               |
+| -------------------------- | ---------------------------------------------------------------------- |
+| `Clave`                    | Registro clínico del paciente: sitio, usuario, clave y notas cifrados  |
+| `ClaveController`          | Listado **sin la clave**, alta, edición, borrado, desbloquear, revelar |
+| `lib/generadorDeClaves.ts` | Generador con `crypto.getRandomValues`, traído del proyecto Secretos   |
+| `lib/portapapeles.ts`      | Copia y borra el portapapeles a los 30 s, traído de Secretos           |
+
+### ⚠️ Sin clave maestra, a propósito (decisión del usuario)
+
+El proyecto Secretos cifra en el navegador con una clave maestra (zero-knowledge). Acá no: una
+clave maestra olvidada **se lleva todas las claves sin recuperación**, y no deja compartirlas
+con un cuidador sin repartir esa clave. Van con el cast `encrypted`, como todo lo demás. Lo que
+agrega protección es otra cosa:
+
+- **La clave NO viaja nunca en los props de Inertia**, ni en el listado ni en el formulario de
+  edición: sale de a una por `GET /claves/{clave}/revelar` (JSON, `no-store`). Un HTML de Inertia
+  queda en el historial y en la memoria del navegador. Al editar, el campo vacío es "dejá la que
+  está" —el mismo patrón de solo escritura que la casilla—. Y `$hidden = ['clave']` como red.
+- **Ver o copiar pide la contraseña de la cuenta reconfirmada hace menos de 5 minutos**
+  (`ClaveController::SEGUNDOS_DESBLOQUEO`), con `ConfirmarClaveSiLaTiene` —salteada para una
+  cuenta de Google sin contraseña—. Sin confirmar, `revelar` contesta **423**, y la pantalla
+  vuelve a ofrecer «Desbloquear». El prop `desbloqueado` solo decide qué botón se dibuja: lo que
+  protege es el middleware. `revelar` lleva además `throttle:30,1`.
+- **El lector ve sitio, usuario y notas, nunca la clave**: revelar pide `update`, no `view`.
+  Propietario y cuidador sí (decisión del usuario).
+- Una clave mostrada **se vuelve a tapar a los 30 s**, y el portapapeles se limpia a los 30 s
+  si sigue teniendo la misma clave.
+
+⚠️ **Copiar le pasa a `copiarSecreto()` la PROMESA de la clave, no la clave.** La clave se pide
+al servidor recién al tocar «Copiar», y Safari en iOS rechaza un `writeText()` que llega después
+de un `await`: considera que el toque ya terminó. Un `ClipboardItem` con una promesa adentro se
+escribe dentro del mismo toque. Sin iPhone real, esto queda verificado solo en Chrome.
+
+- **Sin soft deletes ni UNIQUE**, como la casilla: si se guarda una contraseña, borrar borra. Sin
+  UNIQUE no hace falta índice ciego (`indicesCiegos()` devuelve `[]`): dos cuentas en el mismo
+  sitio son un caso real.
+- **La descarga de datos trae las claves descifradas**, con la contraseña: son datos de la
+  persona. Van aparte de `SECCIONES` porque `fila()` respeta el `$hidden`. El `LEEME.txt` lo avisa.
+- El formulario va **todo con `v-model`**: «Generar una clave» cambia estado local (regla de la
+  Etapa 10). El input lleva `autocomplete="new-password"` para que el navegador no ofrezca la
+  contraseña de MiSalud.
+- El generador saca los caracteres que se confunden (`O0Il1|`) y garantiza los cuatro grupos:
+  muchos portales rechazan una clave sin símbolo, y el rechazo llega recién al pegarla.
+- ⚠️ En `BarridoDePrivacidadTest` la pasada del extraño corre **con la contraseña confirmada en
+  la sesión**: las rutas de Claves la piden antes de llegar a la Policy, y sin eso contestarían
+  "confirmá tu contraseña" en vez del 403 que el barrido tiene que ver.
 
 ## Consultas y grabaciones
 

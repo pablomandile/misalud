@@ -25,13 +25,15 @@ datos. Contacto: **misalud@pablomandile.com.ar**.
 Son **datos de salud**, que la ley considera datos sensibles. Los cargás vos, por tu
 decisión, y solo los usamos para mostrártelos.
 
-- Los datos de cada paciente: nombre, fecha de nacimiento, sexo, grupo sanguíneo y
-  notas.
+- Los datos de cada paciente: nombre, DNI, fecha de nacimiento, sexo, grupo sanguíneo,
+  teléfono, correo electrónico y notas.
 - Su cobertura médica: entidad, plan, número de afiliado, teléfonos y las fotos de la
   credencial.
 - Su historia: alergias, enfermedades y su bitácora, mediciones (peso, presión,
   glucemia y las que definas), tratamientos, vacunas, órdenes y estudios con sus
   resultados, recetas de anteojos, consultas, turnos y recordatorios.
+- Las claves de sus sitios de salud que guardes en «Claves»: sitio, usuario, contraseña y
+  notas, cifradas. Para ver o copiar una contraseña te pedimos de nuevo la de tu cuenta.
 - Los archivos que subas: PDF, fotos y **grabaciones de audio** de las consultas.
 - Tu catálogo: médicos, centros, medicamentos, vacunas y variables.
 

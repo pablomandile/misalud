@@ -23,6 +23,7 @@ use App\Models\OrdenEstudio;
 use App\Models\Paciente;
 use App\Models\PrescripcionOcular;
 use App\Models\Receta;
+use App\Models\RecetaMedica;
 use App\Models\RegistroEnfermedad;
 use App\Models\ResultadoEstudio;
 use App\Models\TipoMedicion;
@@ -85,6 +86,7 @@ class VaciarPapelera extends Command
         ResultadoEstudio::class,
         Estudio::class,
         OrdenEstudio::class,
+        RecetaMedica::class,
         PrescripcionOcular::class,
         Consulta::class,
         Turno::class,

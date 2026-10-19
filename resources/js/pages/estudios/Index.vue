@@ -520,7 +520,7 @@ function valorCompleto(r: Resultado): string {
                             }}
                         </SheetTitle>
                         <SheetDescription v-if="!estudioAEditar">
-                            El informe se sube después de guardarlo.
+                            Podés subir el informe ahora o más tarde.
                         </SheetDescription>
                     </SheetHeader>
 
@@ -657,6 +657,20 @@ function valorCompleto(r: Resultado): string {
                                 >{{ estudioAEditar?.notas }}</textarea>
                             <InputError :message="errors.notas" />
                         </div>
+
+                        <!--
+                            Solo en el alta: la edición va por PUT, y PHP no
+                            parsea un cuerpo multipart de un PUT. Una imagen
+                            suelta (la placa) se sube después, donde se elige
+                            el tipo.
+                        -->
+                        <SubirArchivo
+                            v-if="!estudioAEditar"
+                            name="archivos[]"
+                            multiple
+                            etiqueta="PDF o foto del informe (opcional)"
+                            :error="errors['archivos.0'] ?? errors.archivos"
+                        />
                     </div>
 
                     <SheetFooter>

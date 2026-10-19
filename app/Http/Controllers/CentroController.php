@@ -27,6 +27,15 @@ use Illuminate\Http\RedirectResponse;
  */
 class CentroController extends CatalogoBaseController
 {
+    /**
+     * Lo que se guarda del formulario. Una sola lista para el alta y la
+     * edición: con dos copias, un campo nuevo se guardaba al crear y se perdía
+     * en silencio al editar (o al revés). `medicos` va aparte, por el pivote.
+     */
+    private const CAMPOS = [
+        'nombre', 'tipo', 'direccion', 'telefono', 'whatsapp', 'email', 'web', 'horarios', 'notas',
+    ];
+
     protected function modelo(): string
     {
         return Centro::class;
@@ -71,6 +80,11 @@ class CentroController extends CatalogoBaseController
             'tipoEtiqueta' => $registro->tipo->etiqueta(),
             'direccion' => $registro->direccion,
             'telefono' => $registro->telefono,
+            'whatsapp' => $registro->whatsapp,
+            'whatsappEnlace' => $registro->enlaceWhatsapp(),
+            'email' => $registro->email,
+            'web' => $registro->web,
+            'horarios' => $registro->horarios,
             'notas' => $registro->notas,
             'esSemilla' => $registro->esSemilla(),
             /*
@@ -108,7 +122,7 @@ class CentroController extends CatalogoBaseController
         // `safe($claves)` con claves devuelve un array plano y no un
         // ValidatedInput -a diferencia de `safe()` sin argumentos-, así que
         // acá no hay `->all()` que encadenar.
-        $centro = $this->crear($peticion->safe(['nombre', 'tipo', 'direccion', 'telefono', 'notas']));
+        $centro = $this->crear($peticion->safe(self::CAMPOS));
         $centro->medicos()->sync($peticion->medicosIds());
 
         return back()->with('exito', "Se agregó a {$centro->nombre}.");
@@ -116,7 +130,7 @@ class CentroController extends CatalogoBaseController
 
     public function update(CentroGuardarRequest $peticion, Centro $centro): RedirectResponse
     {
-        $this->actualizar($centro, $peticion->safe(['nombre', 'tipo', 'direccion', 'telefono', 'notas']));
+        $this->actualizar($centro, $peticion->safe(self::CAMPOS));
         $centro->medicos()->sync($peticion->medicosIds());
 
         return back()->with('exito', 'Se guardaron los cambios.');

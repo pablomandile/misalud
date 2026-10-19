@@ -7,6 +7,7 @@ use App\Enums\TipoAdjunto;
 use App\Models\Alergia;
 use App\Models\AplicacionVacuna;
 use App\Models\Centro;
+use App\Models\Clave;
 use App\Models\Cobertura;
 use App\Models\Consulta;
 use App\Models\Contacto;
@@ -20,6 +21,7 @@ use App\Models\OrdenEstudio;
 use App\Models\Paciente;
 use App\Models\PrescripcionOcular;
 use App\Models\Receta;
+use App\Models\RecetaMedica;
 use App\Models\RegistroEnfermedad;
 use App\Models\ResultadoEstudio;
 use App\Models\TipoMedicion;
@@ -104,9 +106,11 @@ function fichaParaBarrer(User $duenio, User $cuidador): array
         'enfermedad' => $enfermedad,
         'registro' => RegistroEnfermedad::factory()->for($enfermedad)->create(),
         'alergia' => Alergia::factory()->for($paciente)->create(),
+        'clave' => Clave::factory()->for($paciente)->create(),
         'medicion' => Medicion::factory()->for($paciente)->create(['tipo_medicion_id' => $tipo->id]),
         'tratamiento' => Tratamiento::factory()->for($paciente)->create(),
         'orden' => OrdenEstudio::factory()->for($paciente)->create(),
+        'recetaMedica' => RecetaMedica::factory()->for($paciente)->create(),
         'estudio' => $estudio,
         'resultado' => ResultadoEstudio::factory()->for($estudio)->create(),
         'prescripcion' => PrescripcionOcular::factory()->for($paciente)->create(),
@@ -136,8 +140,8 @@ function fichaParaBarrer(User $duenio, User $cuidador): array
 function parametrosDeLaFicha(): array
 {
     return [
-        'paciente', 'cobertura', 'enfermedad', 'registro', 'alergia', 'medicion',
-        'tratamiento', 'orden', 'estudio', 'resultado', 'prescripcion', 'aplicacion', 'consulta', 'turno',
+        'paciente', 'cobertura', 'enfermedad', 'registro', 'alergia', 'clave', 'medicion',
+        'tratamiento', 'orden', 'recetaMedica', 'estudio', 'resultado', 'prescripcion', 'aplicacion', 'consulta', 'turno',
         'recordatorio', 'adjunto', 'usuario',
     ];
 }
@@ -230,6 +234,13 @@ it('⚠️ B. un EXTRAÑO recibe 403 en cada ruta que recibe un registro ajeno',
 
     $noFrenadas = [];
     $revisadas = 0;
+
+    /*
+     * Con la contraseña recién confirmada: las rutas de Claves la piden ANTES de
+     * llegar a la Policy, y sin esto contestarían "confirmá tu contraseña" en vez
+     * del 403 que este barrido tiene que ver.
+     */
+    $this->withSession(['auth.password_confirmed_at' => time()]);
 
     foreach (rutasConParametros($ficha) as $ruta) {
         $revisadas++;

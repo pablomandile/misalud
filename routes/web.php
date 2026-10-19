@@ -5,6 +5,7 @@ use App\Http\Controllers\AlergiaController;
 use App\Http\Controllers\AplicacionVacunaController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\CentroController;
+use App\Http\Controllers\ClaveController;
 use App\Http\Controllers\CoberturaController;
 use App\Http\Controllers\CompartirController;
 use App\Http\Controllers\ConsultaController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\PacienteActivoController;
 use App\Http\Controllers\PacienteController;
 use App\Http\Controllers\PrescripcionOcularController;
 use App\Http\Controllers\RecetaController;
+use App\Http\Controllers\RecetaMedicaController;
 use App\Http\Controllers\RecordatorioController;
 use App\Http\Controllers\RegistroEnfermedadController;
 use App\Http\Controllers\ResultadoEstudioController;
@@ -32,6 +34,7 @@ use App\Http\Controllers\TipoMedicionController;
 use App\Http\Controllers\TratamientoController;
 use App\Http\Controllers\TurnoController;
 use App\Http\Controllers\VacunaController;
+use App\Http\Middleware\ConfirmarClaveSiLaTiene;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
@@ -267,6 +270,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('pacientes.ordenes.store');
     Route::put('ordenes/{orden}', [OrdenEstudioController::class, 'update'])->name('ordenes.update');
     Route::delete('ordenes/{orden}', [OrdenEstudioController::class, 'destroy'])->name('ordenes.destroy');
+    /*
+     * Las recetas de medicamentos de una ficha (no la bandeja de `recetas`,
+     * que es lo que llega por mail y cuelga del usuario).
+     */
+    Route::get('pacientes/{paciente}/recetas-medicas', [RecetaMedicaController::class, 'index'])
+        ->name('pacientes.recetas-medicas.index');
+    Route::post('pacientes/{paciente}/recetas-medicas', [RecetaMedicaController::class, 'store'])
+        ->name('pacientes.recetas-medicas.store');
+    Route::put('recetas-medicas/{recetaMedica}', [RecetaMedicaController::class, 'update'])
+        ->name('recetas-medicas.update');
+    Route::put('recetas-medicas/{recetaMedica}/uso', [RecetaMedicaController::class, 'uso'])
+        ->name('recetas-medicas.uso');
+    Route::delete('recetas-medicas/{recetaMedica}', [RecetaMedicaController::class, 'destroy'])
+        ->name('recetas-medicas.destroy');
+    Route::post('recetas-medicas/{recetaMedica}/adjuntos', [AdjuntoController::class, 'storeParaRecetaMedica'])
+        ->name('recetas-medicas.adjuntos.store');
+
     Route::post('ordenes/{orden}/adjuntos', [AdjuntoController::class, 'storeParaOrden'])
         ->name('ordenes.adjuntos.store');
 
@@ -379,6 +399,26 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('contactos', [ContactoController::class, 'store'])->name('contactos.store');
     Route::put('contactos/{contacto}', [ContactoController::class, 'update'])->name('contactos.update');
     Route::delete('contactos/{contacto}', [ContactoController::class, 'destroy'])->name('contactos.destroy');
+
+    /*
+     * Las claves de los sitios de salud de cada ficha. Ver y copiar una clave
+     * pide la contraseña de la cuenta reconfirmada hace menos de cinco minutos
+     * (salteada para una cuenta de Google sin contraseña). Revelar lleva además
+     * un límite: una cuenta tomada no puede vaciar todas las claves de un tirón.
+     */
+    Route::get('claves', [ClaveController::class, 'index'])->name('claves.index');
+    Route::get('claves/desbloquear', [ClaveController::class, 'desbloquear'])
+        ->middleware(ConfirmarClaveSiLaTiene::class.':password.confirm,'.ClaveController::SEGUNDOS_DESBLOQUEO)
+        ->name('claves.desbloquear');
+    Route::post('pacientes/{paciente}/claves', [ClaveController::class, 'store'])->name('pacientes.claves.store');
+    Route::put('claves/{clave}', [ClaveController::class, 'update'])->name('claves.update');
+    Route::delete('claves/{clave}', [ClaveController::class, 'destroy'])->name('claves.destroy');
+    Route::get('claves/{clave}/revelar', [ClaveController::class, 'revelar'])
+        ->middleware([
+            ConfirmarClaveSiLaTiene::class.':password.confirm,'.ClaveController::SEGUNDOS_DESBLOQUEO,
+            'throttle:30,1',
+        ])
+        ->name('claves.revelar');
 
     Route::get('envios/nuevo', [EnvioController::class, 'create'])->name('envios.create');
 

@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Enums\TipoAdjunto;
 use App\Http\Requests\OrdenEstudioGuardarRequest;
 use App\Models\Adjunto;
 use App\Models\Medico;
 use App\Models\OrdenEstudio;
 use App\Models\Paciente;
+use App\Services\AdjuntadorDeArchivos;
 use App\Support\CatalogoVisible;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -24,6 +27,8 @@ use Inertia\Response;
  */
 class OrdenEstudioController extends Controller
 {
+    public function __construct(private readonly AdjuntadorDeArchivos $adjuntador) {}
+
     public function index(Paciente $paciente): Response
     {
         Gate::authorize('view', $paciente);
@@ -62,7 +67,15 @@ class OrdenEstudioController extends Controller
     {
         Gate::authorize('crearEn', [OrdenEstudio::class, $paciente]);
 
-        $paciente->ordenesEstudio()->create($peticion->validated());
+        /*
+         * La orden y su papel juntos o nada: si el archivo no se puede guardar,
+         * no queda una orden "sin papel" que la persona crea que subió.
+         */
+        DB::transaction(function () use ($peticion, $paciente): void {
+            $orden = $paciente->ordenesEstudio()->create($peticion->safe()->except('archivos'));
+
+            $this->adjuntador->adjuntar($orden, $peticion->file('archivos', []), TipoAdjunto::OrdenEstudio);
+        });
 
         return back()->with('exito', 'Se agregó la orden.');
     }
@@ -71,7 +84,7 @@ class OrdenEstudioController extends Controller
     {
         Gate::authorize('update', $orden);
 
-        $orden->update($peticion->validated());
+        $orden->update($peticion->safe()->except('archivos'));
 
         return back()->with('exito', 'Se guardaron los cambios.');
     }

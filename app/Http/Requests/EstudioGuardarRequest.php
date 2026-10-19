@@ -8,6 +8,7 @@ use App\Models\Estudio;
 use App\Models\Paciente;
 use App\Models\User;
 use App\Rules\FechaNoFutura;
+use App\Services\AdjuntadorDeArchivos;
 use App\Support\CatalogoVisible;
 use Illuminate\Contracts\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
@@ -118,6 +119,10 @@ class EstudioGuardarRequest extends FormRequest
             ],
 
             'notas' => ['nullable', 'string', 'max:2000'],
+
+            // El papel en el mismo alta, opcional. Al editar no llega nunca:
+            // para sumar otro está la subida suelta.
+            ...AdjuntadorDeArchivos::reglasOpcionales(),
         ];
     }
 
@@ -167,6 +172,7 @@ class EstudioGuardarRequest extends FormRequest
     public function attributes(): array
     {
         return [
+            'archivos.*' => 'archivo',
             'tipo' => 'tipo de estudio',
             'fecha' => 'fecha',
             'medico_id' => 'médico',

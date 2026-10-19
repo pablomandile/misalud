@@ -13,6 +13,7 @@ use App\Models\OrdenEstudio;
 use App\Models\Paciente;
 use App\Models\PrescripcionOcular;
 use App\Models\Receta;
+use App\Models\RecetaMedica;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -91,6 +92,7 @@ class DocumentosEnviables
             $duenio instanceof Estudio => $duenio->tipo,
             $duenio instanceof PrescripcionOcular => 'del '.$duenio->fecha->format('d/m/Y'),
             $duenio instanceof Receta => $duenio->asunto,
+            $duenio instanceof RecetaMedica => $duenio->medicamento?->nombreVisible() ?? $duenio->detalle,
             $duenio instanceof AplicacionVacuna => $duenio->vacuna->nombre.' del '.$duenio->fecha->format('d/m/Y'),
             default => null,
         };
@@ -120,6 +122,7 @@ class DocumentosEnviables
             (new Estudio)->getMorphClass() => $paciente->estudios()->getQuery()->select('id'),
             (new PrescripcionOcular)->getMorphClass() => $paciente->prescripcionesOculares()->getQuery()->select('id'),
             (new AplicacionVacuna)->getMorphClass() => $paciente->aplicacionesVacuna()->getQuery()->select('id'),
+            (new RecetaMedica)->getMorphClass() => $paciente->recetasMedicas()->getQuery()->select('id'),
         ];
 
         return Adjunto::query()

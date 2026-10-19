@@ -8,6 +8,7 @@ use App\Contracts\EsCatalogo;
 use App\Enums\TipoAdjunto;
 use App\Http\Requests\MedicamentoGuardarRequest;
 use App\Models\Medicamento;
+use App\Models\RecetaMedica;
 use App\Models\Tratamiento;
 use App\Support\UsoDeCatalogo;
 use Illuminate\Database\Eloquent\Model;
@@ -109,6 +110,7 @@ class MedicamentoController extends CatalogoBaseController
     {
         return [
             new UsoDeCatalogo('tratamiento', 'tratamientos', Tratamiento::class, 'medicamento_id'),
+            new UsoDeCatalogo('receta', 'recetas', RecetaMedica::class, 'medicamento_id'),
         ];
     }
 

@@ -365,3 +365,39 @@ it('exige sesión', function (): void {
 
     $this->get(route('pacientes.ordenes.index', $paciente))->assertRedirect(route('login'));
 });
+
+it('sube el papel en el mismo alta de la orden', function (): void {
+    Storage::fake('local');
+    [$usuario, $paciente] = fichaConOrdenes();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.ordenes.store', $paciente), [
+            'estudio_solicitado' => 'Ecografía abdominal',
+            'fecha' => now()->toDateString(),
+            'estado' => 'pendiente',
+            'archivos' => [papelDePrueba()],
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    $orden = $paciente->ordenesEstudio()->sole();
+
+    expect($orden->adjuntos()->count())->toBe(1)
+        ->and($orden->adjuntos()->first()->tipo)->toBe(TipoAdjunto::OrdenEstudio);
+});
+
+it('si el papel no es válido no queda una orden sin él', function (): void {
+    Storage::fake('local');
+    [$usuario, $paciente] = fichaConOrdenes();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.ordenes.store', $paciente), [
+            'estudio_solicitado' => 'Ecografía abdominal',
+            'fecha' => now()->toDateString(),
+            'estado' => 'pendiente',
+            'archivos' => [UploadedFile::fake()->createWithContent('virus.html', '<script>alert(1)</script>')],
+        ])
+        ->assertSessionHasErrors('archivos.0');
+
+    expect($paciente->ordenesEstudio()->count())->toBe(0);
+});
