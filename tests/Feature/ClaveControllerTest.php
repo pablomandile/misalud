@@ -258,3 +258,23 @@ it('la descarga de datos trae las claves descifradas, solo de las fichas propias
         ->and(str_contains(json_encode(json_decode($datos, true)), json_encode(CANARIO_CLAVE)))->toBeTrue()
         ->and($datos)->not->toContain('Clave-De-Otra-Ficha-77');
 });
+
+it('distingue las claves propias de las que le compartieron, con las propias primero', function (): void {
+    $yo = User::factory()->create();
+    $duenio = User::factory()->create(['name' => 'Lucía Gómez']);
+
+    $compartida = Paciente::factory()->for($duenio, 'usuario')->create(['nombre' => 'Aaa Mamá']);
+    $compartida->cuidadores()->attach($yo, ['rol' => RolPaciente::Cuidador->value]);
+    Paciente::factory()->for($yo, 'usuario')->create(['nombre' => 'Zzz Yo']);
+
+    $this->actingAs($yo)->get(route('claves.index'))
+        ->assertInertia(fn ($p) => $p
+            ->where('pacientes.0.nombre', 'Zzz Yo')
+            ->where('pacientes.0.propia', true)
+            ->where('pacientes.0.compartidaPor', null)
+            ->where('pacientes.1.nombre', 'Aaa Mamá')
+            ->where('pacientes.1.propia', false)
+            ->where('pacientes.1.compartidaPor', 'Lucía Gómez')
+            ->where('pacientes.1.rolEtiqueta', 'Cuidador')
+        );
+});

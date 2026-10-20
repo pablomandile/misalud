@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Enums\RolPaciente;
 use App\Http\Requests\ClaveGuardarRequest;
 use App\Models\Clave;
 use App\Models\Paciente;
@@ -40,16 +41,25 @@ class ClaveController extends Controller
         $pacientes = $usuario->pacientes()
             ->with(['claves', 'cuidadores'])
             ->get()
-            // Cifrados: el orden se resuelve acá, no en SQL.
-            ->sortBy(fn (Paciente $paciente): string => mb_strtolower($paciente->nombre))
+            // Las propias primero y después las compartidas; dentro de cada
+            // grupo, por nombre. Cifrados: el orden se resuelve acá, no en SQL.
+            ->sortBy(fn (Paciente $paciente): string => ($paciente->rolDe($usuario) === RolPaciente::Propietario ? '0' : '1').mb_strtolower($paciente->nombre))
             ->values()
             ->map(function (Paciente $paciente) use ($usuario): array {
-                $puedeEditar = $paciente->rolDe($usuario)?->puedeEditar() ?? false;
+                $rol = $paciente->rolDe($usuario);
+                $puedeEditar = $rol?->puedeEditar() ?? false;
+                $propia = $rol === RolPaciente::Propietario;
 
                 return [
                     'id' => $paciente->id,
                     'nombre' => $paciente->nombre,
                     'puedeEditar' => $puedeEditar,
+                    // Para decir de quién es: «Mía» o «Compartida por Fulano».
+                    'propia' => $propia,
+                    'rolEtiqueta' => $rol?->etiqueta(),
+                    'compartidaPor' => $propia ? null : $paciente->cuidadores
+                        ->first(fn ($c): bool => $c->getRelationValue('pivot')?->getAttribute('rol') === RolPaciente::Propietario->value)
+                        ?->name,
                     'claves' => $paciente->claves
                         ->sortBy(fn (Clave $clave): string => mb_strtolower($clave->sitio))
                         ->values()

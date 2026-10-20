@@ -133,3 +133,25 @@ it('el médico de la ficha compartida con correo es un destinatario', function (
 
     expect($libreta->resolver($cuidador, "medico:{$usado->id}")?->email)->toBe('usada@consultorio.test');
 });
+
+it('muestra TODOS los médicos y centros que usa la ficha, no solo el primero', function (): void {
+    $duenio = User::factory()->create();
+    $cuidador = User::factory()->create();
+    $mama = Paciente::factory()->for($duenio, 'usuario')->create();
+    $mama->cuidadores()->attach($cuidador->id, ['rol' => RolPaciente::Cuidador->value]);
+
+    $medicos = collect([1, 2, 3])->map(fn (int $i) => Medico::factory()->for($duenio, 'usuario')->create(['nombre' => "Médico $i"]));
+    $centros = collect([1, 2, 3])->map(fn (int $i) => Centro::factory()->for($duenio, 'usuario')->create(['nombre' => "Centro $i"]));
+
+    Estudio::factory()->for($mama)->create(['medico_id' => $medicos[0]->id, 'centro_id' => $centros[0]->id]);
+    Estudio::factory()->for($mama)->create(['medico_id' => $medicos[1]->id, 'centro_id' => $centros[1]->id]);
+    Turno::factory()->for($mama)->create(['medico_id' => $medicos[2]->id, 'centro_id' => $centros[2]->id]);
+
+    $this->actingAs($cuidador)
+        ->get(route('medicos.index', ['ficha' => $mama->id]))
+        ->assertInertia(fn ($p) => $p->has('registros', 3));
+
+    $this->actingAs($cuidador)
+        ->get(route('centros.index', ['ficha' => $mama->id]))
+        ->assertInertia(fn ($p) => $p->has('registros', 3));
+});

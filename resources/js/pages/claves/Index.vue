@@ -58,6 +58,10 @@ type FichaConClaves = {
     id: number;
     nombre: string;
     puedeEditar: boolean;
+    /** Si la ficha es de esta cuenta (es la propietaria) o se la compartieron. */
+    propia: boolean;
+    rolEtiqueta: string | null;
+    compartidaPor: string | null;
     claves: Clave[];
 };
 
@@ -277,104 +281,129 @@ const claveABorrar = ref<Clave | null>(null);
             </p>
         </div>
 
-        <Card
-            v-for="ficha in pacientes"
-            :id="`paciente-${ficha.id}`"
-            :key="ficha.id"
-            class="scroll-mt-4 gap-0 overflow-hidden py-0"
-        >
-            <div
-                class="flex flex-wrap items-center gap-3 bg-linear-to-br from-limon/60 to-card px-5 py-4"
+        <template v-for="(ficha, i) in pacientes" :key="ficha.id">
+            <!-- Qué claves son mías y cuáles me las compartió un familiar. -->
+            <h2
+                v-if="i === 0 || pacientes[i - 1].propia !== ficha.propia"
+                class="pt-2 text-sm font-medium text-muted-foreground"
             >
-                <h2
-                    class="min-w-[9rem] flex-1 text-lg font-semibold wrap-break-word"
-                >
-                    {{ ficha.nombre }}
-                </h2>
-                <Button
-                    v-if="ficha.puedeEditar"
-                    variant="outline"
-                    class="bg-card/80"
-                    @click="abrirAlta(ficha)"
-                >
-                    <Plus />
-                    Agregar una clave
-                </Button>
-            </div>
-
-            <p
-                v-if="ficha.claves.length === 0"
-                class="px-5 py-4 text-sm text-muted-foreground"
+                {{ ficha.propia ? 'Mis claves' : 'Claves que me compartieron' }}
+            </h2>
+            <Card
+                :id="`paciente-${ficha.id}`"
+                class="scroll-mt-4 gap-0 overflow-hidden py-0"
             >
-                Sin datos.
-            </p>
-
-            <ul v-else class="divide-y">
-                <li
-                    v-for="clave in ficha.claves"
-                    :key="clave.id"
-                    class="space-y-3 px-5 py-4"
+                <div
+                    class="flex flex-wrap items-center gap-3 bg-linear-to-br from-limon/60 to-card px-5 py-4"
                 >
-                    <div class="min-w-0 space-y-1">
-                        <p class="font-medium wrap-break-word">
-                            {{ clave.sitio }}
-                        </p>
-                        <p
-                            v-if="clave.usuario"
-                            class="text-sm break-all text-muted-foreground"
-                        >
-                            Usuario: {{ clave.usuario }}
-                        </p>
-                        <p
-                            v-if="mostradas.has(clave.id)"
-                            class="rounded-md bg-muted px-3 py-2 font-mono text-base break-all"
-                            aria-live="polite"
-                        >
-                            {{ mostradas.get(clave.id) }}
-                        </p>
-                        <p
-                            v-if="clave.notas"
-                            class="text-sm wrap-break-word whitespace-pre-line"
-                        >
-                            {{ clave.notas }}
+                    <div class="min-w-[9rem] flex-1">
+                        <h3 class="text-lg font-semibold wrap-break-word">
+                            {{ ficha.nombre }}
+                        </h3>
+                        <p class="text-sm text-muted-foreground">
+                            <template v-if="ficha.propia">Ficha mía</template>
+                            <template v-else>
+                                Compartida<span v-if="ficha.compartidaPor">
+                                    por {{ ficha.compartidaPor }}</span
+                                >
+                                · {{ ficha.rolEtiqueta }}
+                            </template>
                         </p>
                     </div>
+                    <Button
+                        v-if="ficha.puedeEditar"
+                        variant="outline"
+                        class="bg-card/80"
+                        @click="abrirAlta(ficha)"
+                    >
+                        <Plus />
+                        Agregar una clave
+                    </Button>
+                </div>
 
-                    <div v-if="ficha.puedeEditar" class="flex flex-wrap gap-2">
-                        <template v-if="desbloqueado">
-                            <Button
-                                variant="outline"
-                                @click="alternarMostrar(clave)"
+                <p
+                    v-if="ficha.claves.length === 0"
+                    class="px-5 py-4 text-sm text-muted-foreground"
+                >
+                    Sin datos.
+                </p>
+
+                <ul v-else class="divide-y">
+                    <li
+                        v-for="clave in ficha.claves"
+                        :key="clave.id"
+                        class="space-y-3 px-5 py-4"
+                    >
+                        <div class="min-w-0 space-y-1">
+                            <p class="font-medium wrap-break-word">
+                                {{ clave.sitio }}
+                            </p>
+                            <p
+                                v-if="clave.usuario"
+                                class="text-sm break-all text-muted-foreground"
                             >
-                                <EyeOff v-if="mostradas.has(clave.id)" />
-                                <Eye v-else />
-                                {{
-                                    mostradas.has(clave.id)
-                                        ? 'Ocultar'
-                                        : 'Mostrar'
-                                }}
-                            </Button>
-                            <Button variant="outline" @click="copiar(clave)">
-                                <Copy />
-                                Copiar
-                            </Button>
-                        </template>
-                        <Button variant="ghost" @click="abrirEdicion(clave)">
-                            Editar
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            class="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            :aria-label="`Borrar la clave de ${clave.sitio}`"
-                            @click="claveABorrar = clave"
+                                Usuario: {{ clave.usuario }}
+                            </p>
+                            <p
+                                v-if="mostradas.has(clave.id)"
+                                class="rounded-md bg-muted px-3 py-2 font-mono text-base break-all"
+                                aria-live="polite"
+                            >
+                                {{ mostradas.get(clave.id) }}
+                            </p>
+                            <p
+                                v-if="clave.notas"
+                                class="text-sm wrap-break-word whitespace-pre-line"
+                            >
+                                {{ clave.notas }}
+                            </p>
+                        </div>
+
+                        <div
+                            v-if="ficha.puedeEditar"
+                            class="flex flex-wrap gap-2"
                         >
-                            <Trash2 class="size-4" />
-                        </Button>
-                    </div>
-                </li>
-            </ul>
-        </Card>
+                            <template v-if="desbloqueado">
+                                <Button
+                                    variant="outline"
+                                    @click="alternarMostrar(clave)"
+                                >
+                                    <EyeOff v-if="mostradas.has(clave.id)" />
+                                    <Eye v-else />
+                                    {{
+                                        mostradas.has(clave.id)
+                                            ? 'Ocultar'
+                                            : 'Mostrar'
+                                    }}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    @click="copiar(clave)"
+                                >
+                                    <Copy />
+                                    Copiar
+                                </Button>
+                            </template>
+                            <Button
+                                variant="ghost"
+                                @click="abrirEdicion(clave)"
+                            >
+                                Editar
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                class="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                :aria-label="`Borrar la clave de ${clave.sitio}`"
+                                @click="claveABorrar = clave"
+                            >
+                                <Trash2 class="size-4" />
+                            </Button>
+                        </div>
+                    </li>
+                </ul>
+            </Card>
+        </template>
 
         <!-- Alta y edición -->
         <Sheet
