@@ -2,6 +2,7 @@
 import { Form, Head } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import InputError from '@/components/InputError.vue';
+import ReglasDeClave from '@/components/ReglasDeClave.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -61,6 +62,7 @@ const inputEmail = ref(props.email);
                     :passwordrules="passwordRules"
                 />
                 <InputError :message="errors.password" />
+                <ReglasDeClave :visible="!!errors.password" />
             </div>
 
             <div class="grid gap-2">

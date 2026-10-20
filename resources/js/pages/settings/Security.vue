@@ -3,6 +3,7 @@ import { Form, Head } from '@inertiajs/vue3';
 import SecurityController from '@/actions/App/Http/Controllers/Settings/SecurityController';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import ReglasDeClave from '@/components/ReglasDeClave.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -100,6 +101,7 @@ defineOptions({
                     :passwordrules="props.passwordRules"
                 />
                 <InputError :message="errors.password" />
+                <ReglasDeClave :visible="!!errors.password" />
             </div>
 
             <div class="grid gap-2">

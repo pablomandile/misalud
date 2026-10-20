@@ -2,6 +2,7 @@
 import { Form, Head } from '@inertiajs/vue3';
 import BotonGoogle from '@/components/BotonGoogle.vue';
 import InputError from '@/components/InputError.vue';
+import ReglasDeClave from '@/components/ReglasDeClave.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
@@ -77,6 +78,7 @@ defineOptions({
                     :passwordrules="passwordRules"
                 />
                 <InputError :message="errors.password" />
+                <ReglasDeClave :visible="!!errors.password" />
             </div>
 
             <div class="grid gap-2">
