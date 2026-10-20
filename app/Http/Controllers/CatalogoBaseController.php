@@ -162,6 +162,8 @@ abstract class CatalogoBaseController extends Controller
             'registros' => $registros,
             'fichasCompartidas' => CatalogoDeLaFicha::fichasCompartidas($usuario),
             'ficha' => $ficha === null ? null : ['id' => $ficha->id, 'nombre' => $ficha->nombre],
+            // Si la solapa trae toda la lista del dueño o solo lo que usa la ficha.
+            'fichaCompleta' => CatalogoDeLaFicha::esCompleto($modelo),
             ...$this->propsExtra(),
         ]);
     }

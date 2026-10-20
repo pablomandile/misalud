@@ -64,6 +64,7 @@ defineProps<{
     registros: Farmacia[];
     fichasCompartidas: { id: number; nombre: string }[];
     ficha: { id: number; nombre: string } | null;
+    fichaCompleta: boolean;
 }>();
 
 defineOptions({
@@ -113,6 +114,7 @@ function enlaceTelefono(telefono: string): string {
         <SolapasDeCatalogo
             :fichas="fichasCompartidas"
             :ficha="ficha"
+            :completa="fichaCompleta"
             :enlace="
                 (id) =>
                     FarmaciaController.index(id ? { query: { ficha: id } } : {})
@@ -125,7 +127,11 @@ function enlaceTelefono(telefono: string): string {
         >
             <Cross class="mx-auto size-8 text-muted-foreground" />
             <p v-if="ficha" class="mt-3 text-sm text-muted-foreground">
-                La ficha de {{ ficha.nombre }} todavía no usa ninguno.
+                {{
+                    fichaCompleta
+                        ? `Quien comparte la ficha de ${ficha.nombre} todavía no cargó ninguno.`
+                        : `La ficha de ${ficha.nombre} todavía no usa ninguno.`
+                }}
             </p>
             <p v-else class="mt-3 text-sm text-muted-foreground">
                 Todavía no agregaste ninguna farmacia.

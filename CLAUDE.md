@@ -940,25 +940,28 @@ FK que son metadato (`medico_id`, `centro_id`) se dejaban ir con `nullOnDelete`.
 **ya no se dejan ir**: frenan el borrado. Las FK siguen con `nullOnDelete` en la base como última
 red, pero la app no llega a usarla.
 
-### Lo que usa una ficha compartida: solapas en cada catálogo (decisión del usuario, "opción B")
+### Solapas por ficha compartida en cada catálogo (decisión del usuario)
 
 Los catálogos son de la cuenta, así que a quien le comparten una ficha la historia le muestra
 "Dra. López" en los estudios pero Médicos le aparece vacía. Cada catálogo tiene solapas: **«Míos»** y
-una **«De Marta»** por cada ficha compartida (`SolapasDeCatalogo`, `?ficha=`), donde se ve **lo que
-usa esa ficha**, sea de quien sea, en solo lectura y con «Copiar» a la lista propia.
+una **«De Marta»** por cada ficha compartida (`SolapasDeCatalogo`, `?ficha=`), en solo lectura y con
+«Copiar» a la lista propia. Qué muestra la solapa depende del catálogo (`CatalogoDeLaFicha`):
 
-- `CatalogoDeLaFicha::ids()` sale de los mismos `usos()` de cada controlador (todas esas tablas
-  tienen `paciente_id`): una FK nueva declarada ahí entra sola. Lo de la papelera no cuenta.
-- **No expone nada que no se vea ya en la ficha.** El resto del catálogo del dueño (los médicos de
-  otros familiares) sigue siendo suyo: por eso no se eligió mostrar el catálogo entero del dueño.
-- `CatalogoPolicy::view()` suma "lo usa una ficha que esta persona ve": es lo que habilita
-  «Copiar». Editar y borrar siguen siendo solo del dueño.
+- **Médicos, centros y farmacias: la lista COMPLETA del dueño de la ficha.** Se probó primero "solo lo
+  que usa la ficha" y dejaba afuera al médico cargado y todavía sin usar, así que el usuario eligió
+  compartir la agenda entera. ⚠️ **Compartir una ficha comparte esa agenda**, incluidos los contactos
+  de otros familiares del dueño: el panel de invitar lo avisa. Es del dueño de ESA ficha (el pivote
+  `paciente_usuario`), nunca de un extraño ni la propia lista de quien mira.
+- **Medicamentos, vacunas y variables: solo lo que usa la ficha**, de los mismos `usos()` de cada
+  controlador (todas esas tablas tienen `paciente_id`): una FK nueva declarada ahí entra sola. Lo de la
+  papelera no cuenta.
+- `CatalogoPolicy::view()` suma "está entre lo que ve de una ficha": es lo que habilita «Copiar».
+  Editar y borrar siguen siendo solo del dueño.
 - `soloLectura` lo agrega `CatalogoBaseController::index()` a cada fila (`usuario_id` ajeno: una
-  semilla o lo del dueño), así ninguna pantalla lo calcula por su cuenta.
-- Contactos y los destinatarios de un envío suman lo mismo (`visiblesConFichas()`); en Contactos
-  sin enlace para editar.
-- Límite conocido: un médico que el dueño cargó y todavía no usó en esa ficha no aparece. Las
-  farmacias no aparecen nunca: ningún registro de la historia apunta a una farmacia.
+  semilla o lo del dueño), así ninguna pantalla lo calcula por su cuenta. `fichaCompleta` dice qué
+  texto poner.
+- Contactos y los destinatarios de un envío suman lo mismo (`visiblesConFichas()`); en Contactos sin
+  enlace para editar.
 
 ### Farmacias: el sexto, también sin decisiones nuevas
 

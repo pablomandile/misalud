@@ -21,21 +21,26 @@ use App\Models\User;
 use App\Models\Vacuna;
 use Illuminate\Contracts\Database\Query\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 /**
- * Lo del catálogo que usa una ficha: los médicos de sus estudios y turnos, los
- * centros, los medicamentos que toma, las vacunas que se dio.
+ * Lo del catálogo del dueño que ve quien tiene una ficha compartida: los
+ * catálogos son de cada cuenta, así que sin esto el cuidador veía la historia
+ * con el nombre del médico pero la pantalla Médicos vacía.
  *
- * Es lo que ve de una ficha compartida quien no es su dueño (decisión del
- * usuario, "opción B"): los catálogos son de cada cuenta, así que sin esto el
- * cuidador veía la historia con el nombre del médico pero la pantalla Médicos
- * vacía. **No expone nada que no se vea ya en la ficha**: sale de las mismas
- * referencias que muestra la historia. El resto del catálogo del dueño (los
- * médicos de otros familiares) sigue siendo suyo.
+ * Dos criterios, decididos por el usuario:
  *
- * Dónde se usa cada catálogo ya lo declara su controlador en `usos()`, y todas
- * esas tablas cuelgan del paciente por `paciente_id`: una FK nueva sumada a
- * `usos()` entra acá sola.
+ * - **Médicos, centros y farmacias: la lista COMPLETA del dueño** de la ficha
+ *   (`COMPLETOS`). Son la agenda de contactos de la familia, y el límite de
+ *   "solo lo usado" dejaba afuera al médico cargado y todavía sin usar.
+ *   ⚠️ **Compartir una ficha comparte esa agenda**, incluidos los contactos de
+ *   otros familiares del dueño. Es una decisión consciente, y las invitaciones
+ *   lo dicen.
+ * - **Medicamentos, vacunas y variables: solo lo que usa la ficha.** Sale de
+ *   las mismas referencias que muestra la historia, así que no expone nada que
+ *   no se vea ya. Dónde se usa cada uno lo declara su controlador en `usos()`
+ *   (todas esas tablas cuelgan del paciente por `paciente_id`): una FK nueva
+ *   sumada ahí entra sola.
  */
 final class CatalogoDeLaFicha
 {
@@ -50,8 +55,17 @@ final class CatalogoDeLaFicha
     ];
 
     /**
-     * Los ids del catálogo que usan estas fichas. Lo que está en la papelera
-     * no cuenta: no se ve en la ficha.
+     * Los catálogos que se comparten enteros con la ficha: la agenda de
+     * contactos del dueño.
+     *
+     * @var list<class-string<Model>>
+     */
+    public const COMPLETOS = [Medico::class, Centro::class, Farmacia::class];
+
+    /**
+     * Los ids del catálogo que ve quien tiene estas fichas: todo lo del dueño
+     * (`COMPLETOS`) o lo que la ficha usa. Lo que está en la papelera no
+     * cuenta.
      *
      * @param  class-string<Model>  $modelo
      * @param  list<int>  $pacientes
@@ -61,6 +75,19 @@ final class CatalogoDeLaFicha
     {
         if ($pacientes === [] || ! isset(self::CONTROLADORES[$modelo])) {
             return [];
+        }
+
+        if (in_array($modelo, self::COMPLETOS, true)) {
+            $duenios = DB::table('paciente_usuario')
+                ->whereIn('paciente_id', $pacientes)
+                ->where('rol', RolPaciente::Propietario->value)
+                ->pluck('usuario_id')
+                ->all();
+
+            return array_values(array_map('intval', $modelo::query()
+                ->whereIn('usuario_id', $duenios)
+                ->pluck('id')
+                ->all()));
         }
 
         /** @var list<UsoDeCatalogo> $usos */
@@ -110,6 +137,17 @@ final class CatalogoDeLaFicha
         return function ($consulta) use ($usuario, $ids): void {
             $consulta->where(CatalogoVisible::para($usuario->id))->orWhereIn('id', $ids);
         };
+    }
+
+    /**
+     * Si la solapa de este catálogo muestra la lista completa del dueño o solo
+     * lo que usa la ficha: lo necesita el texto de la pantalla.
+     *
+     * @param  class-string<Model>  $modelo
+     */
+    public static function esCompleto(string $modelo): bool
+    {
+        return in_array($modelo, self::COMPLETOS, true);
     }
 
     /**

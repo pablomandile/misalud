@@ -4,9 +4,9 @@ import type { RouteDefinition } from '@/wayfinder';
 
 /*
  * Las solapas de un catálogo: «Míos» y una por cada ficha que le compartieron
- * a esta persona. En la de una ficha se ve lo que usa esa ficha (los médicos de
- * sus estudios y turnos, sus centros, sus medicamentos), sea de quien sea, en
- * solo lectura. Ver `CatalogoDeLaFicha`.
+ * a esta persona. En la de una ficha se ve, en solo lectura, la lista completa de
+ * quien la comparte (médicos, centros, farmacias) o lo que usa esa ficha
+ * (medicamentos, vacunas, variables). Ver `CatalogoDeLaFicha`.
  *
  * Botones y no un desplegable, como el resto de los selectores de ficha. Sin
  * fichas compartidas no se dibuja.
@@ -14,6 +14,8 @@ import type { RouteDefinition } from '@/wayfinder';
 defineProps<{
     fichas: { id: number; nombre: string }[];
     ficha: { id: number; nombre: string } | null;
+    /** La lista completa de quien comparte, o solo lo que usa la ficha. */
+    completa: boolean;
     enlace: (ficha: number | null) => RouteDefinition<'get'>;
 }>();
 
@@ -46,8 +48,13 @@ const clase = (activa: boolean) =>
             </Link>
         </nav>
         <p v-if="ficha" class="text-sm text-muted-foreground">
-            Lo que figura en la ficha de {{ ficha.nombre }}. Se puede mirar;
-            para cambiar un dato, copialo a tu lista.
+            <template v-if="completa">
+                La lista de quien comparte la ficha de {{ ficha.nombre }}.
+            </template>
+            <template v-else>
+                Lo que figura en la ficha de {{ ficha.nombre }}.
+            </template>
+            Se puede mirar; para cambiar un dato, copialo a tu lista.
         </p>
     </div>
 </template>

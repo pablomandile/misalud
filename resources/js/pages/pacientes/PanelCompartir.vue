@@ -174,6 +174,11 @@ function alCerrar(abierto: boolean): void {
                 <section v-if="paciente.esPropietario" class="space-y-4">
                     <h3 class="font-medium">Invitar a alguien</h3>
 
+                    <p class="text-sm text-muted-foreground">
+                        Quien acepte ve esta ficha y también tu lista de
+                        médicos, centros y farmacias, en solo lectura.
+                    </p>
+
                     <Form
                         v-bind="
                             CompartirController.invitar.form({
