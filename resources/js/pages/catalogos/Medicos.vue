@@ -43,6 +43,8 @@ type Medico = {
     telefono: string | null;
     email: string | null;
     notas: string | null;
+    /** Los nombres de los centros donde atiende. */
+    centros: string[];
     /*
      * Una semilla compartida no se edita: se copia al catálogo propio y
      * recién ahí se toca (regla 5 de CLAUDE.md). El servidor lo vuelve a
@@ -106,6 +108,12 @@ const medicoABorrar = ref<Medico | null>(null);
                             class="text-sm text-muted-foreground"
                         >
                             {{ medico.especialidad }}
+                        </p>
+                        <p
+                            v-if="medico.centros.length > 0"
+                            class="text-sm text-muted-foreground"
+                        >
+                            Atiende en {{ medico.centros.join(', ') }}
                         </p>
                         <p
                             v-if="medico.telefono"

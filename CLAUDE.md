@@ -914,6 +914,7 @@ Dónde se usa cada catálogo lo declara su controlador en `usos()`, una lista de
 | Medicamentos | tratamientos                                                                |
 | Variables    | mediciones                                                                  |
 | Vacunas      | nada, todavía (ver abajo)                                                   |
+| Farmacias    | nada: ningún registro de la historia apunta a una farmacia todavía          |
 
 ⚠️ **La papelera cuenta.** Un estudio borrado se puede restaurar, y volvería sin su médico; y
 donde la FK es `restrictOnDelete` (un tratamiento con su medicamento) la base rechazaría el borrado
@@ -938,6 +939,14 @@ intenta borrar una semilla— si ese registro tiene datos cargados.
 FK que son metadato (`medico_id`, `centro_id`) se dejaban ir con `nullOnDelete`. Desde la pantalla
 **ya no se dejan ir**: frenan el borrado. Las FK siguen con `nullOnDelete` en la base como última
 red, pero la app no llega a usarla.
+
+### Farmacias: el sexto, también sin decisiones nuevas
+
+Dirección, teléfono, WhatsApp, correo, web, horarios y notas, todo cifrado. Comparte con Centros la
+validación y la limpieza de esos datos (`ValidaDatosDeContacto`: la web sin `https://`, el correo en
+minúsculas) y el enlace de WhatsApp (`App\Support\Whatsapp::enlace()`, con el 549 delante): eran
+de Centro y se sacaron de ahí al aparecer el segundo que los necesitaba. En la tarjeta van como
+botones con texto: Llamar, WhatsApp, Correo y Web.
 
 ### Medicamentos y vacunas: el tercero y el cuarto, sin decisiones nuevas
 
@@ -2042,7 +2051,7 @@ la ficha (`DocumentoPorRevisar::visiblesPara()` y `DocumentoPorRevisarPolicy`, e
 
 ### La página de la casilla
 
-`/casilla` (en el menú, abajo) ya no configura nada: dice a qué dirección reenviar (con «Copiar»),
+`/casilla` (en el menú principal, debajo de Pacientes) ya no configura nada: dice a qué dirección reenviar (con «Copiar»),
 cómo escribir el asunto, desde qué correos te reconoce (el tuyo y el de cada ficha) y lista lo que
 quedó por revisar. La bandeja de recetas importadas antes **salió del menú**, y se llega desde acá
 si hay alguna.
@@ -2165,7 +2174,7 @@ y eso ordena todas las decisiones de la etapa.
 | `EnvioDeDocumentos`      | El mailable: `From` la app, `Reply-To` la persona           |
 | `Envio`/`ArchivoEnviado` | El historial, con **fotos del momento** y no referencias    |
 
-### ⚠️ El destino es SIEMPRE un contacto de la libreta
+### ⚠️ El destino es SIEMPRE alguien ya cargado: la libreta o el catálogo
 
 Nunca una dirección tipeada en el momento. Un tipeo en una dirección escrita apurada manda una
 historia clínica a un desconocido, sin forma de deshacerlo. En la libreta la dirección se
@@ -2173,6 +2182,18 @@ escribió una vez, con calma, y en el envío se elige por nombre — con la dire
 vista, para revisarla. **El destinatario no viene elegido** ni siquiera cuando hay uno solo, y el
 botón final dice a quién y cuántos ("Mandar 2 documentos a OSDE"), para que se lea antes de
 tocarlo.
+
+Además de la libreta, se puede elegir **un médico, un centro o una farmacia del catálogo que tenga
+correo** (decisión del usuario): también son direcciones cargadas con calma. Lo arma
+`LibretaDeDestinatarios`, que es **la única fuente para los dos lados**: `para()` es la lista que ve
+la pantalla y `resolver()` busca la clave que vino del formulario ("contacto:12", "medico:3",
+"farmacia:2") **dentro de esa misma lista**. Nunca viaja una dirección, y una clave ajena no resuelve,
+igual que una que no existe. El envío a un catálogo guarda `contacto_id` en `null`, con la foto de la
+dirección y el nombre igual que siempre.
+
+Contactos muestra esos médicos, centros y farmacias como **contactos ya cargados**, con sus botones
+para llamar, escribir o abrir la web, pero **no se editan ahí**: el enlace lleva a su pantalla, así hay
+un solo lugar donde corregir un teléfono.
 
 ### Los contactos: del usuario, pero no un catálogo, y sin soft deletes
 
@@ -2443,6 +2464,51 @@ van como **botones con texto** (WhatsApp, Correo, Web), no como datos para copia
   de que la regla `url` la mire.
 - ⚠️ `CentroController` guarda **una lista de campos** (`CAMPOS`), compartida por alta y edición.
   Estaba copiada dos veces, y un campo nuevo sumado a una sola se perdía en silencio en la otra.
+- **Las notas largas tienen su propio scroll** en la tarjeta (`max-h-32 overflow-y-auto`, con
+  `tabindex` para el teclado), en centros y farmacias: una nota de diez líneas no estira la grilla.
+- La cobertura también tiene WhatsApp (`coberturas.whatsapp`) y web (`sitio_web`, que existía y
+  ningún formulario pedía), con la misma limpieza y los mismos botones.
+- La tarjeta de un médico dice **«Atiende en …»** con los nombres de sus centros (pivote
+  `centro_medico`), solo los que la persona ve.
+
+## El paciente principal: lo que el menú abre directo
+
+Credencial, Variables y Medicamentos del menú llevan a **la ficha de quien usa la cuenta**
+(`PacientePrincipal::de()`): la que tiene el mismo correo que el login (por `email_hash`), y si
+ninguna lo tiene, la primera de la que es propietario (decisión del usuario). Cada pantalla tiene
+`SelectorDeFicha` para pasar a otra.
+
+- **Credencial** (`/credencial`, `CredencialController`): las coberturas **activas** con entidad,
+  plan y afiliado grandes y la imagen, que abre el visor. Las imágenes van por `credenciales.show`,
+  la ruta que el service worker guarda para verlas sin señal. `?paciente=` de una ficha ajena da 403,
+  no cae en silencio a otra.
+- **Variables** (`/variables`) y **Medicamentos** (`/medicamentos-del-paciente`) **redirigen** a la
+  pantalla de la ficha principal; no son pantallas nuevas.
+- **Cada variable tiene su «+ Cargar»**, con datos o sin datos todavía: abre el formulario con la
+  variable elegida y la fecha de ahora, editable. Reemplazó la fila de accesos rápidos. El catálogo
+  de tipos salió del menú (se llega con «Administrar variables») y su «Copiar» pasó a ser «+ Cargar»
+  (`/variables?cargar={id}` abre el formulario en esa variable): una semilla se usa tal cual.
+
+## Medicamentos del paciente (la tabla `tratamientos`)
+
+Lo que **toma cada paciente**. Es la tabla `tratamientos`, que en pantalla pasó a llamarse
+«Medicamentos» (decisión del usuario: por paciente, no en el catálogo). No se hizo una tabla nueva:
+duplicaría la dosis y los avisos de fin.
+
+- **El medicamento se elige de la lista o se escribe** (`<datalist>`, campo `medicamento_nombre`).
+  `TratamientoGuardarRequest::resolverMedicamentoPorNombre()` lo convierte en `medicamento_id` antes
+  de validar —primero uno propio, después la lista compartida, después lo que la ficha ya usa— y, si
+  no coincide con ninguno, el controlador lo crea en el catálogo propio. El de otra cuenta nunca
+  resuelve. Nadie tiene que «copiar» una semilla.
+- **El catálogo de medicamentos lista solo los propios** (`CatalogoBaseController::listaSemillas()`):
+  las semillas son la lista para elegir, no tarjetas. Salió del menú; se llega con «Lista de
+  medicamentos».
+- **`periodicidad`** (`PeriodicidadToma`: diaria, mensual, anual, única), ENUM en claro. `frecuencia`
+  pasó a opcional («cada 8 horas»): una toma única no tiene cada cuánto. `notas` se rotula
+  «Observaciones» y va al final del formulario.
+- **Fotos de la caja**: `Tratamiento` es el **undécimo dueño de archivos**
+  (`TipoAdjunto::CajaMedicamento`; `adjuntos.tipo` es `string(40)`, no hubo ENUM que ensanchar). En
+  el alta, o después con `tratamientos.adjuntos.store`.
 
 ## Claves
 
@@ -2680,6 +2746,26 @@ Un solo `VisorDocumento.vue` a pantalla completa para imágenes **y PDFs**, con 
   táctil: sobre un PDF blanco o una radiografía oscura no se ve y en el celular no se acierta.
 - **Uno solo por pantalla, fuera de cualquier `v-for`**: uno por archivo multiplicaría los
   overlays y los focus traps de reka-ui por la cantidad de documentos.
+- ⚠️ **No se abre desde adentro de un panel lateral.** Documentos de la ficha era un `Sheet`, y
+  el visor quedaba como una capa modal encima de otra del mismo nivel: el usuario lo reportó como
+  "no se abre a pantalla completa ni tiene botón de cerrar". Por eso Documentos pasó a pantalla
+  propia (`/pacientes/{paciente}/documentos`, `DocumentoController`), igual que las demás secciones.
+  Verificado en Chrome: el visor mide lo mismo que el viewport y la X (50 px) es lo que queda bajo
+  el dedo.
+- ⚠️ **El visor va en `z-[60]`, por encima de los paneles (`z-50`).** La credencial de una
+  cobertura sí se sigue abriendo desde su panel, y ahí estaba el mismo bug medido: al mismo nivel,
+  `elementFromPoint` sobre la X devolvía el `sheet-overlay` del panel. Con `z-[60]` la X queda
+  arriba y cierra.
+
+### Documentos de la ficha
+
+- **Nombre y descripción, opcionales** (`adjuntos.titulo`, cifrado, y `descripcion`, que ya
+  existía pero ningún formulario pedía). Sin nombre se muestra el del archivo
+  (`Adjunto::nombreVisible()`). Con varios archivos y un solo nombre, cada uno lleva su número
+  («Análisis (1 de 2)»): tres documentos que se llaman igual no se distinguen.
+- Se editan después por `PUT adjuntos/{adjunto}` (`AdjuntoActualizarRequest`), sin archivo: pide
+  `update` del adjunto, que delega en su dueño.
+- `Adjunto::paraLista()` es la forma única en que viaja un documento a la pantalla.
 - **`object-contain`, nunca `cover`**: recortar algo que la persona abrió para leer es perder
   justo lo que fue a ver.
 - **Se cierra antes de borrar** lo que está mostrando, o queda con un `src` que ya da 404.

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
-import { Activity, Copy, Plus, Trash2 } from '@lucide/vue';
+import { Form, Head, Link } from '@inertiajs/vue3';
+import { Activity, Plus, Trash2 } from '@lucide/vue';
 import { ref } from 'vue';
+import MedicionController from '@/actions/App/Http/Controllers/MedicionController';
 import TipoMedicionController from '@/actions/App/Http/Controllers/TipoMedicionController';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
@@ -157,28 +158,27 @@ function rango(min: number | null, max: number | null): string | null {
                     </div>
 
                     <div class="flex shrink-0 flex-wrap justify-end gap-1">
-                        <Form
-                            v-if="tipo.esSemilla"
-                            v-bind="
-                                TipoMedicionController.duplicar.form({
-                                    tipo_medicion: tipo.id,
-                                })
-                            "
-                            :options="{ preserveScroll: true }"
-                            v-slot="{ processing }"
-                        >
-                            <Button
-                                type="submit"
-                                variant="ghost"
-                                size="sm"
-                                :disabled="processing"
+                        <!--
+                            «+ Cargar» en vez de «Copiar»: una variable de la
+                            lista compartida ya se puede usar tal cual. Lleva a
+                            las variables del paciente principal, con el
+                            formulario abierto en esta variable y la fecha de
+                            ahora.
+                        -->
+                        <Button variant="outline" size="sm" as-child>
+                            <Link
+                                :href="
+                                    MedicionController.principal({
+                                        query: { cargar: tipo.id },
+                                    })
+                                "
+                                :aria-label="`Cargar ${tipo.nombre}`"
                             >
-                                <Copy />
-                                Copiar
-                            </Button>
-                        </Form>
-
-                        <template v-else>
+                                <Plus />
+                                Cargar
+                            </Link>
+                        </Button>
+                        <template v-if="!tipo.esSemilla">
                             <Button
                                 variant="ghost"
                                 size="sm"

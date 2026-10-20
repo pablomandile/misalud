@@ -150,6 +150,19 @@ function estaVinculado(centro: Centro, medicoId: number): boolean {
                             {{ centro.horarios }}
                         </p>
                         <!--
+                            Unas notas largas no estiran la tarjeta: se leen
+                            con su propio scroll. Con tabindex, también con el
+                            teclado.
+                        -->
+                        <p
+                            v-if="centro.notas"
+                            tabindex="0"
+                            aria-label="Notas"
+                            class="max-h-32 overflow-y-auto rounded-md bg-muted/40 p-2 text-sm whitespace-pre-line focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                        >
+                            {{ centro.notas }}
+                        </p>
+                        <!--
                             Escribir, mandar un correo o abrir la web, a un
                             toque: con texto al lado del ícono y a 44 px.
                         -->

@@ -1,7 +1,9 @@
 import {
     Activity,
     BookUser,
+    Cross,
     Building2,
+    IdCard,
     KeyRound,
     LayoutGrid,
     Mail,
@@ -13,12 +15,14 @@ import {
 } from '@lucide/vue';
 import CentroController from '@/actions/App/Http/Controllers/CentroController';
 import CasillaController from '@/actions/App/Http/Controllers/CasillaController';
+import CredencialController from '@/actions/App/Http/Controllers/CredencialController';
 import ClaveController from '@/actions/App/Http/Controllers/ClaveController';
 import ContactoController from '@/actions/App/Http/Controllers/ContactoController';
-import MedicamentoController from '@/actions/App/Http/Controllers/MedicamentoController';
+import FarmaciaController from '@/actions/App/Http/Controllers/FarmaciaController';
+import MedicionController from '@/actions/App/Http/Controllers/MedicionController';
 import MedicoController from '@/actions/App/Http/Controllers/MedicoController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
-import TipoMedicionController from '@/actions/App/Http/Controllers/TipoMedicionController';
+import TratamientoController from '@/actions/App/Http/Controllers/TratamientoController';
 import VacunaController from '@/actions/App/Http/Controllers/VacunaController';
 import { dashboard } from '@/routes';
 import { edit as editarPerfil } from '@/routes/profile';
@@ -44,6 +48,16 @@ export const destinosPrincipales: NavItem[] = [
         icon: LayoutGrid,
         tono: 'lavanda',
     },
+    /*
+     * La credencial del paciente principal (el que comparte el correo con la
+     * cuenta), a un toque: es lo que se busca apurado en un mostrador.
+     */
+    {
+        title: 'Credencial',
+        href: CredencialController.index(),
+        icon: IdCard,
+        tono: 'celeste',
+    },
     {
         title: 'Pacientes',
         href: PacienteController.index(),
@@ -51,11 +65,33 @@ export const destinosPrincipales: NavItem[] = [
         tono: 'rosa',
     },
     /*
-     * La bandeja de recetas ya no está en el menú: lo que llega por mail se
-     * guarda en la ficha de cada paciente (Recetas, Órdenes, Estudios). La
-     * casilla queda abajo, con los ajustes: explica a qué dirección reenviar y
-     * muestra lo que quedó por revisar.
+     * A qué dirección reenviar recetas, órdenes y estudios, y lo que quedó por
+     * revisar. Arriba y no con los ajustes: se usa cada vez que llega un papel.
      */
+    {
+        title: 'Casilla de recetas',
+        href: CasillaController.index(),
+        icon: Mail,
+        tono: 'durazno',
+    },
+    /*
+     * Variables y Medicamentos llevan directo a los del paciente principal
+     * (la pantalla deja cambiar de ficha). Los catálogos de tipos de variable y
+     * de medicamentos se abren desde ahí: como entradas del menú, con semillas
+     * y botones «Copiar», confundían.
+     */
+    {
+        title: 'Variables',
+        href: MedicionController.principal(),
+        icon: Activity,
+        tono: 'rosa',
+    },
+    {
+        title: 'Medicamentos',
+        href: TratamientoController.principal(),
+        icon: Pill,
+        tono: 'lavanda',
+    },
     /*
      * La libreta y, en la misma pantalla, lo que se le mandó a cada uno. Un
      * envío no arranca desde acá sino desde un documento ("Enviar" al lado de
@@ -80,10 +116,7 @@ export const destinosPrincipales: NavItem[] = [
     },
     /*
      * Los catálogos son del USUARIO, no de un paciente: por eso van al mismo
-     * nivel que Pacientes y no adentro. Ya son las cuatro entradas que este
-     * comentario anticipaba -cuatro sueltas son muchas para un menú que usan
-     * personas mayores-; agruparlas bajo "Catálogos" queda pendiente y sigue
-     * viviendo entero en este archivo el día que se haga.
+     * nivel que Pacientes y no adentro.
      */
     {
         title: 'Médicos',
@@ -98,10 +131,10 @@ export const destinosPrincipales: NavItem[] = [
         tono: 'turquesa',
     },
     {
-        title: 'Medicamentos',
-        href: MedicamentoController.index(),
-        icon: Pill,
-        tono: 'lavanda',
+        title: 'Farmacias',
+        href: FarmaciaController.index(),
+        icon: Cross,
+        tono: 'durazno',
     },
     {
         title: 'Vacunas',
@@ -109,28 +142,12 @@ export const destinosPrincipales: NavItem[] = [
         icon: Syringe,
         tono: 'limon',
     },
-    {
-        title: 'Variables',
-        href: TipoMedicionController.index(),
-        icon: Activity,
-        tono: 'rosa',
-    },
 ];
 
 /**
- * Lo que va abajo de todo: ajustes y ayuda, no el uso diario.
- *
- * La casilla de correo va acá y no arriba a propósito: se configura una vez y
- * después no se vuelve a tocar. Lo que sí es de uso diario es la bandeja de
- * recetas que esa casilla alimenta, y esa va arriba.
+ * Lo que va abajo de todo: los ajustes, no el uso diario.
  */
 export const destinosSecundarios: NavItem[] = [
-    {
-        title: 'Casilla de recetas',
-        href: CasillaController.index(),
-        icon: Mail,
-        tono: 'durazno',
-    },
     {
         title: 'Configuración',
         href: editarPerfil(),

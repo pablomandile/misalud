@@ -8,12 +8,13 @@ use App\Enums\EstadoEnvio;
 use App\Enums\TipoContacto;
 use App\Http\Requests\EnvioGuardarRequest;
 use App\Models\Adjunto;
-use App\Models\Contacto;
 use App\Models\Envio;
 use App\Models\Receta;
 use App\Models\User;
 use App\Services\DocumentosEnviables;
 use App\Services\EnviadorDeDocumentos;
+use App\Services\LibretaDeDestinatarios;
+use App\Support\Destinatario;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -82,16 +83,9 @@ class EnvioController extends Controller
                 ])
                 ->all(),
 
-            'contactos' => $usuario->contactos()
-                ->get()
-                ->sortBy(fn (Contacto $c): string => mb_strtolower($c->nombre))
-                ->values()
-                ->map(fn (Contacto $c): array => [
-                    'id' => $c->id,
-                    'nombre' => $c->nombre,
-                    'email' => $c->email,
-                    'tipoEtiqueta' => $c->tipo->etiqueta(),
-                ])
+            // La libreta y el catálogo con correo: lo único que se puede elegir.
+            'destinatarios' => app(LibretaDeDestinatarios::class)->para($usuario)
+                ->map(fn (Destinatario $d): array => $d->paraPantalla())
                 ->all(),
 
             'pacienteNombre' => $paciente?->nombre,
@@ -119,11 +113,13 @@ class EnvioController extends Controller
         /** @var User $usuario */
         $usuario = $peticion->user();
 
-        $contacto = $usuario->contactos()->findOrFail((int) $peticion->validated('contacto_id'));
+        // La validación ya comprobó que la clave está entre lo que puede elegir.
+        $destinatario = app(LibretaDeDestinatarios::class)->resolver($usuario, (string) $peticion->validated('destinatario'));
+        abort_if($destinatario === null, 422);
 
         $envio = $enviador->enviar(
             $usuario,
-            $contacto,
+            $destinatario,
             $peticion->adjuntos(),
             (string) $peticion->validated('asunto'),
             $peticion->validated('mensaje'),
@@ -143,6 +139,6 @@ class EnvioController extends Controller
         // A la libreta, donde el envío nuevo aparece arriba del historial.
         return redirect()
             ->route('contactos.index')
-            ->with('exito', "Se mandó a {$contacto->nombre}.");
+            ->with('exito', "Se mandó a {$destinatario->nombre}.");
     }
 }

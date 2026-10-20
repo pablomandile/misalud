@@ -121,4 +121,30 @@ class Adjunto extends Model implements CifraDatos
 
         return $titulo !== '' ? $titulo : $this->nombre_original;
     }
+
+    /**
+     * Cómo viaja a la pantalla un documento de la ficha. Lo usan la ficha (para
+     * el contador) y la pantalla de Documentos: una sola forma, así no se
+     * separan.
+     *
+     * La URL es la del CONTROLADOR, nunca una del disco: estos archivos están
+     * cifrados y no son públicos, y la Policy se vuelve a consultar al servirlos.
+     *
+     * @return array{id: int, nombre: string, titulo: string|null, descripcion: string|null, archivo: string, mime: string, tamanio: int, tipo: string, url: string}
+     */
+    public function paraLista(): array
+    {
+        return [
+            'id' => $this->id,
+            // El que le puso la persona, o el del archivo.
+            'nombre' => $this->nombreVisible(),
+            'titulo' => $this->titulo,
+            'descripcion' => $this->descripcion,
+            'archivo' => $this->nombre_original,
+            'mime' => $this->mime,
+            'tamanio' => $this->tamanio_bytes,
+            'tipo' => $this->tipo->etiqueta(),
+            'url' => route('adjuntos.show', $this),
+        ];
+    }
 }

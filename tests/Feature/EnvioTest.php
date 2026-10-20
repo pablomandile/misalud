@@ -12,6 +12,8 @@ use App\Models\AplicacionVacuna;
 use App\Models\Cobertura;
 use App\Models\Contacto;
 use App\Models\Envio;
+use App\Models\Farmacia;
+use App\Models\Medico;
 use App\Models\OrdenEstudio;
 use App\Models\Paciente;
 use App\Models\Receta;
@@ -155,7 +157,7 @@ it('manda el mail al contacto, con los archivos y la respuesta yendo a la person
 
     $this->actingAs($this->usuario)
         ->post(route('envios.store'), [
-            'contacto_id' => $this->contacto->id,
+            'destinatario' => 'contacto:'.$this->contacto->id,
             'adjuntos' => [$papel->id, $credencial->id],
             'asunto' => 'Documentación de Rosa Gómez',
             'mensaje' => 'Les mando la orden para autorizar.',
@@ -196,7 +198,7 @@ it('⚠️ mandar un documento AJENO da 403, y no sale nada ni queda nada', func
 
     $this->actingAs($this->usuario)
         ->post(route('envios.store'), [
-            'contacto_id' => $this->contacto->id,
+            'destinatario' => 'contacto:'.$this->contacto->id,
             'adjuntos' => [$propio->id, $ajeno->id],
             'asunto' => 'Algo',
         ])
@@ -213,7 +215,7 @@ it('⚠️ autoriza ANTES de validar: un id ajeno con otro campo inválido da 40
 
     $this->actingAs($this->usuario)
         ->post(route('envios.store'), [
-            'contacto_id' => $this->contacto->id,
+            'destinatario' => 'contacto:'.$this->contacto->id,
             'adjuntos' => [$ajeno->id],
             'asunto' => '',
         ])
@@ -226,11 +228,11 @@ it('⚠️ el destinatario tiene que ser de la libreta propia', function (): voi
 
     $this->actingAs($this->usuario)
         ->post(route('envios.store'), [
-            'contacto_id' => $ajeno->id,
+            'destinatario' => 'contacto:'.$ajeno->id,
             'adjuntos' => [$papel->id],
             'asunto' => 'Algo',
         ])
-        ->assertSessionHasErrors('contacto_id');
+        ->assertSessionHasErrors('destinatario');
 
     Mail::assertNothingSent();
 });
@@ -246,7 +248,7 @@ it('⚠️ no se puede mandar a una dirección suelta, solo a un contacto', func
             'adjuntos' => [$papel->id],
             'asunto' => 'Algo',
         ])
-        ->assertSessionHasErrors('contacto_id');
+        ->assertSessionHasErrors('destinatario');
 
     Mail::assertNothingSent();
 });
@@ -258,7 +260,7 @@ it('frena un envío que pasa del tope de tamaño, antes de mandar', function ():
 
     $this->actingAs($this->usuario)
         ->post(route('envios.store'), [
-            'contacto_id' => $this->contacto->id,
+            'destinatario' => 'contacto:'.$this->contacto->id,
             'adjuntos' => [$papel->id],
             'asunto' => 'Algo',
         ])
@@ -272,7 +274,7 @@ it('el asunto va en una sola línea: es una cabecera del mail', function (): voi
 
     $this->actingAs($this->usuario)
         ->post(route('envios.store'), [
-            'contacto_id' => $this->contacto->id,
+            'destinatario' => 'contacto:'.$this->contacto->id,
             'adjuntos' => [$papel->id],
             'asunto' => "Hola\r\nBcc: todos@spam.test",
         ])
@@ -292,7 +294,7 @@ it('⚠️ un documento BORRADO no se manda: no sale un mail vacío', function (
 
     $this->actingAs($this->usuario)
         ->post(route('envios.store'), [
-            'contacto_id' => $this->contacto->id,
+            'destinatario' => 'contacto:'.$this->contacto->id,
             'adjuntos' => [$papel->id],
             'asunto' => 'Algo',
         ])
@@ -307,7 +309,7 @@ it('un documento repetido no se manda dos veces', function (): void {
 
     $this->actingAs($this->usuario)
         ->post(route('envios.store'), [
-            'contacto_id' => $this->contacto->id,
+            'destinatario' => 'contacto:'.$this->contacto->id,
             'adjuntos' => [$papel->id, $papel->id],
             'asunto' => 'Algo',
         ])
@@ -325,7 +327,7 @@ it('si falla el envío, queda registrado como no enviado y avisa', function (): 
     $this->actingAs($this->usuario)
         ->from(route('envios.create', ['adjuntos' => [$papel->id]]))
         ->post(route('envios.store'), [
-            'contacto_id' => $this->contacto->id,
+            'destinatario' => 'contacto:'.$this->contacto->id,
             'adjuntos' => [$papel->id],
             'asunto' => 'Algo',
         ])
@@ -348,7 +350,7 @@ it('un lector de la ficha puede mandar lo que puede ver', function (): void {
 
     $this->actingAs($lector)
         ->post(route('envios.store'), [
-            'contacto_id' => $suContacto->id,
+            'destinatario' => 'contacto:'.$suContacto->id,
             'adjuntos' => [$papel->id],
             'asunto' => 'Algo',
         ])
@@ -378,7 +380,7 @@ it('guarda cifrado el historial', function (): void {
     [, $papel] = ordenConPapel($this->paciente);
 
     $this->actingAs($this->usuario)->post(route('envios.store'), [
-        'contacto_id' => $this->contacto->id,
+        'destinatario' => 'contacto:'.$this->contacto->id,
         'adjuntos' => [$papel->id],
         'asunto' => 'Asunto reservado',
     ]);
@@ -393,7 +395,7 @@ it('guarda cifrado el historial', function (): void {
 it('limita la frecuencia de envíos', function (): void {
     [, $papel] = ordenConPapel($this->paciente);
     $datos = [
-        'contacto_id' => $this->contacto->id,
+        'destinatario' => 'contacto:'.$this->contacto->id,
         'adjuntos' => [$papel->id],
         'asunto' => 'Algo',
     ];
@@ -422,4 +424,85 @@ it('el comprobante de una vacuna se ofrece para mandar, con el nombre de la vacu
     // Armando un envío desde la orden, el comprobante de la misma ficha está a mano.
     expect($documentos->junto($this->usuario, $papel)->pluck('id'))->toContain($comprobante->id)
         ->and($documentos->describir($comprobante))->toBe('Comprobante de vacuna · Antitetánica del 15/09/2026');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Destinatarios del catálogo
+|--------------------------------------------------------------------------
+*/
+
+it('ofrece los médicos, centros y farmacias con correo, y no los que no tienen', function (): void {
+    [, $papel] = ordenConPapel($this->paciente);
+    Medico::factory()->for($this->usuario, 'usuario')->create(['nombre' => 'Dra. López', 'email' => 'lopez@consultorio.test']);
+    Medico::factory()->for($this->usuario, 'usuario')->create(['nombre' => 'Dr. Sin Mail', 'email' => null]);
+    Farmacia::factory()->for($this->usuario, 'usuario')->create(['nombre' => 'Farmacia del Pueblo', 'email' => 'pedidos@pueblo.test']);
+    // La de otra persona, nunca.
+    Farmacia::factory()->create(['nombre' => 'Ajena', 'email' => 'ajena@x.test']);
+
+    $this->actingAs($this->usuario)
+        ->get(route('envios.create', ['adjuntos' => [$papel->id]]))
+        ->assertInertia(function ($p) {
+            $claves = collect($p->toArray()['props']['destinatarios'])->pluck('nombre')->all();
+
+            expect($claves)->toContain('Dra. López')
+                ->toContain('Farmacia del Pueblo')
+                ->not->toContain('Dr. Sin Mail')
+                ->not->toContain('Ajena');
+
+            return $p;
+        });
+});
+
+it('manda a una farmacia del catálogo y el historial guarda la foto', function (): void {
+    [, $papel] = ordenConPapel($this->paciente);
+    $farmacia = Farmacia::factory()->for($this->usuario, 'usuario')->create([
+        'nombre' => 'Farmacia del Pueblo',
+        'email' => 'pedidos@pueblo.test',
+    ]);
+
+    $this->actingAs($this->usuario)
+        ->post(route('envios.store'), [
+            'destinatario' => "farmacia:{$farmacia->id}",
+            'adjuntos' => [$papel->id],
+            'asunto' => 'Receta',
+        ])
+        ->assertRedirect(route('contactos.index'));
+
+    Mail::assertSent(EnvioDeDocumentos::class, fn (EnvioDeDocumentos $mail): bool => $mail->hasTo('pedidos@pueblo.test'));
+
+    $envio = Envio::sole();
+
+    expect($envio->contacto_id)->toBeNull()
+        ->and($envio->destinatario)->toBe('pedidos@pueblo.test')
+        ->and($envio->destinatario_nombre)->toBe('Farmacia del Pueblo');
+});
+
+it('⚠️ no deja mandar al médico del catálogo de otra persona', function (): void {
+    [, $papel] = ordenConPapel($this->paciente);
+    $ajeno = Medico::factory()->create(['email' => 'ajeno@x.test']);
+
+    $this->actingAs($this->usuario)
+        ->post(route('envios.store'), [
+            'destinatario' => "medico:{$ajeno->id}",
+            'adjuntos' => [$papel->id],
+            'asunto' => 'Receta',
+        ])
+        ->assertSessionHasErrors('destinatario');
+
+    Mail::assertNothingSent();
+});
+
+it('una clave inventada no resuelve a nadie', function (): void {
+    [, $papel] = ordenConPapel($this->paciente);
+
+    $this->actingAs($this->usuario)
+        ->post(route('envios.store'), [
+            'destinatario' => 'cualquiera@x.test',
+            'adjuntos' => [$papel->id],
+            'asunto' => 'Receta',
+        ])
+        ->assertSessionHasErrors('destinatario');
+
+    Mail::assertNothingSent();
 });

@@ -8,6 +8,7 @@ use App\Contracts\TieneArchivos;
 use App\Models\Adjunto;
 use App\Models\Centro;
 use App\Models\Clave;
+use App\Models\Farmacia;
 use App\Models\Medicamento;
 use App\Models\Medico;
 use App\Models\Paciente;
@@ -103,6 +104,7 @@ final class ExportadorDeDatos
                 'catalogo' => [
                     'medicos' => $this->filas(Medico::where('usuario_id', $usuario->id)->get()),
                     'centros' => $this->filas(Centro::where('usuario_id', $usuario->id)->get()),
+                    'farmacias' => $this->filas(Farmacia::where('usuario_id', $usuario->id)->get()),
                     'medicamentos' => $this->conArchivos(Medicamento::where('usuario_id', $usuario->id)->get(), 'catalogo/medicamentos'),
                     'vacunas' => $this->filas(Vacuna::where('usuario_id', $usuario->id)->get()),
                     'variables' => $this->filas(TipoMedicion::where('usuario_id', $usuario->id)->get()),

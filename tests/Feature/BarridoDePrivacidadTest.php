@@ -14,6 +14,7 @@ use App\Models\Contacto;
 use App\Models\DocumentoPorRevisar;
 use App\Models\Enfermedad;
 use App\Models\Estudio;
+use App\Models\Farmacia;
 use App\Models\Medicamento;
 use App\Models\Medicion;
 use App\Models\Medico;
@@ -128,6 +129,7 @@ function fichaParaBarrer(User $duenio, User $cuidador): array
         // Lo del USUARIO, no del paciente: solo entra en el barrido del extraño.
         'medico' => Medico::factory()->for($duenio, 'usuario')->create(),
         'centro' => Centro::factory()->for($duenio, 'usuario')->create(),
+        'farmacia' => Farmacia::factory()->for($duenio, 'usuario')->create(),
         'medicamento' => Medicamento::factory()->for($duenio, 'usuario')->create(),
         'vacuna' => Vacuna::factory()->for($duenio, 'usuario')->create(),
         'tipo_medicion' => $tipo,

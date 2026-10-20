@@ -7,9 +7,9 @@ namespace App\Services;
 use App\Enums\EstadoEnvio;
 use App\Mail\EnvioDeDocumentos;
 use App\Models\Adjunto;
-use App\Models\Contacto;
 use App\Models\Envio;
 use App\Models\User;
+use App\Support\Destinatario;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -49,7 +49,7 @@ class EnviadorDeDocumentos
      */
     public function enviar(
         User $usuario,
-        Contacto $contacto,
+        Destinatario $destinatario,
         Collection $adjuntos,
         string $asunto,
         ?string $mensaje,
@@ -63,7 +63,7 @@ class EnviadorDeDocumentos
                 ])
                 ->all());
 
-            Mail::to($contacto->email, $contacto->nombre)
+            Mail::to($destinatario->email, $destinatario->nombre)
                 ->send(new EnvioDeDocumentos($usuario, $asunto, $mensaje, $archivos));
 
             $estado = EstadoEnvio::Enviado;
@@ -76,7 +76,7 @@ class EnviadorDeDocumentos
              */
             Log::error('No se pudo mandar un envío de documentación', [
                 'usuario_id' => $usuario->id,
-                'contacto_id' => $contacto->id,
+                'destinatario' => $destinatario->origen.':'.$destinatario->id,
                 'archivos' => $adjuntos->pluck('id')->all(),
                 'excepcion' => $e::class,
             ]);
@@ -90,13 +90,15 @@ class EnviadorDeDocumentos
          * siempre en "pendiente" si el proceso se cae en el medio, y un historial
          * que miente es peor que uno que no tiene esa fila.
          */
-        return DB::transaction(function () use ($usuario, $contacto, $adjuntos, $asunto, $mensaje, $estado): Envio {
+        return DB::transaction(function () use ($usuario, $destinatario, $adjuntos, $asunto, $mensaje, $estado): Envio {
             $envio = $usuario->envios()->create([
-                'contacto_id' => $contacto->id,
+                // Solo si salió de la libreta: un médico o una farmacia del
+                // catálogo no son un contacto, y el historial guarda igual la foto.
+                'contacto_id' => $destinatario->contactoId(),
                 // Fotos del momento: si mañana se corrige el contacto, el historial
                 // tiene que seguir diciendo a dónde salió de verdad.
-                'destinatario' => $contacto->email,
-                'destinatario_nombre' => $contacto->nombre,
+                'destinatario' => $destinatario->email,
+                'destinatario_nombre' => $destinatario->nombre,
                 'asunto' => $asunto,
                 'cuerpo' => $mensaje,
                 'estado' => $estado,

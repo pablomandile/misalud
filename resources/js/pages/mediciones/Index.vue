@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
-import { Activity, ArrowLeft, Plus, Trash2 } from '@lucide/vue';
-import { computed, nextTick, ref, watch } from 'vue';
+import { Form, Head, Link } from '@inertiajs/vue3';
+import { Activity, ArrowLeft, Plus, Settings2, Trash2 } from '@lucide/vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import MedicionController from '@/actions/App/Http/Controllers/MedicionController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
+import TipoMedicionController from '@/actions/App/Http/Controllers/TipoMedicionController';
 import GraficoEvolucion from '@/components/GraficoEvolucion.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import SelectorDeFicha from '@/components/SelectorDeFicha.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -46,8 +48,10 @@ import {
  *    `type="text"` llega el texto tal cual y lo normaliza el servidor.
  * 2. La fecha se precarga con `ahoraLocal`, que viene del SERVIDOR en la
  *    zona de la cuenta, no de `new Date()`.
- * 3. Los accesos rápidos de arriba abren el formulario con la variable ya
- *    elegida y el cursor en el número: cargar un peso son dos toques.
+ * 3. Cada variable lleva su botón «+ Cargar», que abre el formulario con la
+ *    variable ya elegida, la fecha de ahora (editable) y el cursor en el
+ *    número: cargar un peso son dos toques. Las variables sin datos todavía
+ *    también lo tienen, abajo.
  */
 
 type Punto = {
@@ -122,6 +126,7 @@ type Imc = {
 
 const props = defineProps<{
     paciente: { id: number; nombre: string; puedeEditar: boolean };
+    fichas: { id: number; nombre: string }[];
     tipos: Tipo[];
     enfermedades: Array<{ id: number; nombre: string }>;
     series: Serie[];
@@ -134,7 +139,7 @@ defineOptions({
     layout: {
         breadcrumbs: [
             { title: 'Pacientes', href: PacienteController.index() },
-            { title: 'Mediciones', href: '' },
+            { title: 'Variables', href: '' },
         ],
     },
 });
@@ -150,6 +155,13 @@ const medicionABorrar = ref<Medicion | null>(null);
 const campoValor = ref<HTMLInputElement | null>(null);
 
 const tipoElegidoId = ref<number | null>(props.tipos[0]?.id ?? null);
+
+/** Las variables que todavía no tienen ninguna medición en esta ficha. */
+const sinDatos = computed<Tipo[]>(() =>
+    props.tipos.filter((t) => !props.series.some((s) => s.tipoId === t.id)),
+);
+
+const enlaceFicha = (id: number) => MedicionController.index({ paciente: id });
 
 const tipoElegido = computed<Tipo | null>(
     () => props.tipos.find((t) => t.id === tipoElegidoId.value) ?? null,
@@ -221,6 +233,24 @@ function abrirEdicion(medicion: Medicion): void {
  * su primer elemento, así que hay que pedirlo después de eso, no solo
  * después del `nextTick`.
  */
+/*
+ * `?cargar=<id>` abre el formulario en esa variable: es a donde lleva el
+ * «+ Cargar» del catálogo de variables.
+ */
+onMounted(() => {
+    const cargar = Number(
+        new URLSearchParams(window.location.search).get('cargar'),
+    );
+
+    if (
+        cargar &&
+        props.paciente.puedeEditar &&
+        props.tipos.some((t) => t.id === cargar)
+    ) {
+        abrirAlta(cargar);
+    }
+});
+
 watch(sheetAbierto, async (abierto) => {
     if (!abierto) {
         return;
@@ -231,30 +261,20 @@ watch(sheetAbierto, async (abierto) => {
 </script>
 
 <template>
-    <Head :title="`Mediciones de ${paciente.nombre}`" />
+    <Head :title="`Variables de ${paciente.nombre}`" />
 
     <div class="space-y-6">
         <Heading
             variant="small"
-            :title="`Mediciones de ${paciente.nombre}`"
-            description="Peso, presión, glucemia y todo lo que quieras seguir en el tiempo"
+            :title="`Variables de ${paciente.nombre}`"
+            description="Peso, presión, glucemia y todo lo que quieras seguir en el tiempo. Tocá «+ Cargar» en la variable para anotar una medición con su fecha."
         />
 
-        <!-- Carga rápida: la variable ya elegida, y el cursor en el número. -->
-        <div v-if="paciente.puedeEditar && tipos.length > 0" class="space-y-2">
-            <p class="text-sm text-muted-foreground">Cargar</p>
-            <div class="flex flex-wrap gap-2">
-                <Button
-                    v-for="tipo in tipos"
-                    :key="tipo.id"
-                    variant="outline"
-                    @click="abrirAlta(tipo.id)"
-                >
-                    <Plus />
-                    {{ tipo.nombre }}
-                </Button>
-            </div>
-        </div>
+        <SelectorDeFicha
+            :fichas="fichas"
+            :actual="paciente.id"
+            :enlace="enlaceFicha"
+        />
 
         <!--
             El IMC se deriva del último peso y la última altura: NO se guarda,
@@ -291,44 +311,56 @@ watch(sheetAbierto, async (abierto) => {
         >
             <Activity class="mx-auto size-8 text-muted-foreground" />
             <p class="mt-3 text-sm text-muted-foreground">
-                Todavía no cargaste ninguna medición.
+                Todavía no cargaste ninguna medición. Elegí una variable abajo y
+                tocá «+ Cargar».
             </p>
         </div>
 
         <!-- Una tarjeta por variable: gráfico arriba, lista abajo. -->
         <Card v-for="serie in series" v-else :key="serie.tipoId">
             <CardContent class="space-y-4">
-                <div>
-                    <p class="text-lg font-medium">{{ serie.nombre }}</p>
-                    <p class="text-sm text-muted-foreground">
-                        {{ serie.resumen.cantidad }}
-                        {{
-                            serie.resumen.cantidad === 1
-                                ? 'medición'
-                                : 'mediciones'
-                        }}
-                        · mínimo {{ serie.resumen.minimo }} · máximo
-                        {{ serie.resumen.maximo }} · promedio
-                        {{ serie.resumen.promedio }} {{ serie.unidad }}
-                    </p>
-                    <p
-                        v-if="
-                            referencia(
-                                serie.minNormal,
-                                serie.maxNormal,
-                                serie.unidad,
-                            )
-                        "
-                        class="text-sm text-muted-foreground"
+                <div class="flex flex-wrap items-start justify-between gap-2">
+                    <div class="min-w-0">
+                        <p class="text-lg font-medium">{{ serie.nombre }}</p>
+                        <p class="text-sm text-muted-foreground">
+                            {{ serie.resumen.cantidad }}
+                            {{
+                                serie.resumen.cantidad === 1
+                                    ? 'medición'
+                                    : 'mediciones'
+                            }}
+                            · mínimo {{ serie.resumen.minimo }} · máximo
+                            {{ serie.resumen.maximo }} · promedio
+                            {{ serie.resumen.promedio }} {{ serie.unidad }}
+                        </p>
+                        <p
+                            v-if="
+                                referencia(
+                                    serie.minNormal,
+                                    serie.maxNormal,
+                                    serie.unidad,
+                                )
+                            "
+                            class="text-sm text-muted-foreground"
+                        >
+                            {{
+                                referencia(
+                                    serie.minNormal,
+                                    serie.maxNormal,
+                                    serie.unidad,
+                                )
+                            }}
+                        </p>
+                    </div>
+                    <Button
+                        v-if="paciente.puedeEditar"
+                        variant="outline"
+                        :aria-label="`Cargar ${serie.nombre}`"
+                        @click="abrirAlta(serie.tipoId)"
                     >
-                        {{
-                            referencia(
-                                serie.minNormal,
-                                serie.maxNormal,
-                                serie.unidad,
-                            )
-                        }}
-                    </p>
+                        <Plus />
+                        Cargar
+                    </Button>
                 </div>
 
                 <!--
@@ -392,7 +424,49 @@ watch(sheetAbierto, async (abierto) => {
             </CardContent>
         </Card>
 
-        <div>
+        <!-- Las variables sin ninguna medición todavía, con su «+». -->
+        <Card v-if="tipos.length > 0 && sinDatos.length > 0">
+            <CardContent class="space-y-3">
+                <p class="font-medium">
+                    {{
+                        series.length === 0
+                            ? 'Variables para empezar a cargar'
+                            : 'Otras variables, sin datos todavía'
+                    }}
+                </p>
+                <ul class="divide-y">
+                    <li
+                        v-for="tipo in sinDatos"
+                        :key="tipo.id"
+                        class="flex items-center justify-between gap-3 py-2"
+                    >
+                        <span class="min-w-0">
+                            {{ tipo.nombre }}
+                            <span class="text-sm text-muted-foreground">
+                                ({{ tipo.unidad }})
+                            </span>
+                        </span>
+                        <Button
+                            v-if="paciente.puedeEditar"
+                            variant="outline"
+                            :aria-label="`Cargar ${tipo.nombre}`"
+                            @click="abrirAlta(tipo.id)"
+                        >
+                            <Plus />
+                            Cargar
+                        </Button>
+                    </li>
+                </ul>
+            </CardContent>
+        </Card>
+
+        <div class="flex flex-wrap gap-2">
+            <Button variant="outline" as-child>
+                <Link :href="TipoMedicionController.index()">
+                    <Settings2 />
+                    Administrar variables
+                </Link>
+            </Button>
             <Button variant="outline" as-child>
                 <a :href="PacienteController.index().url">
                     <ArrowLeft />

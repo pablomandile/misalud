@@ -470,3 +470,36 @@ it('un lector no puede renombrar un documento', function (): void {
 
     expect($adjunto->fresh()->titulo)->toBeNull();
 });
+
+it('Documentos es una pantalla propia con los documentos de la ficha', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create(['nombre' => 'Marta']);
+    adjuntoDe($paciente, ['titulo' => 'Análisis de marzo']);
+    // El de otra ficha no aparece.
+    adjuntoDe(Paciente::factory()->create());
+
+    $this->actingAs($usuario)
+        ->get(route('pacientes.documentos.index', $paciente))
+        ->assertOk()
+        ->assertInertia(fn ($p) => $p
+            ->component('documentos/Index')
+            ->where('paciente.nombre', 'Marta')
+            ->where('paciente.puedeEditar', true)
+            ->has('documentos', 1)
+            ->where('documentos.0.nombre', 'Análisis de marzo'));
+});
+
+it('un lector ve la pantalla de Documentos sin poder editar; un extraño no la ve', function (): void {
+    $paciente = Paciente::factory()->create();
+    $lector = User::factory()->create();
+    $paciente->cuidadores()->attach($lector, ['rol' => RolPaciente::Lector->value]);
+
+    $this->actingAs($lector)
+        ->get(route('pacientes.documentos.index', $paciente))
+        ->assertOk()
+        ->assertInertia(fn ($p) => $p->where('paciente.puedeEditar', false));
+
+    $this->actingAs(User::factory()->create())
+        ->get(route('pacientes.documentos.index', $paciente))
+        ->assertForbidden();
+});

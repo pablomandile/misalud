@@ -2,14 +2,18 @@
 
 declare(strict_types=1);
 
+use App\Enums\PeriodicidadToma;
 use App\Enums\RolPaciente;
+use App\Enums\TipoAdjunto;
 use App\Models\Enfermedad;
 use App\Models\Medicamento;
 use App\Models\Medico;
 use App\Models\Paciente;
 use App\Models\Tratamiento;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * @return array{0: User, 1: Paciente, 2: Medicamento}
@@ -116,12 +120,13 @@ it('un checkbox destildado desactiva el tratamiento', function (): void {
     expect($tratamiento->fresh()->activo)->toBeFalse();
 });
 
-it('exige medicamento, dosis, frecuencia e inicio', function (): void {
+it('exige medicamento, dosis e inicio; la frecuencia es opcional', function (): void {
     [$usuario, $paciente] = fichaConTratamientos();
 
     $this->actingAs($usuario)
         ->post(route('pacientes.tratamientos.store', $paciente), [])
-        ->assertSessionHasErrors(['medicamento_id', 'dosis', 'frecuencia', 'inicio']);
+        ->assertSessionHasErrors(['medicamento_id', 'dosis', 'inicio'])
+        ->assertSessionDoesntHaveErrors('frecuencia');
 });
 
 it('rechaza un fin anterior al inicio', function (): void {
@@ -370,4 +375,138 @@ it('exige sesión', function (): void {
     [, $paciente] = fichaConTratamientos();
 
     $this->get(route('pacientes.tratamientos.index', $paciente))->assertRedirect(route('login'));
+});
+
+/*
+|--------------------------------------------------------------------------
+| Medicamentos del paciente: elegir de la lista o escribirlo, toma y fotos
+|--------------------------------------------------------------------------
+*/
+
+it('elegir un medicamento de la lista por su nombre usa ese, sin copiarlo', function (): void {
+    [$usuario, $paciente] = fichaConTratamientos();
+    $semilla = Medicamento::factory()->semilla()->create(['nombre_comercial' => 'Ibuprofeno']);
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.tratamientos.store', $paciente), [
+            'medicamento_nombre' => ' ibuprofeno ',
+            'dosis' => '1 comprimido',
+            'periodicidad' => 'diaria',
+            'inicio' => '2026-09-01',
+        ])
+        ->assertSessionHasNoErrors();
+
+    $tratamiento = Tratamiento::sole();
+
+    expect($tratamiento->medicamento_id)->toBe($semilla->id)
+        ->and($tratamiento->periodicidad)->toBe(PeriodicidadToma::Diaria)
+        ->and($tratamiento->frecuencia)->toBeNull()
+        ->and(Medicamento::count())->toBe(2);
+});
+
+it('prefiere el medicamento propio a la semilla con el mismo nombre', function (): void {
+    [$usuario, $paciente, $propio] = fichaConTratamientos();
+    Medicamento::factory()->semilla()->create(['nombre_comercial' => $propio->nombre_comercial]);
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.tratamientos.store', $paciente), [
+            'medicamento_nombre' => $propio->nombre_comercial,
+            'dosis' => '1 comprimido',
+            'inicio' => '2026-09-01',
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect(Tratamiento::sole()->medicamento_id)->toBe($propio->id);
+});
+
+it('un nombre que no está en la lista se crea en el catálogo propio', function (): void {
+    [$usuario, $paciente] = fichaConTratamientos();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.tratamientos.store', $paciente), [
+            'medicamento_nombre' => 'Remedio Nuevo',
+            'dosis' => '10 gotas',
+            'periodicidad' => 'unica',
+            'inicio' => '2026-09-01',
+        ])
+        ->assertSessionHasNoErrors();
+
+    $medicamento = Tratamiento::sole()->medicamento;
+
+    expect($medicamento->nombre_comercial)->toBe('Remedio Nuevo')
+        ->and($medicamento->usuario_id)->toBe($usuario->id);
+});
+
+it('el medicamento de otra cuenta no se usa por su nombre: se crea uno propio', function (): void {
+    [$usuario, $paciente] = fichaConTratamientos();
+    $ajeno = Medicamento::factory()->create(['nombre_comercial' => 'Secreto']);
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.tratamientos.store', $paciente), [
+            'medicamento_nombre' => 'Secreto',
+            'dosis' => '1',
+            'inicio' => '2026-09-01',
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect(Tratamiento::sole()->medicamento_id)->not->toBe($ajeno->id);
+});
+
+it('rechaza una toma que no existe', function (): void {
+    [$usuario, $paciente, $medicamento] = fichaConTratamientos();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.tratamientos.store', $paciente), [
+            'medicamento_id' => $medicamento->id,
+            'dosis' => '1',
+            'periodicidad' => 'semanal',
+            'inicio' => '2026-09-01',
+        ])
+        ->assertSessionHasErrors('periodicidad');
+});
+
+it('guarda las fotos de la caja en el mismo alta', function (): void {
+    Storage::fake('local');
+    [$usuario, $paciente, $medicamento] = fichaConTratamientos();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.tratamientos.store', $paciente), [
+            'medicamento_id' => $medicamento->id,
+            'dosis' => '1',
+            'inicio' => '2026-09-01',
+            'archivos' => [UploadedFile::fake()->image('caja.jpg'), UploadedFile::fake()->image('dorso.jpg')],
+        ])
+        ->assertSessionHasNoErrors();
+
+    $tratamiento = Tratamiento::sole();
+
+    expect($tratamiento->adjuntosDe(TipoAdjunto::CajaMedicamento))->toHaveCount(2);
+
+    $this->actingAs($usuario)
+        ->get(route('pacientes.tratamientos.index', $paciente))
+        ->assertInertia(fn ($p) => $p->has('tratamientos.0.fotos', 2));
+});
+
+it('suma una foto después, y un lector no puede', function (): void {
+    Storage::fake('local');
+    [$usuario, $paciente, $medicamento] = fichaConTratamientos();
+    $tratamiento = Tratamiento::factory()->for($paciente)->create(['medicamento_id' => $medicamento->id]);
+    $lector = User::factory()->create();
+    $paciente->cuidadores()->attach($lector->id, ['rol' => RolPaciente::Lector->value]);
+
+    $this->actingAs($lector)
+        ->post(route('tratamientos.adjuntos.store', $tratamiento), [
+            'tipo' => 'caja_medicamento',
+            'archivos' => [UploadedFile::fake()->image('caja.jpg')],
+        ])
+        ->assertForbidden();
+
+    $this->actingAs($usuario)
+        ->post(route('tratamientos.adjuntos.store', $tratamiento), [
+            'tipo' => 'caja_medicamento',
+            'archivos' => [UploadedFile::fake()->image('caja.jpg')],
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect($tratamiento->adjuntos()->count())->toBe(1);
 });

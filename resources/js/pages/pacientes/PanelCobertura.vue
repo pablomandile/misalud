@@ -1,6 +1,15 @@
 <script setup lang="ts">
 import { Form, Link } from '@inertiajs/vue3';
-import { BookUser, CreditCard, FileText, Pencil, Trash2, X } from '@lucide/vue';
+import {
+    BookUser,
+    CreditCard,
+    FileText,
+    Globe,
+    MessageCircle,
+    Pencil,
+    Trash2,
+    X,
+} from '@lucide/vue';
 import { ref } from 'vue';
 import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
 import CoberturaController from '@/actions/App/Http/Controllers/CoberturaController';
@@ -159,6 +168,44 @@ function alBorrarCobertura(): void {
                                     Urgencias
                                     {{ cobertura.telefono_urgencias }}
                                 </p>
+                                <div
+                                    v-if="
+                                        cobertura.whatsappEnlace ||
+                                        cobertura.sitio_web
+                                    "
+                                    class="flex flex-wrap gap-2 py-1"
+                                >
+                                    <Button
+                                        v-if="cobertura.whatsappEnlace"
+                                        variant="outline"
+                                        size="sm"
+                                        as-child
+                                    >
+                                        <a
+                                            :href="cobertura.whatsappEnlace"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >
+                                            <MessageCircle class="size-4" />
+                                            WhatsApp
+                                        </a>
+                                    </Button>
+                                    <Button
+                                        v-if="cobertura.sitio_web"
+                                        variant="outline"
+                                        size="sm"
+                                        as-child
+                                    >
+                                        <a
+                                            :href="cobertura.sitio_web"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >
+                                            <Globe class="size-4" />
+                                            Web
+                                        </a>
+                                    </Button>
+                                </div>
                                 <!--
                                     "Los contactos pueden salir de una cobertura"
                                     (plan, paso 13.1). Sale el nombre y el tipo;
@@ -428,6 +475,40 @@ function alBorrarCobertura(): void {
                         </div>
 
                         <div class="grid gap-2">
+                            <Label :for="`whatsapp-editar-${cobertura.id}`">
+                                WhatsApp
+                            </Label>
+                            <input
+                                :id="`whatsapp-editar-${cobertura.id}`"
+                                name="whatsapp"
+                                type="tel"
+                                inputmode="tel"
+                                :value="cobertura.whatsapp"
+                                :class="campoBase"
+                            />
+                            <p class="text-sm text-muted-foreground">
+                                Con el código de área, sin el 0 ni el 15.
+                            </p>
+                            <InputError :message="errors.whatsapp" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label :for="`sitio_web-editar-${cobertura.id}`">
+                                Página web
+                            </Label>
+                            <input
+                                :id="`sitio_web-editar-${cobertura.id}`"
+                                name="sitio_web"
+                                type="text"
+                                inputmode="url"
+                                autocapitalize="none"
+                                :value="cobertura.sitio_web"
+                                :class="campoBase"
+                            />
+                            <InputError :message="errors.sitio_web" />
+                        </div>
+
+                        <div class="grid gap-2">
                             <Label
                                 :for="`vigencia_desde-editar-${cobertura.id}`"
                             >
@@ -606,6 +687,35 @@ function alBorrarCobertura(): void {
                             :class="campoBase"
                         />
                         <InputError :message="errors.telefono_urgencias" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="whatsapp-crear">WhatsApp</Label>
+                        <input
+                            id="whatsapp-crear"
+                            name="whatsapp"
+                            type="tel"
+                            inputmode="tel"
+                            :class="campoBase"
+                        />
+                        <p class="text-sm text-muted-foreground">
+                            Con el código de área, sin el 0 ni el 15.
+                        </p>
+                        <InputError :message="errors.whatsapp" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="sitio_web-crear">Página web</Label>
+                        <input
+                            id="sitio_web-crear"
+                            name="sitio_web"
+                            type="text"
+                            inputmode="url"
+                            autocapitalize="none"
+                            placeholder="www.osde.com.ar"
+                            :class="campoBase"
+                        />
+                        <InputError :message="errors.sitio_web" />
                     </div>
 
                     <div class="grid gap-2">

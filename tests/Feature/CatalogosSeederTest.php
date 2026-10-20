@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\Medicamento;
+use App\Models\Paciente;
 use App\Models\TipoMedicion;
 use App\Models\User;
 use App\Models\Vacuna;
@@ -66,11 +67,13 @@ it('las semillas se ven pero no se pueden editar ni borrar', function (): void {
     $semilla = Medicamento::whereNull('usuario_id')->dondeIndiceCiego('nombre_comercial', 'Paracetamol')->firstOrFail();
     $usuario = User::factory()->create();
 
-    // Sin ningún medicamento propio, el listado de este usuario es
-    // exactamente el de las semillas: se ven todas.
+    // Las semillas no son tarjetas del catálogo: son la lista para elegir al
+    // cargar lo que toma un paciente.
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+
     $this->actingAs($usuario)
-        ->get(route('medicamentos.index'))
-        ->assertInertia(fn ($p) => $p->has('registros', $totalDeSemillas));
+        ->get(route('pacientes.tratamientos.index', $paciente))
+        ->assertInertia(fn ($p) => $p->has('medicamentos', $totalDeSemillas));
 
     $this->actingAs($usuario)
         ->put(route('medicamentos.update', $semilla), ['nombre_comercial' => 'Intento'])

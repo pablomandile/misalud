@@ -4,23 +4,50 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Enums\PeriodicidadToma;
+use App\Enums\TipoAdjunto;
 use App\Http\Requests\TratamientoGuardarRequest;
+use App\Models\Adjunto;
 use App\Models\Enfermedad;
 use App\Models\Medicamento;
 use App\Models\Medico;
 use App\Models\Paciente;
 use App\Models\Tratamiento;
+use App\Models\User;
+use App\Services\AdjuntadorDeArchivos;
+use App\Services\PacientePrincipal;
 use App\Support\CatalogoVisible;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Los tratamientos de un paciente: qué medicamento toma, con qué dosis.
+ * Los tratamientos de un paciente: qué medicamento toma, con qué dosis. En
+ * pantalla se llaman «Medicamentos» (decisión del usuario): es lo que toma
+ * cada persona, con su toma y las fotos de la caja.
  */
 class TratamientoController extends Controller
 {
+    public function __construct(private AdjuntadorDeArchivos $adjuntador) {}
+
+    /**
+     * «Medicamentos» del menú: los del paciente principal. Sin ninguna ficha,
+     * a Pacientes, a cargar una.
+     */
+    public function principal(): RedirectResponse
+    {
+        $usuario = auth()->user();
+        assert($usuario instanceof User);
+
+        $paciente = PacientePrincipal::de($usuario);
+
+        return $paciente === null
+            ? to_route('pacientes.index')->with('error', 'Primero cargá una ficha para anotar sus medicamentos.')
+            : to_route('pacientes.tratamientos.index', $paciente);
+    }
+
     public function index(Paciente $paciente): Response
     {
         Gate::authorize('view', $paciente);
@@ -29,7 +56,7 @@ class TratamientoController extends Controller
 
         $tratamientos = $paciente->tratamientos()
             // Explícito: sin esto es una consulta por cada fila del listado.
-            ->with(['medicamento', 'medico', 'enfermedad'])
+            ->with(['medicamento', 'medico', 'enfermedad', 'adjuntos'])
             ->get()
             /*
              * Activos primero y, dentro de cada grupo, el más nuevo. En PHP:
@@ -49,6 +76,8 @@ class TratamientoController extends Controller
                 'nombre' => $paciente->nombre,
                 'puedeEditar' => $paciente->rolDe($usuario)?->puedeEditar() ?? false,
             ],
+            'fichas' => $usuario instanceof User ? PacientePrincipal::opciones($usuario) : [],
+            'periodicidades' => PeriodicidadToma::opciones(),
             'tratamientos' => $tratamientos,
             'medicamentos' => $this->medicamentosDisponibles($paciente),
             'medicos' => $this->medicosDisponibles($paciente),
@@ -61,22 +90,28 @@ class TratamientoController extends Controller
     {
         Gate::authorize('crearEn', [Tratamiento::class, $paciente]);
 
-        $paciente->tratamientos()->create([
-            ...$peticion->validated(),
-            'activo' => $peticion->boolean('activo', true),
-        ]);
+        // El medicamento (si hay que crearlo), el registro y las fotos de la
+        // caja: juntos o nada.
+        DB::transaction(function () use ($peticion, $paciente): void {
+            $tratamiento = $paciente->tratamientos()->create([
+                ...$this->datos($peticion),
+                'activo' => $peticion->boolean('activo', true),
+            ]);
 
-        return back()->with('exito', 'Se agregó el tratamiento.');
+            $this->adjuntador->adjuntar($tratamiento, $peticion->file('archivos', []), TipoAdjunto::CajaMedicamento);
+        });
+
+        return back()->with('exito', 'Se agregó el medicamento.');
     }
 
     public function update(TratamientoGuardarRequest $peticion, Tratamiento $tratamiento): RedirectResponse
     {
         Gate::authorize('update', $tratamiento);
 
-        $tratamiento->update([
-            ...$peticion->validated(),
+        DB::transaction(fn () => $tratamiento->update([
+            ...$this->datos($peticion),
             'activo' => $peticion->boolean('activo'),
-        ]);
+        ]));
 
         return back()->with('exito', 'Se guardaron los cambios.');
     }
@@ -87,7 +122,29 @@ class TratamientoController extends Controller
 
         $tratamiento->delete();
 
-        return back()->with('exito', 'Se eliminó el tratamiento.');
+        return back()->with('exito', 'Se eliminó el medicamento.');
+    }
+
+    /**
+     * Lo validado, con el `medicamento_id` resuelto: si el nombre escrito no
+     * coincidió con ninguno de la lista (ver el FormRequest), se crea en el
+     * catálogo propio de quien lo carga.
+     *
+     * @return array<string, mixed>
+     */
+    private function datos(TratamientoGuardarRequest $peticion): array
+    {
+        $datos = $peticion->safe()->except(['archivos', 'medicamento_nombre']);
+
+        if (empty($datos['medicamento_id'])) {
+            $medicamento = new Medicamento(['nombre_comercial' => $peticion->string('medicamento_nombre')->toString()]);
+            $medicamento->setAttribute('usuario_id', auth()->id());
+            $medicamento->save();
+
+            $datos['medicamento_id'] = $medicamento->id;
+        }
+
+        return $datos;
     }
 
     /**
@@ -173,6 +230,13 @@ class TratamientoController extends Controller
             'enfermedadNombre' => $tratamiento->enfermedad?->nombre,
             'dosis' => $tratamiento->dosis,
             'frecuencia' => $tratamiento->frecuencia,
+            'periodicidad' => $tratamiento->periodicidad?->value,
+            'periodicidadEtiqueta' => $tratamiento->periodicidad?->etiqueta(),
+            'fotos' => $tratamiento->adjuntos
+                ->sortBy('id')
+                ->values()
+                ->map(fn (Adjunto $adjunto): array => $adjunto->paraLista())
+                ->all(),
             'inicio' => $tratamiento->inicio->format('Y-m-d'),
             'inicioVisible' => $tratamiento->inicio->format('d/m/Y'),
             'fin' => $tratamiento->fin?->format('Y-m-d'),

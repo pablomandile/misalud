@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Enums\PeriodicidadToma;
+use App\Models\Medicamento;
 use App\Models\Paciente;
 use App\Models\Tratamiento;
+use App\Services\AdjuntadorDeArchivos;
 use App\Support\CatalogoVisible;
 use Illuminate\Contracts\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
@@ -44,6 +47,45 @@ class TratamientoGuardarRequest extends FormRequest
         if ($this->has('activo')) {
             $this->merge(['activo' => $this->boolean('activo')]);
         }
+
+        $this->resolverMedicamentoPorNombre();
+    }
+
+    /**
+     * El formulario manda el NOMBRE del medicamento, elegido de la lista o
+     * escrito a mano. Si coincide con uno que esta persona puede usar (propio
+     * primero, después la lista compartida o lo que la ficha ya usa), se
+     * convierte acá en su `medicamento_id`, antes de que la regla lo mire. Si
+     * no coincide con ninguno, queda sin id y el controlador lo crea en el
+     * catálogo propio: nadie tiene que "copiar" una semilla para usarla.
+     */
+    private function resolverMedicamentoPorNombre(): void
+    {
+        $nombre = $this->input('medicamento_nombre');
+
+        if (! is_string($nombre) || trim($nombre) === '' || $this->filled('medicamento_id')) {
+            return;
+        }
+
+        $this->merge(['medicamento_nombre' => trim($nombre)]);
+
+        $usuarioId = $this->user()?->getAuthIdentifier();
+
+        $candidatos = Medicamento::query()
+            ->where('nombre_hash', Medicamento::hashCiego($nombre))
+            ->where(fn ($ambito) => $ambito
+                ->where(CatalogoVisible::para($usuarioId))
+                ->orWhereIn('id', $this->medicamentosYaUsadosEnLaFicha())
+            )
+            ->get(['id', 'usuario_id']);
+
+        $elegido = $candidatos->firstWhere('usuario_id', $usuarioId)
+            ?? $candidatos->firstWhere('usuario_id', null)
+            ?? $candidatos->first();
+
+        if ($elegido !== null) {
+            $this->merge(['medicamento_id' => $elegido->id]);
+        }
     }
 
     /**
@@ -65,8 +107,10 @@ class TratamientoGuardarRequest extends FormRequest
              * la condición de `id` que agrega `exists` y deja pasar
              * cualquier medicamento (ver `CatalogoVisible`).
              */
+            'medicamento_nombre' => ['nullable', 'string', 'max:255'],
             'medicamento_id' => [
-                'required',
+                'required_without:medicamento_nombre',
+                'nullable',
                 'integer',
                 Rule::exists('medicamentos', 'id')->where(
                     fn (Builder $consulta) => $consulta
@@ -107,7 +151,9 @@ class TratamientoGuardarRequest extends FormRequest
             ],
 
             'dosis' => ['required', 'string', 'max:255'],
-            'frecuencia' => ['required', 'string', 'max:255'],
+            'periodicidad' => ['nullable', Rule::enum(PeriodicidadToma::class)],
+            // Opcional: una toma única no tiene "cada cuánto".
+            'frecuencia' => ['nullable', 'string', 'max:255'],
 
             'inicio' => ['required', 'date'],
 
@@ -121,6 +167,10 @@ class TratamientoGuardarRequest extends FormRequest
 
             'activo' => ['nullable', 'boolean'],
             'notas' => ['nullable', 'string', 'max:2000'],
+
+            // Las fotos de la caja, en el mismo alta. Al editar no llegan: la
+            // edición va por PUT, donde PHP no parsea el multipart.
+            ...AdjuntadorDeArchivos::reglasOpcionales(),
         ];
     }
 
@@ -187,13 +237,15 @@ class TratamientoGuardarRequest extends FormRequest
     {
         return [
             'medicamento_id' => 'medicamento',
+            'medicamento_nombre' => 'medicamento',
+            'periodicidad' => 'toma',
             'medico_id' => 'médico',
             'enfermedad_id' => 'enfermedad',
             'dosis' => 'dosis',
             'frecuencia' => 'frecuencia',
             'inicio' => 'fecha de inicio',
             'fin' => 'fecha de fin',
-            'notas' => 'notas',
+            'notas' => 'observaciones',
         ];
     }
 
@@ -203,6 +255,7 @@ class TratamientoGuardarRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'medicamento_id.required_without' => 'Elegí el medicamento de la lista o escribí su nombre.',
             'medicamento_id.exists' => 'Elegí un medicamento de tu catálogo.',
             'medico_id.exists' => 'Elegí un médico de tu agenda.',
             'fin.after_or_equal' => 'La fecha de fin no puede ser anterior al inicio.',

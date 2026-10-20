@@ -498,3 +498,41 @@ it('una credencial que no es una imagen ni un PDF frena el alta entera', functio
 
     expect($paciente->coberturas()->count())->toBe(0);
 });
+
+it('guarda el WhatsApp cifrado y la web con https, y arma el enlace', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.coberturas.store', $paciente), [
+            'tipo' => 'prepaga',
+            'entidad' => 'OSDE',
+            'whatsapp' => '11 2345 6789',
+            'sitio_web' => 'www.osde.com.ar',
+        ])
+        ->assertSessionHasNoErrors();
+
+    $cobertura = $paciente->coberturas()->sole();
+    $fila = (array) DB::table('coberturas')->where('id', $cobertura->id)->first();
+
+    expect($cobertura->whatsapp)->toBe('11 2345 6789')
+        ->and($cobertura->sitio_web)->toBe('https://www.osde.com.ar')
+        ->and($fila['whatsapp'])->not->toContain('2345');
+
+    $this->actingAs($usuario)
+        ->get(route('pacientes.index'))
+        ->assertInertia(fn ($p) => $p->where('pacientes.0.coberturas.0.whatsappEnlace', 'https://wa.me/5491123456789'));
+});
+
+it('rechaza un WhatsApp con letras', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.coberturas.store', $paciente), [
+            'tipo' => 'prepaga',
+            'entidad' => 'OSDE',
+            'whatsapp' => 'llamame',
+        ])
+        ->assertSessionHasErrors('whatsapp');
+});

@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Contracts\TieneArchivos;
 use App\Http\Controllers\CentroController;
+use App\Http\Controllers\FarmaciaController;
 use App\Http\Controllers\MedicamentoController;
 use App\Http\Controllers\MedicoController;
 use App\Http\Controllers\TipoMedicionController;
@@ -16,6 +17,7 @@ use App\Models\Centro;
 use App\Models\Consulta;
 use App\Models\Enfermedad;
 use App\Models\Estudio;
+use App\Models\Farmacia;
 use App\Models\MailRecibido;
 use App\Models\Medicamento;
 use App\Models\Medicion;
@@ -103,6 +105,7 @@ class VaciarPapelera extends Command
     private const CATALOGOS = [
         Medico::class => MedicoController::class,
         Centro::class => CentroController::class,
+        Farmacia::class => FarmaciaController::class,
         Medicamento::class => MedicamentoController::class,
         Vacuna::class => VacunaController::class,
         TipoMedicion::class => TipoMedicionController::class,

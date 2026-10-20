@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\Centro;
 use App\Models\Medico;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -280,4 +281,16 @@ it('el dueño borra su médico', function (): void {
 
 it('exige sesión', function (): void {
     $this->get(route('medicos.index'))->assertRedirect(route('login'));
+});
+
+it('dice en qué centros atiende, solo con los centros que la persona ve', function (): void {
+    $usuario = User::factory()->create();
+    $medico = Medico::factory()->for($usuario, 'usuario')->create();
+    $centro = Centro::factory()->for($usuario, 'usuario')->create(['nombre' => 'Clínica Norte']);
+    $ajeno = Centro::factory()->create(['nombre' => 'Ajeno']);
+    $medico->centros()->attach([$centro->id, $ajeno->id]);
+
+    $this->actingAs($usuario)
+        ->get(route('medicos.index'))
+        ->assertInertia(fn ($p) => $p->where('registros.0.centros', ['Clínica Norte']));
 });

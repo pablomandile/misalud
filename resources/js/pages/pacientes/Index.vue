@@ -23,6 +23,7 @@ import type { LucideIcon } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
 import ClaveController from '@/actions/App/Http/Controllers/ClaveController';
+import DocumentoController from '@/actions/App/Http/Controllers/DocumentoController';
 import EnfermedadController from '@/actions/App/Http/Controllers/EnfermedadController';
 import EstudioController from '@/actions/App/Http/Controllers/EstudioController';
 import MedicionController from '@/actions/App/Http/Controllers/MedicionController';
@@ -86,6 +87,8 @@ export type CoberturaMedica = {
     nro_afiliado: string | null;
     telefono: string | null;
     telefono_urgencias: string | null;
+    whatsapp: string | null;
+    whatsappEnlace: string | null;
     sitio_web: string | null;
     vigencia_desde: string | null;
     vigencia_hasta: string | null;
@@ -165,10 +168,6 @@ const pacienteABorrar = ref<Paciente | null>(null);
  * Etapa 8, en otra forma. Los sheets de editar y de borrar no la necesitan: se
  * cierran al guardar.
  */
-const idDeDocumentos = ref<number | null>(null);
-const pacienteDeDocumentos = computed(
-    () => props.pacientes.find((p) => p.id === idDeDocumentos.value) ?? null,
-);
 const idDeCoberturas = ref<number | null>(null);
 const pacienteDeCoberturas = computed(
     () => props.pacientes.find((p) => p.id === idDeCoberturas.value) ?? null,
@@ -192,7 +191,6 @@ const pacienteDeCompartir = computed(
  * documentos de la lista.
  */
 const documentoAbierto = ref<DocumentoVisible | null>(null);
-const documentoAEditar = ref<DocumentoDePaciente | null>(null);
 
 function pesoLegible(bytes: number): string {
     return bytes < 1024 * 1024
@@ -224,13 +222,13 @@ const seccionesDeLaFicha: Array<{
         ruta: (paciente) => ConsultaController.index({ paciente }),
     },
     {
-        titulo: 'Tratamientos',
+        titulo: 'Medicamentos',
         icon: Pill,
         tono: 'rosa',
         ruta: (paciente) => TratamientoController.index({ paciente }),
     },
     {
-        titulo: 'Mediciones',
+        titulo: 'Variables',
         icon: Activity,
         tono: 'menta',
         ruta: (paciente) => MedicionController.index({ paciente }),
@@ -471,10 +469,16 @@ function dniVisible(dni: string): string {
                             {{ paciente.coberturas.length }}
                         </span>
                     </button>
-                    <button
-                        type="button"
+                    <!--
+                        Documentos es una pantalla propia, como el resto de las
+                        secciones: desde un panel lateral, el visor a pantalla
+                        completa quedaba en una capa modal encima de otra.
+                    -->
+                    <Link
+                        :href="
+                            DocumentoController.index({ paciente: paciente.id })
+                        "
                         :class="baldosa"
-                        @click="idDeDocumentos = paciente.id"
                     >
                         <IconoSeccion :icon="FileText" tono="durazno" />
                         <span class="min-w-0 flex-1 leading-tight">
@@ -486,7 +490,7 @@ function dniVisible(dni: string): string {
                         <span v-if="paciente.adjuntos.length" :class="contador">
                             {{ paciente.adjuntos.length }}
                         </span>
-                    </button>
+                    </Link>
                     <!--
                         Para todos los que tienen acceso: saber con quién se
                         comparte una historia es parte de verla. Lo que cambia
@@ -807,273 +811,6 @@ function dniVisible(dni: string): string {
                 </Form>
             </SheetContent>
         </Sheet>
-
-        <!-- Documentos -->
-        <Sheet
-            :open="!!pacienteDeDocumentos"
-            @update:open="
-                (v) => {
-                    if (!v) idDeDocumentos = null;
-                }
-            "
-        >
-            <SheetContent v-if="pacienteDeDocumentos">
-                <SheetHeader>
-                    <SheetTitle>
-                        Documentos de {{ pacienteDeDocumentos.nombre }}
-                    </SheetTitle>
-                    <SheetDescription>
-                        Estudios, recetas y lo que haga falta guardar. Se
-                        guardan cifrados.
-                    </SheetDescription>
-                </SheetHeader>
-
-                <div class="flex-1 space-y-6 overflow-y-auto px-4">
-                    <ul
-                        v-if="pacienteDeDocumentos.adjuntos.length > 0"
-                        class="grid gap-2"
-                    >
-                        <li
-                            v-for="documento in pacienteDeDocumentos.adjuntos"
-                            :key="documento.id"
-                            class="flex items-center gap-2 rounded-md border p-2"
-                        >
-                            <!--
-                                Abre el visor de la pantalla; no monta uno
-                                propio.
-                            -->
-                            <button
-                                type="button"
-                                class="flex min-h-11 min-w-0 flex-1 items-center gap-3 text-left"
-                                @click="documentoAbierto = documento"
-                            >
-                                <FileText
-                                    class="size-5 shrink-0 text-muted-foreground"
-                                />
-                                <span class="min-w-0">
-                                    <span
-                                        class="block text-sm font-medium wrap-break-word"
-                                    >
-                                        {{ documento.nombre }}
-                                    </span>
-                                    <span
-                                        v-if="documento.descripcion"
-                                        class="block text-sm wrap-break-word"
-                                    >
-                                        {{ documento.descripcion }}
-                                    </span>
-                                    <span
-                                        class="block text-sm text-muted-foreground"
-                                    >
-                                        {{ documento.tipo }} ·
-                                        {{ pesoLegible(documento.tamanio) }}
-                                    </span>
-                                    <span
-                                        v-if="documento.titulo"
-                                        class="block truncate text-sm text-muted-foreground"
-                                    >
-                                        {{ documento.archivo }}
-                                    </span>
-                                </span>
-                            </button>
-
-                            <Button
-                                v-if="pacienteDeDocumentos.puedeEditar"
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                :aria-label="`Editar ${documento.nombre}`"
-                                @click="documentoAEditar = documento"
-                            >
-                                Editar
-                            </Button>
-
-                            <Form
-                                v-if="pacienteDeDocumentos.puedeEditar"
-                                v-bind="
-                                    AdjuntoController.destroy.form({
-                                        adjunto: documento.id,
-                                    })
-                                "
-                                :options="{ preserveScroll: true }"
-                                v-slot="{ processing }"
-                            >
-                                <!--
-                                    Se cierra el visor ANTES de borrar, o queda
-                                    mostrando un archivo que ya da 404.
-                                -->
-                                <Button
-                                    type="submit"
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    class="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                    :disabled="processing"
-                                    :aria-label="`Eliminar ${documento.nombre}`"
-                                    @click="documentoAbierto = null"
-                                >
-                                    <Trash2 class="size-4" />
-                                </Button>
-                            </Form>
-                        </li>
-                    </ul>
-
-                    <p v-else class="text-sm text-muted-foreground">
-                        Todavía no hay documentos cargados.
-                    </p>
-
-                    <Form
-                        v-if="pacienteDeDocumentos.puedeEditar"
-                        v-bind="
-                            AdjuntoController.store.form({
-                                paciente: pacienteDeDocumentos.id,
-                            })
-                        "
-                        reset-on-success
-                        :options="{ preserveScroll: true }"
-                        v-slot="{ errors, processing }"
-                        class="space-y-4 border-t pt-6"
-                    >
-                        <div class="grid gap-2">
-                            <Label for="tipo-adjunto">Tipo de documento</Label>
-                            <select
-                                id="tipo-adjunto"
-                                name="tipo"
-                                :class="campoUnaLinea"
-                            >
-                                <option value="otro">Documento</option>
-                                <option value="informe_estudio">Informe</option>
-                                <option value="imagen_estudio">
-                                    Imagen del estudio
-                                </option>
-                                <option value="orden_estudio">
-                                    Orden de estudio
-                                </option>
-                                <option value="receta">Receta</option>
-                                <option value="credencial">Credencial</option>
-                            </select>
-                            <InputError :message="errors.tipo" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="titulo-adjunto">
-                                Nombre (opcional)
-                            </Label>
-                            <input
-                                id="titulo-adjunto"
-                                name="titulo"
-                                type="text"
-                                placeholder="Por ejemplo: Análisis de marzo"
-                                aria-describedby="titulo-adjunto-ayuda"
-                                :class="campoUnaLinea"
-                            />
-                            <p
-                                id="titulo-adjunto-ayuda"
-                                class="text-sm text-muted-foreground"
-                            >
-                                Si lo dejás vacío, se ve el nombre del archivo.
-                            </p>
-                            <InputError :message="errors.titulo" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="descripcion-adjunto">
-                                Descripción (opcional)
-                            </Label>
-                            <textarea
-                                id="descripcion-adjunto"
-                                name="descripcion"
-                                rows="2"
-                                :class="campoTexto"
-                            ></textarea>
-                            <InputError :message="errors.descripcion" />
-                        </div>
-
-                        <SubirArchivo
-                            name="archivos[]"
-                            multiple
-                            etiqueta="Elegir documentos"
-                            :error="errors['archivos.0'] ?? errors.archivos"
-                        />
-
-                        <Button
-                            type="submit"
-                            class="w-full"
-                            :disabled="processing"
-                        >
-                            Subir
-                        </Button>
-                    </Form>
-                </div>
-            </SheetContent>
-        </Sheet>
-
-        <!--
-            Editar el nombre y la descripción de un documento ya subido. Va por
-            PUT y sin archivo: el archivo no se toca.
-        -->
-        <Dialog
-            :open="!!documentoAEditar"
-            @update:open="
-                (v) => {
-                    if (!v) documentoAEditar = null;
-                }
-            "
-        >
-            <DialogContent v-if="documentoAEditar">
-                <Form
-                    v-bind="
-                        AdjuntoController.update.form({
-                            adjunto: documentoAEditar.id,
-                        })
-                    "
-                    :options="{ preserveScroll: true }"
-                    v-slot="{ errors, processing }"
-                    class="space-y-4"
-                    @success="documentoAEditar = null"
-                >
-                    <DialogHeader class="space-y-3">
-                        <DialogTitle>Nombre y descripción</DialogTitle>
-                        <DialogDescription class="break-all">
-                            {{ documentoAEditar.archivo }}
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div class="grid gap-2">
-                        <Label for="titulo-editar">Nombre</Label>
-                        <input
-                            id="titulo-editar"
-                            name="titulo"
-                            type="text"
-                            :value="documentoAEditar.titulo ?? ''"
-                            :class="campoUnaLinea"
-                        />
-                        <InputError :message="errors.titulo" />
-                    </div>
-
-                    <div class="grid gap-2">
-                        <Label for="descripcion-editar">Descripción</Label>
-                        <textarea
-                            id="descripcion-editar"
-                            name="descripcion"
-                            rows="3"
-                            :class="campoTexto"
-                            >{{ documentoAEditar.descripcion ?? '' }}</textarea>
-                        <InputError :message="errors.descripcion" />
-                    </div>
-
-                    <DialogFooter class="gap-2">
-                        <DialogClose as-child>
-                            <Button type="button" variant="secondary">
-                                Cancelar
-                            </Button>
-                        </DialogClose>
-                        <Button type="submit" :disabled="processing">
-                            Guardar
-                        </Button>
-                    </DialogFooter>
-                </Form>
-            </DialogContent>
-        </Dialog>
 
         <!-- Borrar -->
         <Dialog

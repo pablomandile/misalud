@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\CatalogoBaseController;
 use App\Http\Controllers\CentroController;
+use App\Http\Controllers\FarmaciaController;
 use App\Http\Controllers\MedicamentoController;
 use App\Http\Controllers\MedicoController;
 use App\Http\Controllers\TipoMedicionController;
@@ -31,6 +32,7 @@ function controladoresDeCatalogo(): array
     return [
         'medicos' => MedicoController::class,
         'centros' => CentroController::class,
+        'farmacias' => FarmaciaController::class,
         'medicamentos' => MedicamentoController::class,
         'vacunas' => VacunaController::class,
         'tipos_medicion' => TipoMedicionController::class,

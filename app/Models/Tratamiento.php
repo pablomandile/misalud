@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Concerns\CifraCampos;
+use App\Concerns\TieneAdjuntos;
 use App\Contracts\CifraDatos;
 use App\Contracts\PerteneceAPaciente;
+use App\Contracts\TieneArchivos;
 use App\Database\Eloquent\ConsultaVigilada;
+use App\Enums\PeriodicidadToma;
 use App\Observers\TratamientoObserver;
 use App\Policies\RegistroClinicoPolicy;
 use Carbon\CarbonImmutable;
@@ -29,7 +32,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property int|null $medico_id
  * @property int|null $enfermedad_id
  * @property string $dosis
- * @property string $frecuencia
+ * @property string|null $frecuencia
+ * @property PeriodicidadToma|null $periodicidad
  * @property CarbonImmutable $inicio
  * @property CarbonImmutable|null $fin
  * @property bool $activo
@@ -37,7 +41,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 #[ObservedBy(TratamientoObserver::class)]
 #[UsePolicy(RegistroClinicoPolicy::class)]
-class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente
+class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente, TieneArchivos
 {
     use CifraCampos;
 
@@ -45,6 +49,12 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente
     use HasFactory;
 
     use SoftDeletes;
+
+    /*
+     * Las fotos de la caja: undécimo dueño de archivos. La autorización no
+     * cambia: subir una foto es editar el tratamiento (ver AdjuntoPolicy).
+     */
+    use TieneAdjuntos;
 
     /** @var class-string<\Illuminate\Database\Eloquent\Builder<*>> */
     protected static string $builder = ConsultaVigilada::class;
@@ -61,6 +71,7 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente
         'enfermedad_id',
         'dosis',
         'frecuencia',
+        'periodicidad',
         'inicio',
         'fin',
         'activo',
@@ -75,6 +86,7 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente
         return [
             'dosis' => 'encrypted',
             'frecuencia' => 'encrypted',
+            'periodicidad' => PeriodicidadToma::class,
             'notas' => 'encrypted',
             'inicio' => 'date',
             'fin' => 'date',

@@ -1,7 +1,16 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
-import { BookUser, Plus, Send, Trash2 } from '@lucide/vue';
-import { ref } from 'vue';
+import { Form, Head, Link } from '@inertiajs/vue3';
+import {
+    BookUser,
+    Globe,
+    Mail,
+    MessageCircle,
+    Phone,
+    Plus,
+    Send,
+    Trash2,
+} from '@lucide/vue';
+import { computed, ref } from 'vue';
 import ContactoController from '@/actions/App/Http/Controllers/ContactoController';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
@@ -55,8 +64,25 @@ type Envio = {
     archivos: string[];
 };
 
+/** Un médico, centro o farmacia del catálogo, como contacto ya cargado. */
+type DelCatalogo = {
+    clave: string;
+    grupo: string;
+    nombre: string;
+    detalle: string | null;
+    direccion: string | null;
+    telefono: string | null;
+    whatsappEnlace: string | null;
+    email: string | null;
+    web: string | null;
+    horarios: string | null;
+    /** Se editan en su propia pantalla: un solo lugar donde corregir un teléfono. */
+    editar: string;
+};
+
 const props = defineProps<{
     contactos: Contacto[];
+    delCatalogo: DelCatalogo[];
     envios: Envio[];
     tipos: Array<{ valor: string; etiqueta: string }>;
     /** Viene de "Guardar como contacto" en una cobertura. */
@@ -76,6 +102,25 @@ const campoUnaLinea =
 const sheetCrearAbierto = ref(props.precarga !== null);
 const contactoAEditar = ref<Contacto | null>(null);
 const contactoABorrar = ref<Contacto | null>(null);
+
+// Agrupados por de dónde salen. `computed`: vuelve a la misma URL al guardar.
+const grupos = computed(() => {
+    const porGrupo = new Map<string, DelCatalogo[]>();
+
+    for (const fila of props.delCatalogo) {
+        porGrupo.set(fila.grupo, [...(porGrupo.get(fila.grupo) ?? []), fila]);
+    }
+
+    return [...porGrupo.entries()].map(([titulo, filas]) => ({
+        titulo,
+        filas,
+    }));
+});
+
+/** El número para llamar: solo dígitos y el +. */
+function enlaceTelefono(telefono: string): string {
+    return `tel:${telefono.replace(/[^\d+]/g, '')}`;
+}
 </script>
 
 <template>
@@ -137,6 +182,121 @@ const contactoABorrar = ref<Contacto | null>(null);
                 </CardContent>
             </Card>
         </div>
+
+        <!--
+            Los médicos, centros y farmacias, como contactos ya cargados. Los
+            que tienen correo además aparecen al mandar un documento.
+        -->
+        <section v-if="grupos.length > 0" class="space-y-4">
+            <div class="space-y-1">
+                <h2 class="font-medium">Tus médicos, centros y farmacias</h2>
+                <p class="text-sm text-muted-foreground">
+                    Los que tienen correo también se pueden elegir al mandar un
+                    documento.
+                </p>
+            </div>
+
+            <div v-for="grupo in grupos" :key="grupo.titulo" class="space-y-3">
+                <p class="text-sm text-muted-foreground">{{ grupo.titulo }}</p>
+
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <Card v-for="fila in grupo.filas" :key="fila.clave">
+                        <CardContent class="space-y-3">
+                            <div class="min-w-0 space-y-1">
+                                <p class="font-medium wrap-break-word">
+                                    {{ fila.nombre }}
+                                </p>
+                                <p
+                                    v-if="fila.detalle"
+                                    class="text-sm text-muted-foreground"
+                                >
+                                    {{ fila.detalle }}
+                                </p>
+                                <p
+                                    v-if="fila.direccion"
+                                    class="text-sm text-muted-foreground"
+                                >
+                                    {{ fila.direccion }}
+                                </p>
+                                <p
+                                    v-if="fila.telefono"
+                                    class="text-sm text-muted-foreground"
+                                >
+                                    Tel. {{ fila.telefono }}
+                                </p>
+                                <p v-if="fila.email" class="text-sm break-all">
+                                    {{ fila.email }}
+                                </p>
+                                <p
+                                    v-if="fila.horarios"
+                                    class="text-sm whitespace-pre-line text-muted-foreground"
+                                >
+                                    {{ fila.horarios }}
+                                </p>
+                            </div>
+
+                            <div class="flex flex-wrap gap-2">
+                                <Button
+                                    v-if="fila.telefono"
+                                    variant="outline"
+                                    size="sm"
+                                    as-child
+                                >
+                                    <a :href="enlaceTelefono(fila.telefono)">
+                                        <Phone />
+                                        Llamar
+                                    </a>
+                                </Button>
+                                <Button
+                                    v-if="fila.whatsappEnlace"
+                                    variant="outline"
+                                    size="sm"
+                                    as-child
+                                >
+                                    <a
+                                        :href="fila.whatsappEnlace"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        <MessageCircle />
+                                        WhatsApp
+                                    </a>
+                                </Button>
+                                <Button
+                                    v-if="fila.email"
+                                    variant="outline"
+                                    size="sm"
+                                    as-child
+                                >
+                                    <a :href="`mailto:${fila.email}`">
+                                        <Mail />
+                                        Correo
+                                    </a>
+                                </Button>
+                                <Button
+                                    v-if="fila.web"
+                                    variant="outline"
+                                    size="sm"
+                                    as-child
+                                >
+                                    <a
+                                        :href="fila.web"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        <Globe />
+                                        Web
+                                    </a>
+                                </Button>
+                                <Button variant="ghost" size="sm" as-child>
+                                    <Link :href="fila.editar">Editar</Link>
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        </section>
 
         <!-- Lo que se mandó: lo que se consulta cuando alguien dice "no nos llegó nada". -->
         <section class="space-y-3">

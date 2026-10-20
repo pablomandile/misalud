@@ -184,7 +184,7 @@ class DashboardController extends Controller
      * Los tratamientos activos, ya filtrados y con su medicamento cargados
      * en `pacienteActivo()` -acá no se vuelve a consultar la base-.
      *
-     * @return list<array{id: int, medicamento: string, dosis: string, frecuencia: string}>
+     * @return list<array{id: int, medicamento: string, dosis: string, frecuencia: string|null}>
      */
     private function tratamientosActivosDe(Paciente $paciente): array
     {

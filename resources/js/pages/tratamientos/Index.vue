@@ -1,11 +1,17 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
-import { ArrowLeft, Pill, Plus, Trash2 } from '@lucide/vue';
+import { Form, Head, Link } from '@inertiajs/vue3';
+import { ArrowLeft, Camera, List, Pill, Plus, Trash2 } from '@lucide/vue';
 import { computed, ref } from 'vue';
+import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
+import MedicamentoController from '@/actions/App/Http/Controllers/MedicamentoController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
 import TratamientoController from '@/actions/App/Http/Controllers/TratamientoController';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import SelectorDeFicha from '@/components/SelectorDeFicha.vue';
+import SubirArchivo from '@/components/SubirArchivo.vue';
+import type { DocumentoVisible } from '@/components/VisorDocumento.vue';
+import VisorDocumento from '@/components/VisorDocumento.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -30,12 +36,17 @@ import {
 } from '@/components/ui/sheet';
 
 /*
- * Los tratamientos de un paciente: qué medicamento toma, con qué dosis.
+ * Los medicamentos que toma un paciente (en el código, `tratamientos`): cuál,
+ * con qué dosis, cada cuánto, y las fotos de la caja.
  *
- * Activos primero, y separados de los que ya se dejaron de tomar. Un
- * tratamiento inactivo no desaparece -sirve de historial-, pero no puede
- * competir en pantalla con lo que sigue vigente.
+ * El medicamento se elige de la lista o se escribe: si no está en la lista, el
+ * servidor lo suma al catálogo propio. Nadie tiene que "copiar" nada antes.
+ *
+ * Activos primero, y separados de los que ya se dejaron de tomar: uno inactivo
+ * no desaparece -sirve de historial-, pero no compite con lo vigente.
  */
+
+type Foto = DocumentoVisible & { id: number };
 
 type Tratamiento = {
     id: number;
@@ -46,17 +57,22 @@ type Tratamiento = {
     enfermedad_id: number | null;
     enfermedadNombre: string | null;
     dosis: string;
-    frecuencia: string;
+    frecuencia: string | null;
+    periodicidad: string | null;
+    periodicidadEtiqueta: string | null;
     inicio: string;
     inicioVisible: string;
     fin: string | null;
     finVisible: string | null;
     activo: boolean;
     notas: string | null;
+    fotos: Foto[];
 };
 
 const props = defineProps<{
     paciente: { id: number; nombre: string; puedeEditar: boolean };
+    fichas: { id: number; nombre: string }[];
+    periodicidades: { valor: string; etiqueta: string }[];
     tratamientos: Tratamiento[];
     medicamentos: Array<{ id: number; nombre: string }>;
     medicos: Array<{ id: number; nombre: string }>;
@@ -68,7 +84,7 @@ defineOptions({
     layout: {
         breadcrumbs: [
             { title: 'Pacientes', href: PacienteController.index() },
-            { title: 'Tratamientos', href: '' },
+            { title: 'Medicamentos', href: '' },
         ],
     },
 });
@@ -81,64 +97,66 @@ const campoTexto = `${campoBase} min-h-24`;
 const sheetAlta = ref(false);
 const tratamientoAEditar = ref<Tratamiento | null>(null);
 const tratamientoABorrar = ref<Tratamiento | null>(null);
+const tratamientoDeFotos = ref<Tratamiento | null>(null);
+
+/** UNO SOLO para toda la pantalla, y fuera de todo v-for. */
+const fotoAbierta = ref<DocumentoVisible | null>(null);
+
+const enlaceFicha = (id: number) =>
+    TratamientoController.index({ paciente: id });
 
 /*
- * `computed()` y NO un `const` calculado una vez: al cargar un tratamiento,
- * Inertia redirige a esta MISMA URL y reutiliza la instancia del
- * componente -no la remonta-, así que `props.tratamientos` cambia pero un
- * `const` calculado en el `setup()` quedaría congelado con el valor de la
- * primera carga. Con un `const`, el tratamiento recién creado no aparecía
- * hasta un refresh manual de la página: encontrado en Chrome real, ni un
- * test de Pest lo hubiera visto porque no hay reactividad de por medio.
+ * `computed()` y NO un `const` calculado una vez: al cargar uno, Inertia
+ * redirige a esta MISMA URL y reutiliza la instancia del componente, así que
+ * un `const` quedaría congelado con la primera carga (encontrado en Chrome).
  */
 const activos = computed(() => props.tratamientos.filter((t) => t.activo));
 const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
+
+function detalleDeToma(t: Tratamiento): string {
+    return [t.dosis, t.periodicidadEtiqueta, t.frecuencia]
+        .filter((parte) => parte)
+        .join(' · ');
+}
 </script>
 
 <template>
-    <Head :title="`Tratamientos de ${paciente.nombre}`" />
+    <Head :title="`Medicamentos de ${paciente.nombre}`" />
 
     <div class="space-y-6">
-        <div class="flex items-start justify-between gap-4">
+        <div class="flex flex-wrap items-start justify-between gap-4">
             <Heading
                 variant="small"
-                :title="`Tratamientos de ${paciente.nombre}`"
-                description="Qué medicamento toma, con qué dosis y por qué"
+                :title="`Medicamentos de ${paciente.nombre}`"
+                description="Lo que toma: la dosis, cada cuánto y una foto de la caja"
             />
-            <Button
-                v-if="paciente.puedeEditar && medicamentos.length > 0"
-                @click="sheetAlta = true"
-            >
+            <Button v-if="paciente.puedeEditar" @click="sheetAlta = true">
                 <Plus />
                 Agregar
             </Button>
         </div>
 
-        <div
-            v-if="medicamentos.length === 0"
-            class="rounded-lg border border-dashed p-8 text-center"
-        >
-            <Pill class="mx-auto size-8 text-muted-foreground" />
-            <p class="mt-3 text-sm text-muted-foreground">
-                Todavía no hay medicamentos en tu catálogo. Cargá uno en
-                <span class="font-medium">Medicamentos</span> y volvé.
-            </p>
-        </div>
+        <SelectorDeFicha
+            :fichas="fichas"
+            :actual="paciente.id"
+            :enlace="enlaceFicha"
+        />
 
         <div
-            v-else-if="tratamientos.length === 0"
+            v-if="tratamientos.length === 0"
             class="rounded-lg border border-dashed p-8 text-center"
         >
             <Pill class="mx-auto size-8 text-muted-foreground" />
             <p class="mt-3 text-sm text-muted-foreground">
-                Todavía no cargaste ningún tratamiento.
+                Todavía no cargaste ningún medicamento. Tocá «Agregar» y elegilo
+                de la lista.
             </p>
         </div>
 
         <template
             v-for="grupo in [
-                { titulo: 'Activos', lista: activos },
-                { titulo: 'Inactivos', lista: inactivos },
+                { titulo: 'Los que toma', lista: activos },
+                { titulo: 'Los que ya no toma', lista: inactivos },
             ]"
             :key="grupo.titulo"
         >
@@ -150,69 +168,151 @@ const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
                         v-for="tratamiento in grupo.lista"
                         :key="tratamiento.id"
                     >
-                        <CardContent
-                            class="flex items-start justify-between gap-3"
-                        >
-                            <div class="min-w-0 space-y-1">
-                                <p class="font-medium">
-                                    {{ tratamiento.medicamentoNombre }}
-                                </p>
-                                <p class="text-sm text-muted-foreground">
-                                    {{ tratamiento.dosis }} ·
-                                    {{ tratamiento.frecuencia }}
-                                </p>
-                                <p class="text-sm text-muted-foreground">
-                                    Desde {{ tratamiento.inicioVisible
-                                    }}<span v-if="tratamiento.finVisible">
-                                        hasta
-                                        {{ tratamiento.finVisible }}</span
+                        <CardContent class="space-y-3">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0 space-y-1">
+                                    <p class="font-medium wrap-break-word">
+                                        {{ tratamiento.medicamentoNombre }}
+                                    </p>
+                                    <p class="text-sm text-muted-foreground">
+                                        {{ detalleDeToma(tratamiento) }}
+                                    </p>
+                                    <p class="text-sm text-muted-foreground">
+                                        Desde {{ tratamiento.inicioVisible
+                                        }}<span v-if="tratamiento.finVisible">
+                                            hasta
+                                            {{ tratamiento.finVisible }}</span
+                                        >
+                                    </p>
+                                    <p
+                                        v-if="tratamiento.medicoNombre"
+                                        class="text-sm text-muted-foreground"
                                     >
-                                </p>
-                                <p
-                                    v-if="tratamiento.medicoNombre"
-                                    class="text-sm text-muted-foreground"
+                                        {{ tratamiento.medicoNombre }}
+                                    </p>
+                                    <p
+                                        v-if="tratamiento.enfermedadNombre"
+                                        class="text-sm text-muted-foreground"
+                                    >
+                                        Por {{ tratamiento.enfermedadNombre }}
+                                    </p>
+                                    <p
+                                        v-if="tratamiento.notas"
+                                        class="text-sm whitespace-pre-line"
+                                    >
+                                        {{ tratamiento.notas }}
+                                    </p>
+                                </div>
+
+                                <div
+                                    v-if="paciente.puedeEditar"
+                                    class="flex shrink-0 gap-1"
                                 >
-                                    {{ tratamiento.medicoNombre }}
-                                </p>
-                                <p
-                                    v-if="tratamiento.enfermedadNombre"
-                                    class="text-sm text-muted-foreground"
-                                >
-                                    Por {{ tratamiento.enfermedadNombre }}
-                                </p>
-                                <p v-if="tratamiento.notas" class="text-sm">
-                                    {{ tratamiento.notas }}
-                                </p>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        @click="
+                                            tratamientoAEditar = tratamiento
+                                        "
+                                    >
+                                        Editar
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        class="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                        :aria-label="`Eliminar ${tratamiento.medicamentoNombre}`"
+                                        @click="
+                                            tratamientoABorrar = tratamiento
+                                        "
+                                    >
+                                        <Trash2 class="size-4" />
+                                    </Button>
+                                </div>
                             </div>
 
-                            <div
-                                v-if="paciente.puedeEditar"
-                                class="flex shrink-0 gap-1"
+                            <!-- Las fotos de la caja: tocarlas las agranda. -->
+                            <ul
+                                v-if="tratamiento.fotos.length > 0"
+                                class="flex flex-wrap gap-2"
                             >
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    @click="tratamientoAEditar = tratamiento"
+                                <li
+                                    v-for="foto in tratamiento.fotos"
+                                    :key="foto.id"
+                                    class="space-y-1"
                                 >
-                                    Editar
-                                </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    class="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                    :aria-label="`Eliminar el tratamiento con ${tratamiento.medicamentoNombre}`"
-                                    @click="tratamientoABorrar = tratamiento"
-                                >
-                                    <Trash2 class="size-4" />
-                                </Button>
-                            </div>
+                                    <button
+                                        type="button"
+                                        class="block size-24 overflow-hidden rounded-md border bg-muted/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                                        :aria-label="`Ver ${foto.nombre}`"
+                                        @click="fotoAbierta = foto"
+                                    >
+                                        <img
+                                            v-if="
+                                                foto.mime.startsWith('image/')
+                                            "
+                                            :src="foto.url"
+                                            :alt="`Caja de ${tratamiento.medicamentoNombre}`"
+                                            class="size-full object-contain"
+                                        />
+                                        <span
+                                            v-else
+                                            class="flex size-full items-center justify-center p-1 text-xs break-all"
+                                        >
+                                            {{ foto.nombre }}
+                                        </span>
+                                    </button>
+                                    <Form
+                                        v-if="paciente.puedeEditar"
+                                        v-bind="
+                                            AdjuntoController.destroy.form({
+                                                adjunto: foto.id,
+                                            })
+                                        "
+                                        :options="{ preserveScroll: true }"
+                                        v-slot="{ processing }"
+                                    >
+                                        <Button
+                                            type="submit"
+                                            variant="ghost"
+                                            size="sm"
+                                            class="w-24 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                            :disabled="processing"
+                                            :aria-label="`Quitar la foto ${foto.nombre}`"
+                                            @click="fotoAbierta = null"
+                                        >
+                                            Quitar
+                                        </Button>
+                                    </Form>
+                                </li>
+                            </ul>
+
+                            <Button
+                                v-if="paciente.puedeEditar"
+                                variant="outline"
+                                size="sm"
+                                @click="tratamientoDeFotos = tratamiento"
+                            >
+                                <Camera />
+                                {{
+                                    tratamiento.fotos.length > 0
+                                        ? 'Agregar otra foto'
+                                        : 'Foto de la caja'
+                                }}
+                            </Button>
                         </CardContent>
                     </Card>
                 </div>
             </div>
         </template>
 
-        <div>
+        <div class="flex flex-wrap gap-2">
+            <Button variant="outline" as-child>
+                <Link :href="MedicamentoController.index()">
+                    <List />
+                    Lista de medicamentos
+                </Link>
+            </Button>
             <Button variant="outline" as-child>
                 <a :href="PacienteController.index().url">
                     <ArrowLeft />
@@ -220,6 +320,15 @@ const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
                 </a>
             </Button>
         </div>
+
+        <!-- La lista para elegir: comunes + los propios. -->
+        <datalist id="lista-medicamentos">
+            <option
+                v-for="medicamento in medicamentos"
+                :key="medicamento.id"
+                :value="medicamento.nombre"
+            />
+        </datalist>
 
         <!-- Alta -->
         <Sheet v-model:open="sheetAlta">
@@ -237,7 +346,7 @@ const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
                     @success="sheetAlta = false"
                 >
                     <SheetHeader>
-                        <SheetTitle>Agregar un tratamiento</SheetTitle>
+                        <SheetTitle>Agregar un medicamento</SheetTitle>
                         <SheetDescription>
                             Queda en la ficha de {{ paciente.nombre }}.
                         </SheetDescription>
@@ -246,21 +355,25 @@ const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
                     <div class="flex-1 space-y-4 overflow-y-auto px-4">
                         <div class="grid gap-2">
                             <Label for="medicamento-crear">Medicamento</Label>
-                            <select
+                            <input
                                 id="medicamento-crear"
-                                name="medicamento_id"
+                                name="medicamento_nombre"
+                                type="text"
+                                list="lista-medicamentos"
                                 required
+                                autocomplete="off"
+                                placeholder="Escribí y elegí de la lista"
                                 :class="campoUnaLinea"
-                            >
-                                <option
-                                    v-for="medicamento in medicamentos"
-                                    :key="medicamento.id"
-                                    :value="medicamento.id"
-                                >
-                                    {{ medicamento.nombre }}
-                                </option>
-                            </select>
-                            <InputError :message="errors.medicamento_id" />
+                            />
+                            <p class="text-sm text-muted-foreground">
+                                Si no está en la lista, escribilo y se agrega.
+                            </p>
+                            <InputError
+                                :message="
+                                    errors.medicamento_id ??
+                                    errors.medicamento_nombre
+                                "
+                            />
                         </div>
 
                         <div class="grid gap-2">
@@ -270,19 +383,45 @@ const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
                                 name="dosis"
                                 type="text"
                                 required
-                                placeholder="500mg"
+                                placeholder="1 comprimido de 500 mg"
                                 :class="campoUnaLinea"
                             />
                             <InputError :message="errors.dosis" />
                         </div>
 
                         <div class="grid gap-2">
-                            <Label for="frecuencia-crear">Frecuencia</Label>
+                            <Label for="periodicidad-crear">Toma</Label>
+                            <select
+                                id="periodicidad-crear"
+                                name="periodicidad"
+                                :class="campoUnaLinea"
+                            >
+                                <option
+                                    value=""
+                                    class="bg-background text-foreground"
+                                >
+                                    Sin especificar
+                                </option>
+                                <option
+                                    v-for="opcion in periodicidades"
+                                    :key="opcion.valor"
+                                    :value="opcion.valor"
+                                    class="bg-background text-foreground"
+                                >
+                                    {{ opcion.etiqueta }}
+                                </option>
+                            </select>
+                            <InputError :message="errors.periodicidad" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="frecuencia-crear">
+                                Cada cuánto (opcional)
+                            </Label>
                             <input
                                 id="frecuencia-crear"
                                 name="frecuencia"
                                 type="text"
-                                required
                                 placeholder="Cada 8 horas"
                                 :class="campoUnaLinea"
                             />
@@ -303,7 +442,7 @@ const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
                         </div>
 
                         <div class="grid gap-2">
-                            <Label for="fin-crear"> Hasta (opcional) </Label>
+                            <Label for="fin-crear">Hasta (opcional)</Label>
                             <input
                                 id="fin-crear"
                                 name="fin"
@@ -320,11 +459,17 @@ const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
                                 name="medico_id"
                                 :class="campoUnaLinea"
                             >
-                                <option value="">Sin especificar</option>
+                                <option
+                                    value=""
+                                    class="bg-background text-foreground"
+                                >
+                                    Sin especificar
+                                </option>
                                 <option
                                     v-for="medico in medicos"
                                     :key="medico.id"
                                     :value="medico.id"
+                                    class="bg-background text-foreground"
                                 >
                                     {{ medico.nombre }}
                                 </option>
@@ -341,11 +486,17 @@ const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
                                 name="enfermedad_id"
                                 :class="campoUnaLinea"
                             >
-                                <option value="">No especificar</option>
+                                <option
+                                    value=""
+                                    class="bg-background text-foreground"
+                                >
+                                    No especificar
+                                </option>
                                 <option
                                     v-for="enfermedad in enfermedades"
                                     :key="enfermedad.id"
                                     :value="enfermedad.id"
+                                    class="bg-background text-foreground"
                                 >
                                     {{ enfermedad.nombre }}
                                 </option>
@@ -368,8 +519,15 @@ const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
                             <InputError :message="errors.activo" />
                         </div>
 
+                        <SubirArchivo
+                            name="archivos[]"
+                            multiple
+                            etiqueta="Fotos de la caja (opcional)"
+                            :error="errors['archivos.0'] ?? errors.archivos"
+                        />
+
                         <div class="grid gap-2">
-                            <Label for="notas-crear">Notas</Label>
+                            <Label for="notas-crear">Observaciones</Label>
                             <textarea
                                 id="notas-crear"
                                 name="notas"
@@ -394,7 +552,7 @@ const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
             </SheetContent>
         </Sheet>
 
-        <!-- Editar -->
+        <!-- Editar (sin fotos: la edición va por PUT y ahí no viaja un archivo) -->
         <Sheet
             :open="!!tratamientoAEditar"
             @update:open="
@@ -416,28 +574,28 @@ const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
                     @success="tratamientoAEditar = null"
                 >
                     <SheetHeader>
-                        <SheetTitle>Editar el tratamiento</SheetTitle>
+                        <SheetTitle>Editar el medicamento</SheetTitle>
                     </SheetHeader>
 
                     <div class="flex-1 space-y-4 overflow-y-auto px-4">
                         <div class="grid gap-2">
                             <Label for="medicamento-editar">Medicamento</Label>
-                            <select
+                            <input
                                 id="medicamento-editar"
-                                name="medicamento_id"
+                                name="medicamento_nombre"
+                                type="text"
+                                list="lista-medicamentos"
                                 required
-                                :value="tratamientoAEditar.medicamento_id"
+                                autocomplete="off"
+                                :value="tratamientoAEditar.medicamentoNombre"
                                 :class="campoUnaLinea"
-                            >
-                                <option
-                                    v-for="medicamento in medicamentos"
-                                    :key="medicamento.id"
-                                    :value="medicamento.id"
-                                >
-                                    {{ medicamento.nombre }}
-                                </option>
-                            </select>
-                            <InputError :message="errors.medicamento_id" />
+                            />
+                            <InputError
+                                :message="
+                                    errors.medicamento_id ??
+                                    errors.medicamento_nombre
+                                "
+                            />
                         </div>
 
                         <div class="grid gap-2">
@@ -454,12 +612,39 @@ const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
                         </div>
 
                         <div class="grid gap-2">
-                            <Label for="frecuencia-editar">Frecuencia</Label>
+                            <Label for="periodicidad-editar">Toma</Label>
+                            <select
+                                id="periodicidad-editar"
+                                name="periodicidad"
+                                :value="tratamientoAEditar.periodicidad ?? ''"
+                                :class="campoUnaLinea"
+                            >
+                                <option
+                                    value=""
+                                    class="bg-background text-foreground"
+                                >
+                                    Sin especificar
+                                </option>
+                                <option
+                                    v-for="opcion in periodicidades"
+                                    :key="opcion.valor"
+                                    :value="opcion.valor"
+                                    class="bg-background text-foreground"
+                                >
+                                    {{ opcion.etiqueta }}
+                                </option>
+                            </select>
+                            <InputError :message="errors.periodicidad" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="frecuencia-editar">
+                                Cada cuánto (opcional)
+                            </Label>
                             <input
                                 id="frecuencia-editar"
                                 name="frecuencia"
                                 type="text"
-                                required
                                 :value="tratamientoAEditar.frecuencia"
                                 :class="campoUnaLinea"
                             />
@@ -499,11 +684,17 @@ const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
                                 :value="tratamientoAEditar.medico_id ?? ''"
                                 :class="campoUnaLinea"
                             >
-                                <option value="">Sin especificar</option>
+                                <option
+                                    value=""
+                                    class="bg-background text-foreground"
+                                >
+                                    Sin especificar
+                                </option>
                                 <option
                                     v-for="medico in medicos"
                                     :key="medico.id"
                                     :value="medico.id"
+                                    class="bg-background text-foreground"
                                 >
                                     {{ medico.nombre }}
                                 </option>
@@ -521,11 +712,17 @@ const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
                                 :value="tratamientoAEditar.enfermedad_id ?? ''"
                                 :class="campoUnaLinea"
                             >
-                                <option value="">No especificar</option>
+                                <option
+                                    value=""
+                                    class="bg-background text-foreground"
+                                >
+                                    No especificar
+                                </option>
                                 <option
                                     v-for="enfermedad in enfermedades"
                                     :key="enfermedad.id"
                                     :value="enfermedad.id"
+                                    class="bg-background text-foreground"
                                 >
                                     {{ enfermedad.nombre }}
                                 </option>
@@ -549,7 +746,7 @@ const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
                         </div>
 
                         <div class="grid gap-2">
-                            <Label for="notas-editar">Notas</Label>
+                            <Label for="notas-editar">Observaciones</Label>
                             <textarea
                                 id="notas-editar"
                                 name="notas"
@@ -558,6 +755,63 @@ const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
                                 >{{ tratamientoAEditar.notas }}</textarea>
                             <InputError :message="errors.notas" />
                         </div>
+                    </div>
+
+                    <SheetFooter>
+                        <Button type="submit" :disabled="processing">
+                            Guardar
+                        </Button>
+                        <SheetClose as-child>
+                            <Button type="button" variant="secondary">
+                                Cancelar
+                            </Button>
+                        </SheetClose>
+                    </SheetFooter>
+                </Form>
+            </SheetContent>
+        </Sheet>
+
+        <!-- Fotos de la caja, después del alta -->
+        <Sheet
+            :open="!!tratamientoDeFotos"
+            @update:open="
+                (v: boolean) => {
+                    if (!v) tratamientoDeFotos = null;
+                }
+            "
+        >
+            <SheetContent v-if="tratamientoDeFotos">
+                <Form
+                    v-bind="
+                        AdjuntoController.storeParaTratamiento.form({
+                            tratamiento: tratamientoDeFotos.id,
+                        })
+                    "
+                    reset-on-success
+                    :options="{ preserveScroll: true }"
+                    v-slot="{ errors, processing }"
+                    class="flex h-full flex-col"
+                    @success="tratamientoDeFotos = null"
+                >
+                    <SheetHeader>
+                        <SheetTitle>Fotos de la caja</SheetTitle>
+                        <SheetDescription>
+                            {{ tratamientoDeFotos.medicamentoNombre }}
+                        </SheetDescription>
+                    </SheetHeader>
+
+                    <div class="flex-1 space-y-4 overflow-y-auto px-4">
+                        <input
+                            type="hidden"
+                            name="tipo"
+                            value="caja_medicamento"
+                        />
+                        <SubirArchivo
+                            name="archivos[]"
+                            multiple
+                            etiqueta="Elegir fotos"
+                            :error="errors['archivos.0'] ?? errors.archivos"
+                        />
                     </div>
 
                     <SheetFooter>
@@ -596,11 +850,13 @@ const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
                 >
                     <DialogHeader class="space-y-3">
                         <DialogTitle>
-                            ¿Eliminar el tratamiento con
+                            ¿Eliminar
                             {{ tratamientoABorrar.medicamentoNombre }}?
                         </DialogTitle>
                         <DialogDescription>
-                            Esto no se puede deshacer.
+                            Si ya no lo toma, mejor destildá «Lo sigue tomando»
+                            y queda en el historial. Eliminar es para lo que se
+                            cargó mal.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -621,5 +877,7 @@ const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
                 </Form>
             </DialogContent>
         </Dialog>
+
+        <VisorDocumento :documento="fotoAbierta" @cerrar="fotoAbierta = null" />
     </div>
 </template>

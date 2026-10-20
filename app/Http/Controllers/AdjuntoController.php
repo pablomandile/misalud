@@ -19,6 +19,7 @@ use App\Models\OrdenEstudio;
 use App\Models\Paciente;
 use App\Models\PrescripcionOcular;
 use App\Models\RecetaMedica;
+use App\Models\Tratamiento;
 use App\Services\AdjuntadorDeArchivos;
 use App\Services\ArchivoService;
 use Illuminate\Database\Eloquent\Model;
@@ -93,6 +94,14 @@ class AdjuntoController extends Controller
     public function storeParaRecetaMedica(AdjuntoStoreRequest $peticion, RecetaMedica $recetaMedica): RedirectResponse
     {
         return $this->guardarEn($peticion, $recetaMedica);
+    }
+
+    /**
+     * Una foto de la caja del medicamento que toma el paciente. Undécimo dueño.
+     */
+    public function storeParaTratamiento(AdjuntoStoreRequest $peticion, Tratamiento $tratamiento): RedirectResponse
+    {
+        return $this->guardarEn($peticion, $tratamiento);
     }
 
     /**

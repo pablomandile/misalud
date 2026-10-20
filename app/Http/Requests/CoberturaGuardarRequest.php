@@ -54,6 +54,15 @@ class CoberturaGuardarRequest extends FormRequest
         if ($this->has('activa')) {
             $this->merge(['activa' => $this->boolean('activa')]);
         }
+
+        // La web se escribe como se la lee ("www.osde.com.ar"): el `https://`
+        // se agrega antes de que la regla `url` la mire, igual que en centros.
+        $web = $this->input('sitio_web');
+
+        if (is_string($web)) {
+            $web = trim($web);
+            $this->merge(['sitio_web' => $web === '' ? null : (preg_match('#^https?://#i', $web) ? $web : 'https://'.$web)]);
+        }
     }
 
     /**
@@ -78,7 +87,8 @@ class CoberturaGuardarRequest extends FormRequest
             'nro_afiliado' => ['nullable', 'string', 'max:100'],
             'telefono' => ['nullable', 'string', 'max:50'],
             'telefono_urgencias' => ['nullable', 'string', 'max:50'],
-            'sitio_web' => ['nullable', 'string', 'max:255'],
+            'whatsapp' => ['nullable', 'string', 'max:30', 'regex:/^[0-9+()\s.\-]+$/'],
+            'sitio_web' => ['nullable', 'string', 'url:http,https', 'max:255'],
             'vigencia_desde' => ['nullable', 'date'],
             'vigencia_hasta' => ['nullable', 'date', 'after_or_equal:vigencia_desde'],
             'activa' => ['nullable', 'boolean'],
@@ -119,6 +129,17 @@ class CoberturaGuardarRequest extends FormRequest
     /**
      * @return array<string, string>
      */
+    public function messages(): array
+    {
+        return [
+            'whatsapp.regex' => 'El WhatsApp solo puede tener números, espacios, guiones, paréntesis y el +.',
+            'sitio_web.url' => 'Escribí la dirección de la página, por ejemplo www.osde.com.ar.',
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
     public function attributes(): array
     {
         return [
@@ -128,7 +149,8 @@ class CoberturaGuardarRequest extends FormRequest
             'nro_afiliado' => 'número de afiliado',
             'telefono' => 'teléfono',
             'telefono_urgencias' => 'teléfono de urgencias',
-            'sitio_web' => 'sitio web',
+            'whatsapp' => 'WhatsApp',
+            'sitio_web' => 'página web',
             'vigencia_desde' => 'vigencia desde',
             'vigencia_hasta' => 'vigencia hasta',
             'notas' => 'notas',

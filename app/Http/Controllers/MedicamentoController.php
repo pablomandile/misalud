@@ -102,6 +102,15 @@ class MedicamentoController extends CatalogoBaseController
      * mediciones (ver esa clase).
      */
     /**
+     * Solo los propios: la lista compartida se ofrece al cargar lo que toma un
+     * paciente, no como tarjetas para copiar.
+     */
+    protected function listaSemillas(): bool
+    {
+        return false;
+    }
+
+    /**
      * Un tratamiento sin su medicamento es "500 mg cada 8 horas" de nada: es la
      * FK con `restrictOnDelete` del catálogo. Antes este controlador lo frenaba por
      * su cuenta; ahora es el mismo freno que el de los otros cuatro.

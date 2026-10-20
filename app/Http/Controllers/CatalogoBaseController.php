@@ -108,6 +108,17 @@ abstract class CatalogoBaseController extends Controller
     }
 
     /**
+     * Si el listado muestra también las semillas compartidas. Medicamentos lo
+     * apaga: sus semillas son la lista para elegir al cargar lo que toma un
+     * paciente, y como tarjetas con «Copiar» confundían (decisión del
+     * usuario).
+     */
+    protected function listaSemillas(): bool
+    {
+        return true;
+    }
+
+    /**
      * El listado: lo del usuario más las semillas compartidas.
      *
      * El nombre está cifrado, así que **no hay `orderBy` en SQL**: se traen
@@ -120,7 +131,9 @@ abstract class CatalogoBaseController extends Controller
 
         $registros = $modelo::query()
             ->with($this->conEager())
-            ->where($this->visiblesPara(auth()->user()))
+            ->where($this->listaSemillas()
+                ? $this->visiblesPara(auth()->user())
+                : fn ($consulta) => $consulta->where('usuario_id', auth()->id()))
             ->get()
             ->sortBy(fn (Model&EsCatalogo $registro): string => mb_strtolower($registro->nombreVisible()))
             ->values()

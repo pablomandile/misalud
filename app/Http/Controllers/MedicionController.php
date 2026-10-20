@@ -9,6 +9,8 @@ use App\Models\Enfermedad;
 use App\Models\Medicion;
 use App\Models\Paciente;
 use App\Models\TipoMedicion;
+use App\Models\User;
+use App\Services\PacientePrincipal;
 use App\Services\SeriesDeMediciones;
 use App\Support\CatalogoVisible;
 use Illuminate\Http\RedirectResponse;
@@ -36,6 +38,29 @@ class MedicionController extends Controller
      * SQL** —a diferencia de cualquier orden por valor, que es imposible
      * sobre una columna cifrada—.
      */
+    /**
+     * «Variables» del menú: las del paciente principal (el que comparte el
+     * correo con la cuenta). Sin ninguna ficha, a Pacientes, a cargar una.
+     */
+    public function principal(): RedirectResponse
+    {
+        $usuario = auth()->user();
+        assert($usuario instanceof User);
+
+        $paciente = PacientePrincipal::de($usuario);
+
+        // `cargar` abre el formulario en esa variable (el «+ Cargar» del
+        // catálogo de variables).
+        $cargar = request()->integer('cargar');
+
+        return $paciente === null
+            ? to_route('pacientes.index')->with('error', 'Primero cargá una ficha para anotar sus variables.')
+            : to_route('pacientes.mediciones.index', [
+                'paciente' => $paciente,
+                ...($cargar > 0 ? ['cargar' => $cargar] : []),
+            ]);
+    }
+
     public function index(Paciente $paciente): Response
     {
         Gate::authorize('view', $paciente);
@@ -54,6 +79,7 @@ class MedicionController extends Controller
                 'nombre' => $paciente->nombre,
                 'puedeEditar' => $paciente->rolDe($usuario)?->puedeEditar() ?? false,
             ],
+            'fichas' => PacientePrincipal::opciones($usuario),
             'tipos' => $this->tiposDisponibles($paciente),
             'enfermedades' => $this->enfermedadesDeLaFicha($paciente),
             'series' => $this->series->armar($mediciones, $usuario),

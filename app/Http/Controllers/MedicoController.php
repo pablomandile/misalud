@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Contracts\EsCatalogo;
 use App\Http\Requests\MedicoGuardarRequest;
+use App\Models\Centro;
 use App\Models\Consulta;
 use App\Models\Enfermedad;
 use App\Models\Estudio;
@@ -60,6 +61,14 @@ class MedicoController extends CatalogoBaseController
             'telefono' => $registro->telefono,
             'email' => $registro->email,
             'notas' => $registro->notas,
+            // Solo los nombres, y solo de los centros que esta persona ve: el
+            // médico puede estar vinculado a centros que no son suyos.
+            'centros' => $registro->centros
+                ->filter(fn (Centro $centro): bool => $centro->usuario_id === null || $centro->usuario_id === auth()->id())
+                ->map(fn (Centro $centro): string => (string) $centro->nombre)
+                ->sort(fn (string $a, string $b): int => strcasecmp($a, $b))
+                ->values()
+                ->all(),
             /*
              * Que sea semilla NO es un detalle de presentación: decide si la
              * pantalla muestra "Editar" o "Copiar a mi catálogo". La Policy
@@ -76,6 +85,17 @@ class MedicoController extends CatalogoBaseController
      * El pivote `centro_medico` no está, a propósito: que atienda en un centro
      * es configuración del catálogo, y se va solo con el borrado.
      */
+    /**
+     * Los centros donde atiende, para el «Atiende en» de la tarjeta. Sin esto,
+     * una consulta por médico.
+     *
+     * @return list<string>
+     */
+    protected function conEager(): array
+    {
+        return ['centros'];
+    }
+
     public function usos(): array
     {
         return [

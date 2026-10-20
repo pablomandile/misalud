@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 use App\Enums\EstadoEnvio;
 use App\Enums\RolPaciente;
+use App\Models\Centro;
 use App\Models\Cobertura;
 use App\Models\Contacto;
+use App\Models\Farmacia;
+use App\Models\Medico;
 use App\Models\Paciente;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -203,4 +206,25 @@ it('muestra el historial de envíos, el último primero', function (): void {
         ->assertInertia(fn ($pagina) => $pagina
             ->has('envios', 2)
             ->where('envios.0.asunto', 'Nuevo'));
+});
+
+it('muestra los médicos, centros y farmacias como contactos ya cargados', function (): void {
+    Medico::factory()->for($this->usuario, 'usuario')->create(['nombre' => 'Dra. López', 'telefono' => '11 4444 5555']);
+    Centro::factory()->for($this->usuario, 'usuario')->create(['nombre' => 'Clínica Norte', 'whatsapp' => '11 2345 6789']);
+    Farmacia::factory()->for($this->usuario, 'usuario')->create(['nombre' => 'Farmacia del Pueblo', 'email' => 'pedidos@pueblo.test']);
+    Farmacia::factory()->create(['nombre' => 'Ajena']);
+
+    $this->actingAs($this->usuario)
+        ->get(route('contactos.index'))
+        ->assertOk()
+        ->assertInertia(function ($p) {
+            $filas = collect($p->toArray()['props']['delCatalogo']);
+
+            expect($filas->pluck('nombre')->all())->toContain('Dra. López', 'Clínica Norte', 'Farmacia del Pueblo')
+                ->not->toContain('Ajena')
+                ->and($filas->firstWhere('nombre', 'Clínica Norte')['whatsappEnlace'])->toBe('https://wa.me/5491123456789')
+                ->and($filas->firstWhere('nombre', 'Farmacia del Pueblo')['grupo'])->toBe('Farmacias');
+
+            return $p;
+        });
 });

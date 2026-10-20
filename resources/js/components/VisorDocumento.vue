@@ -256,10 +256,17 @@ function cerrar(): void {
         "
     >
         <DialogPortal>
-            <DialogOverlay class="fixed inset-0 z-50 bg-black/90" />
+            <!--
+                ⚠️ z-[60] y no z-50: el visor se abre también desde un panel
+                lateral (la credencial de una cobertura), y los paneles están en
+                z-50. Al mismo nivel, la capa oscura del panel quedaba ENCIMA de
+                la X del visor y el toque no le llegaba: medido en Chrome con
+                `elementFromPoint`, que devolvía el overlay del panel.
+            -->
+            <DialogOverlay class="fixed inset-0 z-[60] bg-black/90" />
 
             <DialogContent
-                class="fixed inset-0 z-50 flex h-[100dvh] w-screen flex-col bg-black/95 outline-none"
+                class="fixed inset-0 z-[60] flex h-[100dvh] w-screen flex-col bg-black/95 outline-none"
             >
                 <!-- Para lector de pantalla: el visor no tiene encabezado visible. -->
                 <DialogTitle class="sr-only">

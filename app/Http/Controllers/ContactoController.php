@@ -7,10 +7,14 @@ namespace App\Http\Controllers;
 use App\Enums\TipoContacto;
 use App\Http\Requests\ContactoGuardarRequest;
 use App\Models\ArchivoEnviado;
+use App\Models\Centro;
 use App\Models\Cobertura;
 use App\Models\Contacto;
 use App\Models\Envio;
+use App\Models\Farmacia;
+use App\Models\Medico;
 use App\Models\User;
+use App\Support\CatalogoVisible;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -76,6 +80,7 @@ class ContactoController extends Controller
 
         return Inertia::render('contactos/Index', [
             'contactos' => $contactos,
+            'delCatalogo' => $this->delCatalogo($usuario),
             'envios' => $envios,
             'tipos' => array_map(
                 fn (TipoContacto $tipo): array => ['valor' => $tipo->value, 'etiqueta' => $tipo->etiqueta()],
@@ -83,6 +88,73 @@ class ContactoController extends Controller
             ),
             'precarga' => $this->precargaDesdeCobertura($peticion, $usuario),
         ]);
+    }
+
+    /**
+     * Los médicos, centros y farmacias, como contactos ya cargados: con lo que
+     * hace falta para comunicarse con cada uno. No se editan acá -cada uno en
+     * su pantalla, para que no haya dos lugares donde corregir un teléfono-, y
+     * los que tienen correo además se pueden elegir al mandar un documento
+     * (ver `LibretaDeDestinatarios`).
+     *
+     * Lo propio y las semillas (`CatalogoVisible`), como en cada catálogo.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function delCatalogo(User $usuario): array
+    {
+        $visibles = CatalogoVisible::para($usuario->id);
+
+        $medicos = Medico::query()->where($visibles)->get()->map(fn (Medico $m): array => [
+            'clave' => "medico:{$m->id}",
+            'grupo' => 'Médicos',
+            'nombre' => $m->nombre,
+            'detalle' => $m->especialidad,
+            'direccion' => null,
+            'telefono' => $m->telefono,
+            'whatsappEnlace' => null,
+            'email' => $m->email,
+            'web' => null,
+            'horarios' => null,
+            'editar' => route('medicos.index'),
+        ]);
+
+        $centros = Centro::query()->where($visibles)->get()->map(fn (Centro $c): array => [
+            'clave' => "centro:{$c->id}",
+            'grupo' => 'Centros',
+            'nombre' => $c->nombre,
+            'detalle' => $c->tipo->etiqueta(),
+            'direccion' => $c->direccion,
+            'telefono' => $c->telefono,
+            'whatsappEnlace' => $c->enlaceWhatsapp(),
+            'email' => $c->email,
+            'web' => $c->web,
+            'horarios' => $c->horarios,
+            'editar' => route('centros.index'),
+        ]);
+
+        $farmacias = Farmacia::query()->where($visibles)->get()->map(fn (Farmacia $f): array => [
+            'clave' => "farmacia:{$f->id}",
+            'grupo' => 'Farmacias',
+            'nombre' => $f->nombre,
+            'detalle' => null,
+            'direccion' => $f->direccion,
+            'telefono' => $f->telefono,
+            'whatsappEnlace' => $f->enlaceWhatsapp(),
+            'email' => $f->email,
+            'web' => $f->web,
+            'horarios' => $f->horarios,
+            'editar' => route('farmacias.index'),
+        ]);
+
+        // En PHP: los nombres están cifrados.
+        return array_values(collect()
+            ->concat($medicos)
+            ->concat($centros)
+            ->concat($farmacias)
+            ->sortBy(fn (array $fila): string => $fila['grupo'].'|'.mb_strtolower($fila['nombre']))
+            ->values()
+            ->all());
     }
 
     public function store(ContactoGuardarRequest $peticion): RedirectResponse

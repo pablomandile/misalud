@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Models\Adjunto;
+use App\Models\User;
 use App\Services\EnviadorDeDocumentos;
+use App\Services\LibretaDeDestinatarios;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
@@ -60,14 +62,24 @@ class EnvioGuardarRequest extends FormRequest
     {
         return [
             /*
-             * ⚠️ Solo un contacto de la libreta de ESTA persona, nunca una dirección
-             * suelta (ver la migración de `contactos`). Uno ajeno falla como "no
-             * existe", que es lo correcto: no confirma que exista en otra libreta.
+             * ⚠️ Una CLAVE ("contacto:12", "medico:3"), nunca una dirección
+             * suelta: se busca entre lo que esta persona puede elegir (su
+             * libreta y su catálogo con correo, ver `LibretaDeDestinatarios`).
+             * Una ajena falla como "no existe", que es lo correcto: no confirma
+             * que exista en la libreta o el catálogo de otro.
              */
-            'contacto_id' => [
+            'destinatario' => [
                 'required',
-                'integer',
-                Rule::exists('contactos', 'id')->where('usuario_id', $this->user()?->id),
+                'string',
+                'max:40',
+                function (string $atributo, mixed $valor, \Closure $fallar): void {
+                    $usuario = $this->user();
+
+                    if (! $usuario instanceof User || ! is_string($valor)
+                        || app(LibretaDeDestinatarios::class)->resolver($usuario, $valor) === null) {
+                        $fallar('Elegí a quién mandárselo de tu lista.');
+                    }
+                },
             ],
 
             'adjuntos' => ['required', 'array', 'min:1', 'max:10'],
@@ -170,7 +182,7 @@ class EnvioGuardarRequest extends FormRequest
     public function attributes(): array
     {
         return [
-            'contacto_id' => 'destinatario',
+            'destinatario' => 'destinatario',
             'adjuntos' => 'documentos',
             'asunto' => 'asunto',
             'mensaje' => 'mensaje',
@@ -183,8 +195,7 @@ class EnvioGuardarRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'contacto_id.required' => 'Elegí a quién mandárselo.',
-            'contacto_id.exists' => 'Elegí a quién mandárselo de tu libreta.',
+            'destinatario.required' => 'Elegí a quién mandárselo.',
             'adjuntos.required' => 'Tildá al menos un documento.',
             'adjuntos.min' => 'Tildá al menos un documento.',
             'adjuntos.max' => 'Entran hasta 10 documentos por envío.',

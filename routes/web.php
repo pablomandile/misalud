@@ -11,11 +11,14 @@ use App\Http\Controllers\CoberturaController;
 use App\Http\Controllers\CompartirController;
 use App\Http\Controllers\ConsultaController;
 use App\Http\Controllers\ContactoController;
+use App\Http\Controllers\CredencialController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DocumentoController;
 use App\Http\Controllers\DocumentoPorRevisarController;
 use App\Http\Controllers\EnfermedadController;
 use App\Http\Controllers\EnvioController;
 use App\Http\Controllers\EstudioController;
+use App\Http\Controllers\FarmaciaController;
 use App\Http\Controllers\InvitacionController;
 use App\Http\Controllers\Legales\LegalesController;
 use App\Http\Controllers\MedicamentoController;
@@ -117,6 +120,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
      * Los archivos SIEMPRE por controlador: viven cifrados en el disco
      * privado y no hay ninguna URL que los sirva sin pasar por la Policy.
      */
+    /*
+     * Lo que el menú abre directo para el paciente principal (el que comparte
+     * el correo con la cuenta): la credencial, sus variables y sus
+     * medicamentos. Las dos últimas redirigen a la pantalla de la ficha.
+     */
+    Route::get('credencial', [CredencialController::class, 'index'])->name('credencial.index');
+    Route::get('variables', [MedicionController::class, 'principal'])->name('variables.principal');
+    Route::get('medicamentos-del-paciente', [TratamientoController::class, 'principal'])
+        ->name('medicamentos-del-paciente');
+
+    // La pantalla de Documentos de una ficha (ver y cargar los sueltos).
+    Route::get('pacientes/{paciente}/documentos', [DocumentoController::class, 'index'])
+        ->name('pacientes.documentos.index');
     Route::post('pacientes/{paciente}/adjuntos', [AdjuntoController::class, 'store'])
         ->name('pacientes.adjuntos.store');
     Route::get('adjuntos/{adjunto}', [AdjuntoController::class, 'show'])->name('adjuntos.show');
@@ -166,6 +182,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('centros/{centro}', [CentroController::class, 'destroy'])->name('centros.destroy');
     Route::post('centros/{centro}/duplicar', [CentroController::class, 'duplicar'])
         ->name('centros.duplicar');
+
+    Route::get('farmacias', [FarmaciaController::class, 'index'])->name('farmacias.index');
+    Route::post('farmacias', [FarmaciaController::class, 'store'])->name('farmacias.store');
+    Route::put('farmacias/{farmacia}', [FarmaciaController::class, 'update'])->name('farmacias.update');
+    Route::delete('farmacias/{farmacia}', [FarmaciaController::class, 'destroy'])->name('farmacias.destroy');
+    Route::post('farmacias/{farmacia}/duplicar', [FarmaciaController::class, 'duplicar'])
+        ->name('farmacias.duplicar');
 
     Route::get('medicamentos', [MedicamentoController::class, 'index'])->name('medicamentos.index');
     Route::post('medicamentos', [MedicamentoController::class, 'store'])->name('medicamentos.store');
@@ -288,6 +311,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('recetas-medicas.destroy');
     Route::post('recetas-medicas/{recetaMedica}/adjuntos', [AdjuntoController::class, 'storeParaRecetaMedica'])
         ->name('recetas-medicas.adjuntos.store');
+    Route::post('tratamientos/{tratamiento}/adjuntos', [AdjuntoController::class, 'storeParaTratamiento'])
+        ->name('tratamientos.adjuntos.store');
 
     Route::post('ordenes/{orden}/adjuntos', [AdjuntoController::class, 'storeParaOrden'])
         ->name('ordenes.adjuntos.store');

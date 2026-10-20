@@ -30,14 +30,14 @@ it('lista los medicamentos propios y NO los de otro usuario', function (): void 
         );
 });
 
-it('lista también las semillas compartidas', function (): void {
+it('lista solo los propios: las semillas son la lista para elegir, no tarjetas', function (): void {
     $usuario = User::factory()->create();
     Medicamento::factory()->for($usuario, 'usuario')->create();
     Medicamento::factory()->semilla()->create();
 
     $this->actingAs($usuario)
         ->get(route('medicamentos.index'))
-        ->assertInertia(fn ($p) => $p->has('registros', 2));
+        ->assertInertia(fn ($p) => $p->has('registros', 1)->where('registros.0.esSemilla', false));
 });
 
 it('ordena por nombre comercial, que está cifrado', function (): void {

@@ -35,6 +35,9 @@ enum TipoAdjunto: string
     /** El prospecto de un medicamento del catálogo. */
     case Prospecto = 'prospecto';
 
+    /** Una foto de la caja del medicamento que toma un paciente. */
+    case CajaMedicamento = 'caja_medicamento';
+
     /** La receta de anteojos, que se sube aunque los valores estén cargados. */
     case PrescripcionOcular = 'prescripcion_ocular';
 
@@ -78,6 +81,7 @@ enum TipoAdjunto: string
             self::ImagenEstudio => 'Imagen del estudio',
             self::Receta => 'Receta',
             self::Prospecto => 'Prospecto',
+            self::CajaMedicamento => 'Foto de la caja',
             self::PrescripcionOcular => 'Receta de anteojos',
             self::Vacuna => 'Comprobante de vacuna',
             self::AudioConsulta => 'Grabación de la consulta',

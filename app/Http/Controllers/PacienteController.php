@@ -11,6 +11,7 @@ use App\Models\Adjunto;
 use App\Models\Cobertura;
 use App\Models\Paciente;
 use App\Models\User;
+use App\Support\Whatsapp;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -139,26 +140,14 @@ class PacienteController extends Controller
             'accesos' => $this->accesos($paciente, $rol === RolPaciente::Propietario),
 
             /*
-             * Los documentos van con la URL del CONTROLADOR, nunca una del
-             * disco: estos archivos están cifrados y no son públicos. La URL
-             * igual no alcanza sola -la Policy se vuelve a consultar al
-             * servirlos-, pero no hay que dar de más.
+             * Los documentos de la ficha. Acá solo hacen falta para el
+             * contador de la baldosa: se ven y se cargan en su pantalla
+             * (`DocumentoController`).
              */
             'adjuntos' => $paciente->adjuntos
                 ->sortByDesc('created_at')
                 ->values()
-                ->map(fn (Adjunto $adjunto): array => [
-                    'id' => $adjunto->id,
-                    // El que le puso la persona, o el del archivo.
-                    'nombre' => $adjunto->nombreVisible(),
-                    'titulo' => $adjunto->titulo,
-                    'descripcion' => $adjunto->descripcion,
-                    'archivo' => $adjunto->nombre_original,
-                    'mime' => $adjunto->mime,
-                    'tamanio' => $adjunto->tamanio_bytes,
-                    'tipo' => $adjunto->tipo->etiqueta(),
-                    'url' => route('adjuntos.show', $adjunto),
-                ])
+                ->map(fn (Adjunto $adjunto): array => $adjunto->paraLista())
                 ->all(),
 
             'coberturas' => $paciente->coberturas
@@ -175,6 +164,8 @@ class PacienteController extends Controller
                     'nro_afiliado' => $cobertura->nro_afiliado,
                     'telefono' => $cobertura->telefono,
                     'telefono_urgencias' => $cobertura->telefono_urgencias,
+                    'whatsapp' => $cobertura->whatsapp,
+                    'whatsappEnlace' => Whatsapp::enlace($cobertura->whatsapp),
                     'sitio_web' => $cobertura->sitio_web,
                     'vigencia_desde' => $cobertura->vigencia_desde?->format('Y-m-d'),
                     'vigencia_hasta' => $cobertura->vigencia_hasta?->format('Y-m-d'),

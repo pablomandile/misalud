@@ -373,7 +373,9 @@ it('sube el papel en el mismo alta de la orden', function (): void {
     $this->actingAs($usuario)
         ->post(route('pacientes.ordenes.store', $paciente), [
             'estudio_solicitado' => 'Ecografía abdominal',
-            'fecha' => now()->toDateString(),
+            // El día de la cuenta, no el de UTC: después de las 21 en
+            // Argentina, el "hoy" de UTC ya es mañana y sería futuro.
+            'fecha' => $usuario->hoyCalendario()->toDateString(),
             'estado' => 'pendiente',
             'archivos' => [papelDePrueba()],
         ])

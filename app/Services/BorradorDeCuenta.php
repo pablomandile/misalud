@@ -6,11 +6,13 @@ namespace App\Services;
 
 use App\Contracts\CifraDatos;
 use App\Http\Controllers\CentroController;
+use App\Http\Controllers\FarmaciaController;
 use App\Http\Controllers\MedicamentoController;
 use App\Http\Controllers\MedicoController;
 use App\Http\Controllers\TipoMedicionController;
 use App\Http\Controllers\VacunaController;
 use App\Models\Centro;
+use App\Models\Farmacia;
 use App\Models\MailRecibido;
 use App\Models\Medicamento;
 use App\Models\Medico;
@@ -59,6 +61,7 @@ final readonly class BorradorDeCuenta
     private const CATALOGOS = [
         Medico::class => MedicoController::class,
         Centro::class => CentroController::class,
+        Farmacia::class => FarmaciaController::class,
         Medicamento::class => MedicamentoController::class,
         Vacuna::class => VacunaController::class,
         TipoMedicion::class => TipoMedicionController::class,

@@ -58,7 +58,7 @@ defineProps<{
         id: number;
         medicamento: string;
         dosis: string;
-        frecuencia: string;
+        frecuencia: string | null;
     }>;
     ordenesPendientes: Tarjeta<{
         id: number;
@@ -385,17 +385,13 @@ function masDe(total: number, mostradas: number): string | null {
                 </template>
             </TarjetaPanel>
 
-            <!-- Tratamientos activos -->
-            <TarjetaPanel
-                :icon="Pill"
-                tono="rosa"
-                titulo="Tratamientos activos"
-            >
+            <!-- Los medicamentos que toma (los tratamientos activos) -->
+            <TarjetaPanel :icon="Pill" tono="rosa" titulo="Medicamentos">
                 <p
                     v-if="tratamientosActivos.length === 0"
                     class="text-sm text-muted-foreground"
                 >
-                    Sin datos. No hay tratamientos activos cargados.
+                    Sin datos. No hay medicamentos cargados.
                 </p>
 
                 <ul v-else class="divide-y">
@@ -408,8 +404,11 @@ function masDe(total: number, mostradas: number): string | null {
                             {{ tratamiento.medicamento }}
                         </p>
                         <p class="text-sm text-muted-foreground">
-                            {{ tratamiento.dosis }} ·
-                            {{ tratamiento.frecuencia }}
+                            {{
+                                [tratamiento.dosis, tratamiento.frecuencia]
+                                    .filter((parte) => parte)
+                                    .join(' · ')
+                            }}
                         </p>
                     </li>
                 </ul>

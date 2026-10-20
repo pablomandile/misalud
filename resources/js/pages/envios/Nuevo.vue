@@ -42,16 +42,22 @@ type Documento = DocumentoVisible & {
     elegido: boolean;
 };
 
-type Contacto = {
-    id: number;
+/**
+ * Un contacto de la libreta, o un médico, centro o farmacia del catálogo con
+ * correo. La `clave` ("contacto:12", "medico:3") es lo que viaja: nunca la
+ * dirección (ver `LibretaDeDestinatarios`).
+ */
+type Destinatario = {
+    clave: string;
     nombre: string;
     email: string;
     tipoEtiqueta: string;
+    esDeLaLibreta: boolean;
 };
 
 const props = defineProps<{
     documentos: Documento[];
-    contactos: Contacto[];
+    destinatarios: Destinatario[];
     pacienteNombre: string | null;
     asuntoSugerido: string;
     maximoBytes: number;
@@ -72,7 +78,7 @@ const campoBase =
 const campoUnaLinea = `${campoBase} min-h-11`;
 const campoTexto = `${campoBase} min-h-24`;
 
-const contactoId = ref<number | null>(null);
+const clave = ref<string | null>(null);
 const elegidos = ref<number[]>(
     props.documentos.filter((d) => d.elegido).map((d) => d.id),
 );
@@ -84,21 +90,21 @@ const documentoAbierto = ref<DocumentoVisible | null>(null);
 
 /*
  * Un contacto recién cargado desde acá queda elegido: es para eso que se lo
- * cargó. Se lo reconoce porque su id no estaba antes.
+ * cargó. Se lo reconoce porque su clave no estaba antes.
  */
 watch(
-    () => props.contactos.map((c) => c.id),
+    () => props.destinatarios.map((d) => d.clave),
     (ahora, antes) => {
-        const nuevo = ahora.find((id) => !antes.includes(id));
+        const nuevo = ahora.find((c) => !antes.includes(c));
 
         if (nuevo !== undefined) {
-            contactoId.value = nuevo;
+            clave.value = nuevo;
         }
     },
 );
 
-const contactoElegido = computed(
-    () => props.contactos.find((c) => c.id === contactoId.value) ?? null,
+const elegido = computed(
+    () => props.destinatarios.find((d) => d.clave === clave.value) ?? null,
 );
 
 const pesoElegido = computed(() =>
@@ -113,8 +119,8 @@ const textoBoton = computed(() => {
     const cuantos = elegidos.value.length;
     const que = cuantos === 1 ? '1 documento' : `${cuantos} documentos`;
 
-    return contactoElegido.value
-        ? `Mandar ${que} a ${contactoElegido.value.nombre}`
+    return elegido.value
+        ? `Mandar ${que} a ${elegido.value.nombre}`
         : `Mandar ${que}`;
 });
 
@@ -154,36 +160,37 @@ function pesoLegible(bytes: number): string {
                 <h2 class="font-medium">¿A quién?</h2>
 
                 <p
-                    v-if="contactos.length === 0"
+                    v-if="destinatarios.length === 0"
                     class="text-sm text-muted-foreground"
                 >
-                    Todavía no tenés a nadie en tu libreta. Agregá a quién se lo
+                    Todavía no tenés a nadie con correo: ni en tu libreta ni en
+                    tus médicos, centros o farmacias. Agregá a quién se lo
                     querés mandar.
                 </p>
 
                 <div v-else class="grid gap-2">
                     <label
-                        v-for="contacto in contactos"
-                        :key="contacto.id"
+                        v-for="destinatario in destinatarios"
+                        :key="destinatario.clave"
                         class="flex min-h-11 cursor-pointer items-start gap-3 rounded-md border p-3 has-[:checked]:border-primary"
                     >
                         <input
-                            v-model="contactoId"
+                            v-model="clave"
                             type="radio"
-                            name="contacto_id"
-                            :value="contacto.id"
+                            name="destinatario"
+                            :value="destinatario.clave"
                             class="mt-1 size-5 shrink-0"
                         />
                         <span class="min-w-0">
                             <span class="block font-medium break-words">
-                                {{ contacto.nombre }}
+                                {{ destinatario.nombre }}
                             </span>
                             <span class="block text-sm text-muted-foreground">
-                                {{ contacto.tipoEtiqueta }}
+                                {{ destinatario.tipoEtiqueta }}
                             </span>
                             <!-- La dirección completa: es lo que hay que revisar. -->
                             <span class="block text-sm break-all">
-                                {{ contacto.email }}
+                                {{ destinatario.email }}
                             </span>
                         </span>
                     </label>
@@ -197,7 +204,7 @@ function pesoLegible(bytes: number): string {
                     <Plus />
                     Agregar a alguien
                 </Button>
-                <InputError :message="errors.contacto_id" />
+                <InputError :message="errors.destinatario" />
             </section>
 
             <!-- 2. Qué -->
@@ -305,7 +312,7 @@ function pesoLegible(bytes: number): string {
                 class="w-full sm:w-auto"
                 :disabled="
                     processing ||
-                    contactoId === null ||
+                    clave === null ||
                     elegidos.length === 0 ||
                     pasaDelTope
                 "
