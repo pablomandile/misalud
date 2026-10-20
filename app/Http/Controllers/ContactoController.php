@@ -14,7 +14,7 @@ use App\Models\Envio;
 use App\Models\Farmacia;
 use App\Models\Medico;
 use App\Models\User;
-use App\Support\CatalogoVisible;
+use App\Support\CatalogoDeLaFicha;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -97,15 +97,17 @@ class ContactoController extends Controller
      * los que tienen correo además se pueden elegir al mandar un documento
      * (ver `LibretaDeDestinatarios`).
      *
-     * Lo propio y las semillas (`CatalogoVisible`), como en cada catálogo.
+     * Lo propio, las semillas y lo que usan las fichas compartidas
+     * (`CatalogoDeLaFicha`).
      *
      * @return list<array<string, mixed>>
      */
     private function delCatalogo(User $usuario): array
     {
-        $visibles = CatalogoVisible::para($usuario->id);
-
-        $medicos = Medico::query()->where($visibles)->get()->map(fn (Medico $m): array => [
+        // Lo propio, las semillas y lo que usan las fichas compartidas: el
+        // médico del dueño que figura en los estudios de mamá también es un
+        // contacto para el cuidador.
+        $medicos = Medico::query()->where(CatalogoDeLaFicha::visiblesConFichas(Medico::class, $usuario))->get()->map(fn (Medico $m): array => [
             'clave' => "medico:{$m->id}",
             'grupo' => 'Médicos',
             'nombre' => $m->nombre,
@@ -116,10 +118,11 @@ class ContactoController extends Controller
             'email' => $m->email,
             'web' => null,
             'horarios' => null,
-            'editar' => route('medicos.index'),
+            // Lo del dueño de una ficha compartida se mira, no se edita acá.
+            'editar' => $m->usuario_id === $usuario->id ? route('medicos.index') : null,
         ]);
 
-        $centros = Centro::query()->where($visibles)->get()->map(fn (Centro $c): array => [
+        $centros = Centro::query()->where(CatalogoDeLaFicha::visiblesConFichas(Centro::class, $usuario))->get()->map(fn (Centro $c): array => [
             'clave' => "centro:{$c->id}",
             'grupo' => 'Centros',
             'nombre' => $c->nombre,
@@ -130,10 +133,11 @@ class ContactoController extends Controller
             'email' => $c->email,
             'web' => $c->web,
             'horarios' => $c->horarios,
-            'editar' => route('centros.index'),
+            // Lo del dueño de una ficha compartida se mira, no se edita acá.
+            'editar' => $c->usuario_id === $usuario->id ? route('centros.index') : null,
         ]);
 
-        $farmacias = Farmacia::query()->where($visibles)->get()->map(fn (Farmacia $f): array => [
+        $farmacias = Farmacia::query()->where(CatalogoDeLaFicha::visiblesConFichas(Farmacia::class, $usuario))->get()->map(fn (Farmacia $f): array => [
             'clave' => "farmacia:{$f->id}",
             'grupo' => 'Farmacias',
             'nombre' => $f->nombre,
@@ -144,7 +148,8 @@ class ContactoController extends Controller
             'email' => $f->email,
             'web' => $f->web,
             'horarios' => $f->horarios,
-            'editar' => route('farmacias.index'),
+            // Lo del dueño de una ficha compartida se mira, no se edita acá.
+            'editar' => $f->usuario_id === $usuario->id ? route('farmacias.index') : null,
         ]);
 
         // En PHP: los nombres están cifrados.

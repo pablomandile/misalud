@@ -12,6 +12,7 @@ import {
 import { ref } from 'vue';
 import CentroController from '@/actions/App/Http/Controllers/CentroController';
 import Heading from '@/components/Heading.vue';
+import SolapasDeCatalogo from '@/components/SolapasDeCatalogo.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -62,11 +63,15 @@ type Centro = {
     horarios: string | null;
     notas: string | null;
     esSemilla: boolean;
+    /** Lo que no es de esta cuenta: una semilla o lo de una ficha compartida. */
+    soloLectura: boolean;
     medicos: MedicoDisponible[];
 };
 
 defineProps<{
     registros: Centro[];
+    fichasCompartidas: { id: number; nombre: string }[];
+    ficha: { id: number; nombre: string } | null;
     medicosDisponibles: MedicoDisponible[];
 }>();
 
@@ -100,18 +105,30 @@ function estaVinculado(centro: Centro, medicoId: number): boolean {
                 title="Centros"
                 description="Consultorios, clínicas y laboratorios donde atienden tus médicos"
             />
-            <Button @click="sheetCrearAbierto = true">
+            <Button v-if="!ficha" @click="sheetCrearAbierto = true">
                 <Plus />
                 Agregar
             </Button>
         </div>
+
+        <SolapasDeCatalogo
+            :fichas="fichasCompartidas"
+            :ficha="ficha"
+            :enlace="
+                (id) =>
+                    CentroController.index(id ? { query: { ficha: id } } : {})
+            "
+        />
 
         <div
             v-if="registros.length === 0"
             class="rounded-lg border border-dashed p-8 text-center"
         >
             <Building2 class="mx-auto size-8 text-muted-foreground" />
-            <p class="mt-3 text-sm text-muted-foreground">
+            <p v-if="ficha" class="mt-3 text-sm text-muted-foreground">
+                La ficha de {{ ficha.nombre }} todavía no usa ninguno.
+            </p>
+            <p v-else class="mt-3 text-sm text-muted-foreground">
                 Todavía no agregaste ningún centro.
             </p>
         </div>
@@ -236,7 +253,7 @@ function estaVinculado(centro: Centro, medicoId: number): boolean {
                             copiarla al catálogo propio.
                         -->
                         <Form
-                            v-if="centro.esSemilla"
+                            v-if="centro.soloLectura"
                             v-bind="
                                 CentroController.duplicar.form({
                                     centro: centro.id,

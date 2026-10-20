@@ -940,6 +940,26 @@ FK que son metadato (`medico_id`, `centro_id`) se dejaban ir con `nullOnDelete`.
 **ya no se dejan ir**: frenan el borrado. Las FK siguen con `nullOnDelete` en la base como última
 red, pero la app no llega a usarla.
 
+### Lo que usa una ficha compartida: solapas en cada catálogo (decisión del usuario, "opción B")
+
+Los catálogos son de la cuenta, así que a quien le comparten una ficha la historia le muestra
+"Dra. López" en los estudios pero Médicos le aparece vacía. Cada catálogo tiene solapas: **«Míos»** y
+una **«De Marta»** por cada ficha compartida (`SolapasDeCatalogo`, `?ficha=`), donde se ve **lo que
+usa esa ficha**, sea de quien sea, en solo lectura y con «Copiar» a la lista propia.
+
+- `CatalogoDeLaFicha::ids()` sale de los mismos `usos()` de cada controlador (todas esas tablas
+  tienen `paciente_id`): una FK nueva declarada ahí entra sola. Lo de la papelera no cuenta.
+- **No expone nada que no se vea ya en la ficha.** El resto del catálogo del dueño (los médicos de
+  otros familiares) sigue siendo suyo: por eso no se eligió mostrar el catálogo entero del dueño.
+- `CatalogoPolicy::view()` suma "lo usa una ficha que esta persona ve": es lo que habilita
+  «Copiar». Editar y borrar siguen siendo solo del dueño.
+- `soloLectura` lo agrega `CatalogoBaseController::index()` a cada fila (`usuario_id` ajeno: una
+  semilla o lo del dueño), así ninguna pantalla lo calcula por su cuenta.
+- Contactos y los destinatarios de un envío suman lo mismo (`visiblesConFichas()`); en Contactos
+  sin enlace para editar.
+- Límite conocido: un médico que el dueño cargó y todavía no usó en esa ficha no aparece. Las
+  farmacias no aparecen nunca: ningún registro de la historia apunta a una farmacia.
+
 ### Farmacias: el sexto, también sin decisiones nuevas
 
 Dirección, teléfono, WhatsApp, correo, web, horarios y notas, todo cifrado. Comparte con Centros la

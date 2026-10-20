@@ -6,6 +6,7 @@ namespace App\Policies;
 
 use App\Contracts\EsCatalogo;
 use App\Models\User;
+use App\Support\CatalogoDeLaFicha;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -33,7 +34,11 @@ class CatalogoPolicy
      */
     public function view(User $usuario, Model&EsCatalogo $registro): bool
     {
-        return $registro->esSemilla() || $this->esSuyo($usuario, $registro);
+        return $registro->esSemilla()
+            || $this->esSuyo($usuario, $registro)
+            // Lo que usa una ficha que esta persona ve (el médico del dueño en
+            // un estudio de la ficha compartida): ya lo ve en la historia.
+            || in_array($registro->getKey(), CatalogoDeLaFicha::idsEnFichasDe($registro::class, $usuario), true);
     }
 
     public function create(User $usuario): bool

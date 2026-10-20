@@ -4,6 +4,7 @@ import { Copy, Plus, Syringe, Trash2 } from '@lucide/vue';
 import { ref } from 'vue';
 import VacunaController from '@/actions/App/Http/Controllers/VacunaController';
 import Heading from '@/components/Heading.vue';
+import SolapasDeCatalogo from '@/components/SolapasDeCatalogo.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -37,9 +38,15 @@ type Vacuna = {
     nombre: string;
     notas: string | null;
     esSemilla: boolean;
+    /** Lo que no es de esta cuenta: una semilla o lo de una ficha compartida. */
+    soloLectura: boolean;
 };
 
-defineProps<{ registros: Vacuna[] }>();
+defineProps<{
+    registros: Vacuna[];
+    fichasCompartidas: { id: number; nombre: string }[];
+    ficha: { id: number; nombre: string } | null;
+}>();
 
 defineOptions({
     layout: {
@@ -67,18 +74,30 @@ const vacunaABorrar = ref<Vacuna | null>(null);
                 title="Vacunas"
                 description="El catálogo de vacunas, para registrar las dosis aplicadas"
             />
-            <Button @click="sheetCrearAbierto = true">
+            <Button v-if="!ficha" @click="sheetCrearAbierto = true">
                 <Plus />
                 Agregar
             </Button>
         </div>
+
+        <SolapasDeCatalogo
+            :fichas="fichasCompartidas"
+            :ficha="ficha"
+            :enlace="
+                (id) =>
+                    VacunaController.index(id ? { query: { ficha: id } } : {})
+            "
+        />
 
         <div
             v-if="registros.length === 0"
             class="rounded-lg border border-dashed p-8 text-center"
         >
             <Syringe class="mx-auto size-8 text-muted-foreground" />
-            <p class="mt-3 text-sm text-muted-foreground">
+            <p v-if="ficha" class="mt-3 text-sm text-muted-foreground">
+                La ficha de {{ ficha.nombre }} todavía no usa ninguno.
+            </p>
+            <p v-else class="mt-3 text-sm text-muted-foreground">
                 Todavía no agregaste ninguna vacuna.
             </p>
         </div>
@@ -98,7 +117,7 @@ const vacunaABorrar = ref<Vacuna | null>(null);
 
                     <div class="flex shrink-0 flex-wrap justify-end gap-1">
                         <Form
-                            v-if="vacuna.esSemilla"
+                            v-if="vacuna.soloLectura"
                             v-bind="
                                 VacunaController.duplicar.form({
                                     vacuna: vacuna.id,

@@ -6,13 +6,16 @@ namespace App\Http\Controllers;
 
 use App\Contracts\EsCatalogo;
 use App\Contracts\TieneArchivos;
+use App\Models\Paciente;
 use App\Models\User;
 use App\Services\ArchivoService;
+use App\Support\CatalogoDeLaFicha;
 use App\Support\CatalogoVisible;
 use App\Support\UsoDeCatalogo;
 use Illuminate\Contracts\Database\Query\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -121,29 +124,64 @@ abstract class CatalogoBaseController extends Controller
     /**
      * El listado: lo del usuario más las semillas compartidas.
      *
+     * Con `?ficha=` es otra cosa: lo que usa esa ficha (una que le
+     * compartieron), sea de quien sea, en solo lectura. Ver
+     * `CatalogoDeLaFicha`.
+     *
      * El nombre está cifrado, así que **no hay `orderBy` en SQL**: se traen
      * todas -un catálogo personal son decenas de filas- y se ordenan en PHP
      * (ver CLAUDE.md).
      */
-    public function index(): Response
+    public function index(Request $peticion): Response
     {
         $modelo = $this->modelo();
+        $usuario = $peticion->user();
+        assert($usuario instanceof User);
+
+        $ficha = $this->fichaElegida($peticion);
 
         $registros = $modelo::query()
             ->with($this->conEager())
-            ->where($this->listaSemillas()
-                ? $this->visiblesPara(auth()->user())
-                : fn ($consulta) => $consulta->where('usuario_id', auth()->id()))
+            ->where(match (true) {
+                $ficha !== null => fn ($consulta) => $consulta->whereIn('id', CatalogoDeLaFicha::ids($modelo, [$ficha->id])),
+                $this->listaSemillas() => $this->visiblesPara($usuario),
+                default => fn ($consulta) => $consulta->where('usuario_id', $usuario->id),
+            })
             ->get()
             ->sortBy(fn (Model&EsCatalogo $registro): string => mb_strtolower($registro->nombreVisible()))
             ->values()
-            ->map(fn (Model&EsCatalogo $registro): array => $this->serializar($registro))
+            ->map(fn (Model&EsCatalogo $registro): array => [
+                ...$this->serializar($registro),
+                // Lo que no es de esta cuenta (una semilla, o lo del dueño de
+                // una ficha compartida) se mira y se copia, no se edita.
+                'soloLectura' => $registro->getAttribute('usuario_id') !== $usuario->id,
+            ])
             ->all();
 
         return Inertia::render($this->pagina(), [
             'registros' => $registros,
+            'fichasCompartidas' => CatalogoDeLaFicha::fichasCompartidas($usuario),
+            'ficha' => $ficha === null ? null : ['id' => $ficha->id, 'nombre' => $ficha->nombre],
             ...$this->propsExtra(),
         ]);
+    }
+
+    /**
+     * La ficha de la solapa, si la persona la puede ver. Una ajena da 403: no
+     * se cae en silencio a la lista propia, que diría "no usa ningún médico".
+     */
+    private function fichaElegida(Request $peticion): ?Paciente
+    {
+        $id = $peticion->integer('ficha');
+
+        if ($id <= 0) {
+            return null;
+        }
+
+        $paciente = Paciente::query()->findOrFail($id);
+        Gate::authorize('view', $paciente);
+
+        return $paciente;
     }
 
     /**

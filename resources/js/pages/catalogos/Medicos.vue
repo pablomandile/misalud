@@ -4,6 +4,7 @@ import { Copy, Plus, Stethoscope, Trash2 } from '@lucide/vue';
 import { ref } from 'vue';
 import MedicoController from '@/actions/App/Http/Controllers/MedicoController';
 import Heading from '@/components/Heading.vue';
+import SolapasDeCatalogo from '@/components/SolapasDeCatalogo.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -51,9 +52,15 @@ type Medico = {
      * chequear igual — esto solo decide qué botones se dibujan.
      */
     esSemilla: boolean;
+    /** Lo que no es de esta cuenta: una semilla o lo de una ficha compartida. */
+    soloLectura: boolean;
 };
 
-defineProps<{ registros: Medico[] }>();
+defineProps<{
+    registros: Medico[];
+    fichasCompartidas: { id: number; nombre: string }[];
+    ficha: { id: number; nombre: string } | null;
+}>();
 
 defineOptions({
     layout: {
@@ -81,18 +88,30 @@ const medicoABorrar = ref<Medico | null>(null);
                 title="Médicos"
                 description="Tu agenda de médicos, la misma para toda la familia que administrés"
             />
-            <Button @click="sheetCrearAbierto = true">
+            <Button v-if="!ficha" @click="sheetCrearAbierto = true">
                 <Plus />
                 Agregar
             </Button>
         </div>
+
+        <SolapasDeCatalogo
+            :fichas="fichasCompartidas"
+            :ficha="ficha"
+            :enlace="
+                (id) =>
+                    MedicoController.index(id ? { query: { ficha: id } } : {})
+            "
+        />
 
         <div
             v-if="registros.length === 0"
             class="rounded-lg border border-dashed p-8 text-center"
         >
             <Stethoscope class="mx-auto size-8 text-muted-foreground" />
-            <p class="mt-3 text-sm text-muted-foreground">
+            <p v-if="ficha" class="mt-3 text-sm text-muted-foreground">
+                La ficha de {{ ficha.nombre }} todavía no usa ninguno.
+            </p>
+            <p v-else class="mt-3 text-sm text-muted-foreground">
                 Todavía no agregaste ningún médico.
             </p>
         </div>
@@ -135,7 +154,7 @@ const medicoABorrar = ref<Medico | null>(null);
                             copiarla al catálogo propio.
                         -->
                         <Form
-                            v-if="medico.esSemilla"
+                            v-if="medico.soloLectura"
                             v-bind="
                                 MedicoController.duplicar.form({
                                     medico: medico.id,

@@ -5,6 +5,7 @@ import { ref } from 'vue';
 import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
 import MedicamentoController from '@/actions/App/Http/Controllers/MedicamentoController';
 import Heading from '@/components/Heading.vue';
+import SolapasDeCatalogo from '@/components/SolapasDeCatalogo.vue';
 import InputError from '@/components/InputError.vue';
 import SubirArchivo from '@/components/SubirArchivo.vue';
 import type { DocumentoVisible } from '@/components/VisorDocumento.vue';
@@ -55,10 +56,16 @@ type Medicamento = {
     para_que_sirve: string | null;
     notas: string | null;
     esSemilla: boolean;
+    /** Lo que no es de esta cuenta: una semilla o lo de una ficha compartida. */
+    soloLectura: boolean;
     prospecto: Prospecto | null;
 };
 
-defineProps<{ registros: Medicamento[] }>();
+defineProps<{
+    registros: Medicamento[];
+    fichasCompartidas: { id: number; nombre: string }[];
+    ficha: { id: number; nombre: string } | null;
+}>();
 
 defineOptions({
     layout: {
@@ -95,18 +102,32 @@ const documentoAbierto = ref<DocumentoVisible | null>(null);
                 title="Medicamentos"
                 description="Tu catálogo de medicamentos, con el prospecto a mano"
             />
-            <Button @click="sheetCrearAbierto = true">
+            <Button v-if="!ficha" @click="sheetCrearAbierto = true">
                 <Plus />
                 Agregar
             </Button>
         </div>
+
+        <SolapasDeCatalogo
+            :fichas="fichasCompartidas"
+            :ficha="ficha"
+            :enlace="
+                (id) =>
+                    MedicamentoController.index(
+                        id ? { query: { ficha: id } } : {},
+                    )
+            "
+        />
 
         <div
             v-if="registros.length === 0"
             class="rounded-lg border border-dashed p-8 text-center"
         >
             <Pill class="mx-auto size-8 text-muted-foreground" />
-            <p class="mt-3 text-sm text-muted-foreground">
+            <p v-if="ficha" class="mt-3 text-sm text-muted-foreground">
+                La ficha de {{ ficha.nombre }} todavía no usa ninguno.
+            </p>
+            <p v-else class="mt-3 text-sm text-muted-foreground">
                 Todavía no agregaste ningún medicamento.
             </p>
         </div>
@@ -141,7 +162,7 @@ const documentoAbierto = ref<DocumentoVisible | null>(null);
 
                         <div class="flex shrink-0 flex-wrap justify-end gap-1">
                             <Form
-                                v-if="medicamento.esSemilla"
+                                v-if="medicamento.soloLectura"
                                 v-bind="
                                     MedicamentoController.duplicar.form({
                                         medicamento: medicamento.id,
@@ -215,7 +236,7 @@ const documentoAbierto = ref<DocumentoVisible | null>(null);
                             </button>
 
                             <Form
-                                v-if="!medicamento.esSemilla"
+                                v-if="!medicamento.soloLectura"
                                 v-bind="
                                     AdjuntoController.destroy.form({
                                         adjunto: medicamento.prospecto.id,
@@ -238,7 +259,7 @@ const documentoAbierto = ref<DocumentoVisible | null>(null);
                         </div>
 
                         <Form
-                            v-else-if="!medicamento.esSemilla"
+                            v-else-if="!medicamento.soloLectura"
                             v-bind="
                                 AdjuntoController.storeParaMedicamento.form({
                                     medicamento: medicamento.id,

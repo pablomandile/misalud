@@ -77,7 +77,7 @@ type DelCatalogo = {
     web: string | null;
     horarios: string | null;
     /** Se editan en su propia pantalla: un solo lugar donde corregir un teléfono. */
-    editar: string;
+    editar: string | null;
 };
 
 const props = defineProps<{
@@ -288,7 +288,12 @@ function enlaceTelefono(telefono: string): string {
                                         Web
                                     </a>
                                 </Button>
-                                <Button variant="ghost" size="sm" as-child>
+                                <Button
+                                    v-if="fila.editar"
+                                    variant="ghost"
+                                    size="sm"
+                                    as-child
+                                >
                                     <Link :href="fila.editar">Editar</Link>
                                 </Button>
                             </div>
