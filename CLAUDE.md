@@ -943,25 +943,25 @@ red, pero la app no llega a usarla.
 ### Solapas por ficha compartida en cada catálogo (decisión del usuario)
 
 Los catálogos son de la cuenta, así que a quien le comparten una ficha la historia le muestra
-"Dra. López" en los estudios pero Médicos le aparece vacía. Cada catálogo tiene solapas: **«Míos»** y
-una **«De Marta»** por cada ficha compartida (`SolapasDeCatalogo`, `?ficha=`), en solo lectura y con
-«Copiar» a la lista propia. Qué muestra la solapa depende del catálogo (`CatalogoDeLaFicha`):
+"Dra. López" en los estudios pero Médicos le aparece vacía. Cada catálogo tiene solapas: **«Míos»**
+—la primera y la elegida por defecto— y una **«De Marta»** por cada ficha compartida
+(`SolapasDeCatalogo`, `?ficha=`). La de una ficha muestra, en solo lectura y con «Copiar» a la lista
+propia, **la lista COMPLETA de quien comparte esa ficha**, en los seis catálogos (médicos, centros,
+farmacias, medicamentos, vacunas y variables).
 
-- **Médicos, centros y farmacias: la lista COMPLETA del dueño de la ficha.** Se probó primero "solo lo
-  que usa la ficha" y dejaba afuera al médico cargado y todavía sin usar, así que el usuario eligió
-  compartir la agenda entera. ⚠️ **Compartir una ficha comparte esa agenda**, incluidos los contactos
-  de otros familiares del dueño: el panel de invitar lo avisa. Es del dueño de ESA ficha (el pivote
-  `paciente_usuario`), nunca de un extraño ni la propia lista de quien mira.
-- **Medicamentos, vacunas y variables: solo lo que usa la ficha**, de los mismos `usos()` de cada
-  controlador (todas esas tablas tienen `paciente_id`): una FK nueva declarada ahí entra sola. Lo de la
-  papelera no cuenta.
-- `CatalogoPolicy::view()` suma "está entre lo que ve de una ficha": es lo que habilita «Copiar».
+- Se probó primero "solo lo que usa la ficha" (sacado de los `usos()`), y dejaba afuera al médico o al
+  medicamento cargado y todavía sin usar: el usuario eligió compartir las listas enteras.
+  `CatalogoDeLaFicha` quedó en una sola regla: el catálogo del **propietario** de esa ficha (el pivote
+  `paciente_usuario`), nunca el de un extraño ni el propio de quien mira.
+- ⚠️ **Compartir una ficha comparte esas listas**, incluidos los contactos de otros familiares del
+  dueño. El panel de invitar lo avisa. Para una ficha que ya estaba compartida pasa desde el deploy,
+  sin que el dueño vuelva a aprobar nada.
+- `CatalogoPolicy::view()` suma "es del dueño de una ficha que ve": es lo que habilita «Copiar».
   Editar y borrar siguen siendo solo del dueño.
 - `soloLectura` lo agrega `CatalogoBaseController::index()` a cada fila (`usuario_id` ajeno: una
-  semilla o lo del dueño), así ninguna pantalla lo calcula por su cuenta. `fichaCompleta` dice qué
-  texto poner.
-- Contactos y los destinatarios de un envío suman lo mismo (`visiblesConFichas()`); en Contactos sin
-  enlace para editar.
+  semilla o lo del dueño), así ninguna pantalla lo calcula por su cuenta.
+- Contactos y los destinatarios de un envío suman lo mismo (`visiblesConFichas()`) para médicos,
+  centros y farmacias; en Contactos sin enlace para editar.
 
 ### Farmacias: el sexto, también sin decisiones nuevas
 

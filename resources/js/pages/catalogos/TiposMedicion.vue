@@ -62,7 +62,6 @@ defineProps<{
     registros: TipoMedicion[];
     fichasCompartidas: { id: number; nombre: string }[];
     ficha: { id: number; nombre: string } | null;
-    fichaCompleta: boolean;
 }>();
 
 defineOptions({
@@ -126,7 +125,6 @@ function rango(min: number | null, max: number | null): string | null {
         <SolapasDeCatalogo
             :fichas="fichasCompartidas"
             :ficha="ficha"
-            :completa="fichaCompleta"
             :enlace="
                 (id) =>
                     TipoMedicionController.index(
@@ -141,11 +139,8 @@ function rango(min: number | null, max: number | null): string | null {
         >
             <Activity class="mx-auto size-8 text-muted-foreground" />
             <p v-if="ficha" class="mt-3 text-sm text-muted-foreground">
-                {{
-                    fichaCompleta
-                        ? `Quien comparte la ficha de ${ficha.nombre} todavía no cargó ninguno.`
-                        : `La ficha de ${ficha.nombre} todavía no usa ninguno.`
-                }}
+                Quien comparte la ficha de {{ ficha.nombre }} todavía no cargó
+                ninguno.
             </p>
             <p v-else class="mt-3 text-sm text-muted-foreground">
                 Todavía no hay ninguna variable.

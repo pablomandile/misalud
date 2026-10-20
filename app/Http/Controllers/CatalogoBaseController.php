@@ -124,9 +124,8 @@ abstract class CatalogoBaseController extends Controller
     /**
      * El listado: lo del usuario más las semillas compartidas.
      *
-     * Con `?ficha=` es otra cosa: lo que usa esa ficha (una que le
-     * compartieron), sea de quien sea, en solo lectura. Ver
-     * `CatalogoDeLaFicha`.
+     * Con `?ficha=` es otra cosa: la lista completa del dueño de esa ficha (una
+     * que le compartieron), en solo lectura. Ver `CatalogoDeLaFicha`.
      *
      * El nombre está cifrado, así que **no hay `orderBy` en SQL**: se traen
      * todas -un catálogo personal son decenas de filas- y se ordenan en PHP
@@ -162,8 +161,6 @@ abstract class CatalogoBaseController extends Controller
             'registros' => $registros,
             'fichasCompartidas' => CatalogoDeLaFicha::fichasCompartidas($usuario),
             'ficha' => $ficha === null ? null : ['id' => $ficha->id, 'nombre' => $ficha->nombre],
-            // Si la solapa trae toda la lista del dueño o solo lo que usa la ficha.
-            'fichaCompleta' => CatalogoDeLaFicha::esCompleto($modelo),
             ...$this->propsExtra(),
         ]);
     }

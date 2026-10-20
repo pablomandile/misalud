@@ -8,9 +8,10 @@ use App\Models\Estudio;
 use App\Models\Medicamento;
 use App\Models\Medico;
 use App\Models\Paciente;
-use App\Models\Tratamiento;
+use App\Models\TipoMedicion;
 use App\Models\Turno;
 use App\Models\User;
+use App\Models\Vacuna;
 use App\Services\LibretaDeDestinatarios;
 
 /*
@@ -66,7 +67,6 @@ it('la solapa de la ficha muestra la lista COMPLETA de médicos del dueño, en s
         ->assertOk()
         ->assertInertia(fn ($p) => $p
             ->where('ficha.id', $mama->id)
-            ->where('fichaCompleta', true)
             ->has('registros', 2)
             ->where('registros.0.soloLectura', true)
             ->where('registros.1.soloLectura', true));
@@ -93,18 +93,24 @@ it('no muestra los médicos de OTRO dueño, ni los del cuidador mezclados', func
         });
 });
 
-it('medicamentos y vacunas siguen mostrando solo lo que usa la ficha', function (): void {
+it('medicamentos, vacunas y variables también muestran la lista completa del dueño', function (): void {
     [$duenio, $cuidador, $mama] = fichaCompartidaConCatalogo();
-    Medicamento::factory()->for($duenio, 'usuario')->create(['nombre_comercial' => 'No Usado']);
-    $usado = Medicamento::factory()->for($duenio, 'usuario')->create(['nombre_comercial' => 'Usado']);
-    Tratamiento::factory()->for($mama)->create(['medicamento_id' => $usado->id]);
+    Medicamento::factory()->for($duenio, 'usuario')->count(2)->create();
+    Vacuna::factory()->for($duenio, 'usuario')->create();
+    TipoMedicion::factory()->for($duenio, 'usuario')->create();
+    Medicamento::factory()->for($cuidador, 'usuario')->create();
 
     $this->actingAs($cuidador)
         ->get(route('medicamentos.index', ['ficha' => $mama->id]))
-        ->assertInertia(fn ($p) => $p
-            ->where('fichaCompleta', false)
-            ->has('registros', 1)
-            ->where('registros.0.nombre_comercial', 'Usado'));
+        ->assertInertia(fn ($p) => $p->has('registros', 2)->where('registros.0.soloLectura', true));
+
+    $this->actingAs($cuidador)
+        ->get(route('vacunas.index', ['ficha' => $mama->id]))
+        ->assertInertia(fn ($p) => $p->has('registros', 1));
+
+    $this->actingAs($cuidador)
+        ->get(route('tipos-medicion.index', ['ficha' => $mama->id]))
+        ->assertInertia(fn ($p) => $p->has('registros', 1));
 });
 
 it('la lista propia no cambia: el cuidador no ve el catálogo del dueño en «Míos»', function (): void {
