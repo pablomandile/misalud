@@ -107,3 +107,29 @@ it('sin fichas, la credencial dice sin datos', function (): void {
         ->assertOk()
         ->assertInertia(fn ($p) => $p->where('paciente', null)->has('coberturas', 0));
 });
+
+it('en Pacientes la ficha de la cuenta va primera, aunque por nombre fuera última', function (): void {
+    $usuario = User::factory()->create(['email' => 'yo@ejemplo.test']);
+    Paciente::factory()->for($usuario, 'usuario')->create(['nombre' => 'Abuela']);
+    Paciente::factory()->for($usuario, 'usuario')->create(['nombre' => 'Zulema', 'email' => 'yo@ejemplo.test']);
+    Paciente::factory()->for($usuario, 'usuario')->create(['nombre' => 'Mamá']);
+
+    $this->actingAs($usuario)
+        ->get(route('pacientes.index'))
+        ->assertInertia(fn ($p) => $p
+            ->where('pacientes.0.nombre', 'Zulema')
+            ->where('pacientes.1.nombre', 'Abuela')
+            ->where('pacientes.2.nombre', 'Mamá'));
+});
+
+it('el panel abre por defecto en la ficha de la cuenta, y la pone primera en el selector', function (): void {
+    $usuario = User::factory()->create(['email' => 'yo@ejemplo.test']);
+    Paciente::factory()->for($usuario, 'usuario')->create(['nombre' => 'Abuela']);
+    $propia = Paciente::factory()->for($usuario, 'usuario')->create(['nombre' => 'Zulema', 'email' => 'yo@ejemplo.test']);
+
+    $this->actingAs($usuario)
+        ->get(route('dashboard'))
+        ->assertInertia(fn ($p) => $p
+            ->where('pacienteActivo.id', $propia->id)
+            ->where('pacientes.0.id', $propia->id));
+});

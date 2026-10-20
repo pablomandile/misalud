@@ -11,6 +11,7 @@ use App\Models\Adjunto;
 use App\Models\Cobertura;
 use App\Models\Paciente;
 use App\Models\User;
+use App\Services\PacientePrincipal;
 use App\Support\Whatsapp;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
@@ -27,13 +28,20 @@ class PacienteController extends Controller
      */
     public function index(): Response
     {
-        $pacientes = auth()->user()->pacientes()
+        $usuario = auth()->user();
+        assert($usuario instanceof User);
+
+        // La ficha de quien usa la cuenta va siempre primera; después, por
+        // nombre (cifrado: el orden se resuelve en PHP).
+        $principal = PacientePrincipal::de($usuario)?->id;
+
+        $pacientes = $usuario->pacientes()
             // Explícito: sin esto es una consulta por cada paciente y cada cobertura.
             // `cuidadores` además es lo que lee `rolDe()`: sin cargarlo, una
             // consulta más por paciente para saber el rol.
             ->with(['adjuntos', 'coberturas.adjuntos', 'cuidadores'])
             ->get()
-            ->sortBy(fn (Paciente $paciente): string => $paciente->nombre)
+            ->sortBy(fn (Paciente $paciente): string => ($paciente->id === $principal ? '0' : '1').mb_strtolower($paciente->nombre))
             ->values()
             ->map(fn (Paciente $paciente): array => $this->serializar($paciente))
             ->all();

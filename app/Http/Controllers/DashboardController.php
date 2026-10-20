@@ -18,6 +18,7 @@ use App\Models\RecetaMedica;
 use App\Models\Tratamiento;
 use App\Models\Turno;
 use App\Models\User;
+use App\Services\PacientePrincipal;
 use App\Services\SeriesDeMediciones;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
@@ -79,17 +80,20 @@ class DashboardController extends Controller
     }
 
     /**
-     * Las fichas que ve esta persona, por nombre —mismo criterio de orden que
-     * `PacienteController::index`—. `nombre` está cifrado: no hay `orderBy` en
-     * SQL, así que se ordena en PHP (son decenas de filas, como mucho).
+     * Las fichas que ve esta persona, con la de la cuenta primera y después
+     * por nombre —mismo criterio que `PacienteController::index`—. Así, sin
+     * una elegida en la sesión, el panel abre en la ficha propia. `nombre` está
+     * cifrado: no hay `orderBy` en SQL, así que se ordena en PHP.
      *
      * @return Collection<int, Paciente>
      */
     private function pacientesOrdenados(User $usuario): Collection
     {
+        $principal = PacientePrincipal::de($usuario)?->id;
+
         return $usuario->pacientes()
             ->get()
-            ->sortBy(fn (Paciente $p): string => $p->nombre)
+            ->sortBy(fn (Paciente $p): string => ($p->id === $principal ? '0' : '1').mb_strtolower($p->nombre))
             ->values();
     }
 
