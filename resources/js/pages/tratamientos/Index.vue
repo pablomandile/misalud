@@ -13,6 +13,7 @@ import SubirArchivo from '@/components/SubirArchivo.vue';
 import type { DocumentoVisible } from '@/components/VisorDocumento.vue';
 import VisorDocumento from '@/components/VisorDocumento.vue';
 import DiasDeLaSemana from '@/pages/tratamientos/DiasDeLaSemana.vue';
+import HorariosDeToma from '@/pages/tratamientos/HorariosDeToma.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -59,7 +60,10 @@ type Tratamiento = {
     enfermedadNombre: string | null;
     dosis: string;
     frecuencia: string | null;
-    hora: string | null;
+    tomasPorDia: number | null;
+    horas: string[];
+    tomasVisible: string | null;
+    horarioVisible: string | null;
     periodicidad: string | null;
     periodicidadEtiqueta: string | null;
     diasSemana: number[];
@@ -121,7 +125,8 @@ function detalleDeToma(t: Tratamiento): string {
     return [
         t.dosis,
         t.periodicidadEtiqueta,
-        t.hora ? `a las ${t.hora}` : null,
+        t.tomasVisible,
+        t.horarioVisible,
         t.frecuencia,
     ]
         .filter((parte) => parte)
@@ -431,6 +436,11 @@ function detalleDeToma(t: Tratamiento): string {
                                 :dias="diasDeLaSemana"
                                 :error="errors.dias_semana"
                             />
+                            <HorariosDeToma
+                                id="toma-crear"
+                                :errores="errors"
+                                :clase-campo="campoUnaLinea"
+                            />
                         </div>
 
                         <div class="grid gap-2">
@@ -445,17 +455,6 @@ function detalleDeToma(t: Tratamiento): string {
                                 :class="campoUnaLinea"
                             />
                             <InputError :message="errors.frecuencia" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="hora-crear">Horario (opcional)</Label>
-                            <input
-                                id="hora-crear"
-                                name="hora"
-                                type="time"
-                                :class="campoUnaLinea"
-                            />
-                            <InputError :message="errors.hora" />
                         </div>
 
                         <div class="grid gap-2">
@@ -676,6 +675,16 @@ function detalleDeToma(t: Tratamiento): string {
                                 :seleccionados="tratamientoAEditar.diasSemana"
                                 :error="errors.dias_semana"
                             />
+                            <HorariosDeToma
+                                id="toma-editar"
+                                :key="tratamientoAEditar.id"
+                                :tomas-iniciales="
+                                    tratamientoAEditar.tomasPorDia
+                                "
+                                :horas-iniciales="tratamientoAEditar.horas"
+                                :errores="errors"
+                                :clase-campo="campoUnaLinea"
+                            />
                         </div>
 
                         <div class="grid gap-2">
@@ -690,18 +699,6 @@ function detalleDeToma(t: Tratamiento): string {
                                 :class="campoUnaLinea"
                             />
                             <InputError :message="errors.frecuencia" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="hora-editar">Horario (opcional)</Label>
-                            <input
-                                id="hora-editar"
-                                name="hora"
-                                type="time"
-                                :value="tratamientoAEditar.hora ?? ''"
-                                :class="campoUnaLinea"
-                            />
-                            <InputError :message="errors.hora" />
                         </div>
 
                         <div class="grid gap-2">

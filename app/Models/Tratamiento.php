@@ -13,6 +13,7 @@ use App\Database\Eloquent\ConsultaVigilada;
 use App\Enums\PeriodicidadToma;
 use App\Observers\TratamientoObserver;
 use App\Policies\RegistroClinicoPolicy;
+use App\Support\Enumeracion;
 use Carbon\CarbonImmutable;
 use Database\Factories\TratamientoFactory;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
@@ -35,7 +36,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $frecuencia
  * @property PeriodicidadToma|null $periodicidad
  * @property list<int>|null $dias_semana
- * @property string|null $hora
+ * @property int|null $tomas_por_dia
+ * @property list<string>|null $horas
  * @property CarbonImmutable $inicio
  * @property CarbonImmutable|null $fin
  * @property bool $activo
@@ -75,7 +77,8 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente, Tiene
         'frecuencia',
         'periodicidad',
         'dias_semana',
-        'hora',
+        'tomas_por_dia',
+        'horas',
         'inicio',
         'fin',
         'activo',
@@ -92,6 +95,7 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente, Tiene
             'frecuencia' => 'encrypted',
             'periodicidad' => PeriodicidadToma::class,
             'dias_semana' => 'array',
+            'horas' => 'array',
             'notas' => 'encrypted',
             'inicio' => 'date',
             'fin' => 'date',
@@ -175,12 +179,21 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente, Tiene
     }
 
     /**
-     * "08:00": MySQL devuelve la columna `time` con segundos ("08:00:00"), y el
-     * campo de la pantalla los quiere sin.
+     * "3 veces por día". Una sola no se dice: "todos los días" ya la nombra.
      */
-    public function horaVisible(): ?string
+    public function tomasVisible(): ?string
     {
-        return $this->hora === null ? null : substr($this->hora, 0, 5);
+        return $this->tomas_por_dia !== null && $this->tomas_por_dia > 1
+            ? "{$this->tomas_por_dia} veces por día"
+            : null;
+    }
+
+    /**
+     * "a las 08:00, 14:00 y 20:00".
+     */
+    public function horarioVisible(): ?string
+    {
+        return empty($this->horas) ? null : 'a las '.Enumeracion::unir($this->horas);
     }
 
     public function pacienteDelRegistro(): ?Paciente

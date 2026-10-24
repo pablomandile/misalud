@@ -622,54 +622,111 @@ it('suma una foto después, y un lector no puede', function (): void {
 
 /*
 |--------------------------------------------------------------------------
-| Horario de la toma
+| Tomas por día y su horario
 |--------------------------------------------------------------------------
 */
 
-it('guarda el horario tal cual, sin pasarlo a UTC, y lo manda sin segundos', function (): void {
-    [$usuario, $paciente, $medicamento] = fichaConTratamientos();
-
-    $this->actingAs($usuario)
+function cargarToma(object $test, User $usuario, Paciente $paciente, Medicamento $medicamento, array $datos): void
+{
+    $test->actingAs($usuario)
         ->post(route('pacientes.tratamientos.store', $paciente), [
             'medicamento_id' => $medicamento->id,
             'dosis' => '1 comprimido',
-            'periodicidad' => 'diaria',
-            'hora' => '08:30',
             'inicio' => '2026-09-01',
+            ...$datos,
         ])
         ->assertSessionHasNoErrors();
+}
 
-    expect(Tratamiento::sole()->horaVisible())->toBe('08:30');
+it('guarda varias tomas por día con su horario, ordenados y sin pasarlos a UTC', function (): void {
+    [$usuario, $paciente, $medicamento] = fichaConTratamientos();
+
+    cargarToma($this, $usuario, $paciente, $medicamento, [
+        'periodicidad' => 'diaria',
+        'tomas_por_dia' => '3',
+        'horas' => ['20:00', '08:00', '14:00'],
+    ]);
+
+    $tratamiento = Tratamiento::sole();
+
+    expect($tratamiento->tomas_por_dia)->toBe(3)
+        ->and($tratamiento->horas)->toBe(['08:00', '14:00', '20:00'])
+        ->and($tratamiento->tomasVisible())->toBe('3 veces por día')
+        ->and($tratamiento->horarioVisible())->toBe('a las 08:00, 14:00 y 20:00');
 
     $this->actingAs($usuario)
         ->get(route('pacientes.tratamientos.index', $paciente))
-        ->assertInertia(fn ($p) => $p->where('tratamientos.0.hora', '08:30'));
+        ->assertInertia(fn ($p) => $p
+            ->where('tratamientos.0.tomasPorDia', 3)
+            ->where('tratamientos.0.horas', ['08:00', '14:00', '20:00'])
+        );
 });
 
-it('el horario es opcional', function (): void {
+it('el horario de cada toma es opcional: la cantidad queda aunque falten horarios', function (): void {
+    [$usuario, $paciente, $medicamento] = fichaConTratamientos();
+
+    cargarToma($this, $usuario, $paciente, $medicamento, [
+        'periodicidad' => 'personalizada',
+        'dias_semana' => ['1'],
+        'tomas_por_dia' => '2',
+        'horas' => ['', '21:00'],
+    ]);
+
+    expect(Tratamiento::sole()->tomas_por_dia)->toBe(2)
+        ->and(Tratamiento::sole()->horas)->toBe(['21:00']);
+});
+
+it('una sola toma no se dice, y sin horarios no hay horario', function (): void {
+    [$usuario, $paciente, $medicamento] = fichaConTratamientos();
+
+    cargarToma($this, $usuario, $paciente, $medicamento, [
+        'periodicidad' => 'diaria',
+        'tomas_por_dia' => '1',
+        'horas' => [''],
+    ]);
+
+    expect(Tratamiento::sole()->tomasVisible())->toBeNull()
+        ->and(Tratamiento::sole()->horas)->toBeNull()
+        ->and(Tratamiento::sole()->horarioVisible())->toBeNull();
+});
+
+it('con una toma que no cuenta por día, queda un solo horario y sin contador', function (): void {
+    [$usuario, $paciente, $medicamento] = fichaConTratamientos();
+
+    // Ocultos en pantalla, pero el contador y los otros horarios viajan igual.
+    cargarToma($this, $usuario, $paciente, $medicamento, [
+        'periodicidad' => 'semanal',
+        'tomas_por_dia' => '3',
+        'horas' => ['09:00', '13:00', '18:00'],
+    ]);
+
+    expect(Tratamiento::sole()->tomas_por_dia)->toBeNull()
+        ->and(Tratamiento::sole()->horas)->toBe(['09:00']);
+});
+
+it('no guarda más horarios que tomas', function (): void {
+    [$usuario, $paciente, $medicamento] = fichaConTratamientos();
+
+    cargarToma($this, $usuario, $paciente, $medicamento, [
+        'periodicidad' => 'diaria',
+        'tomas_por_dia' => '2',
+        'horas' => ['08:00', '14:00', '20:00'],
+    ]);
+
+    expect(Tratamiento::sole()->horas)->toBe(['08:00', '14:00']);
+});
+
+it('rechaza una hora que no existe y más de seis tomas', function (): void {
     [$usuario, $paciente, $medicamento] = fichaConTratamientos();
 
     $this->actingAs($usuario)
         ->post(route('pacientes.tratamientos.store', $paciente), [
             'medicamento_id' => $medicamento->id,
             'dosis' => '1',
-            'hora' => '',
+            'periodicidad' => 'diaria',
+            'tomas_por_dia' => '7',
+            'horas' => ['25:00'],
             'inicio' => '2026-09-01',
         ])
-        ->assertSessionHasNoErrors();
-
-    expect(Tratamiento::sole()->hora)->toBeNull();
-});
-
-it('rechaza una hora que no existe', function (): void {
-    [$usuario, $paciente, $medicamento] = fichaConTratamientos();
-
-    $this->actingAs($usuario)
-        ->post(route('pacientes.tratamientos.store', $paciente), [
-            'medicamento_id' => $medicamento->id,
-            'dosis' => '1',
-            'hora' => '25:00',
-            'inicio' => '2026-09-01',
-        ])
-        ->assertSessionHasErrors('hora');
+        ->assertSessionHasErrors(['tomas_por_dia', 'horas.0']);
 });

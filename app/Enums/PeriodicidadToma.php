@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Enums;
 
+use App\Support\Enumeracion;
+
 /**
  * Cada cuánto se toma un medicamento, en grueso: lo que se repite todos los
  * días, una vez por semana, algunos días de la semana (cuáles, en
@@ -50,8 +52,7 @@ enum PeriodicidadToma: string
             array_filter($dias, fn (int $dia): bool => isset(self::DIAS[$dia])),
         ));
 
-        $ultimo = array_pop($nombres);
-        $texto = $nombres === [] ? (string) $ultimo : implode(', ', $nombres).' y '.$ultimo;
+        $texto = Enumeracion::unir($nombres);
 
         return mb_strtoupper(mb_substr($texto, 0, 1)).mb_substr($texto, 1);
     }
@@ -66,6 +67,15 @@ enum PeriodicidadToma: string
             array_keys(self::DIAS),
             self::DIAS,
         );
+    }
+
+    /**
+     * Las dos tomas en las que se cuenta cuántas veces por día. En las otras
+     * (una vez por semana, por mes...) "dos veces" no tiene sentido.
+     */
+    public function cuentaTomasPorDia(): bool
+    {
+        return $this === self::Diaria || $this === self::Personalizada;
     }
 
     public function etiqueta(): string

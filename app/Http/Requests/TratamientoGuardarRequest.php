@@ -50,6 +50,38 @@ class TratamientoGuardarRequest extends FormRequest
 
         $this->resolverMedicamentoPorNombre();
         $this->normalizarDias();
+        $this->normalizarTomas();
+    }
+
+    /**
+     * Cuántas tomas por día y a qué hora cada una.
+     *
+     * El contador solo vale con "todos los días" o "algunos días": con otra
+     * toma se vacía y queda un solo horario, el primero. Igual que los días,
+     * los campos ocultos en pantalla siguen viajando y no pueden quedar
+     * guardados sin que se vean. Los horarios vacíos se descartan (el horario
+     * es opcional) y los demás se ordenan, para que se lean en el orden del día.
+     */
+    private function normalizarTomas(): void
+    {
+        $periodicidad = PeriodicidadToma::tryFrom((string) $this->input('periodicidad'));
+        $cuenta = $periodicidad?->cuentaTomasPorDia() ?? false;
+
+        $tomas = $this->input('tomas_por_dia');
+        $tomas = $cuenta && is_numeric($tomas) ? (int) $tomas : null;
+
+        $horas = $this->input('horas');
+
+        if (is_array($horas)) {
+            $horas = array_slice(array_values($horas), 0, $cuenta ? max(1, min($tomas ?? 1, 6)) : 1);
+            $horas = array_values(array_filter($horas, fn ($hora) => $hora !== null && $hora !== ''));
+            sort($horas);
+            $horas = $horas === [] ? null : $horas;
+        } elseif ($horas === '') {
+            $horas = null;
+        }
+
+        $this->merge(['tomas_por_dia' => $tomas, 'horas' => $horas]);
     }
 
     /**
@@ -180,8 +212,10 @@ class TratamientoGuardarRequest extends FormRequest
             'dias_semana.*' => ['integer', 'between:1,7'],
             // Opcional: una toma única no tiene "cada cuánto".
             'frecuencia' => ['nullable', 'string', 'max:255'],
+            'tomas_por_dia' => ['nullable', 'integer', 'between:1,6'],
+            'horas' => ['nullable', 'array', 'max:6'],
             // Lo que manda un <input type="time">. Hora de reloj, sin zona.
-            'hora' => ['nullable', 'date_format:H:i'],
+            'horas.*' => ['string', 'date_format:H:i'],
 
             'inicio' => ['required', 'date'],
 
@@ -272,7 +306,8 @@ class TratamientoGuardarRequest extends FormRequest
             'enfermedad_id' => 'enfermedad',
             'dosis' => 'dosis',
             'frecuencia' => 'frecuencia',
-            'hora' => 'horario',
+            'tomas_por_dia' => 'tomas por día',
+            'horas' => 'horarios',
             'inicio' => 'fecha de inicio',
             'fin' => 'fecha de fin',
             'notas' => 'observaciones',
@@ -290,7 +325,8 @@ class TratamientoGuardarRequest extends FormRequest
             'medico_id.exists' => 'Elegí un médico de tu agenda.',
             'fin.after_or_equal' => 'La fecha de fin no puede ser anterior al inicio.',
             'dias_semana.required_if' => 'Elegí al menos un día.',
-            'hora.date_format' => 'Escribí la hora como 08:30.',
+            'horas.*.date_format' => 'Escribí la hora como 08:30.',
+            'tomas_por_dia.between' => 'Pueden ser de 1 a 6 tomas por día.',
             'dias_semana.*.between' => 'Elegí días de la semana.',
             'dias_semana.*.integer' => 'Elegí días de la semana.',
         ];

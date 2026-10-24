@@ -2531,10 +2531,15 @@ duplicaría la dosis y los avisos de fin.
   dice cuáles; se elige con siete casillas L M X J V S D (la X es el miércoles) y se lee con palabras
   («Lunes, miércoles y viernes», `Tratamiento::tomaVisible()`). Con otra toma el request los **vacía**
   aunque vengan tildados: ocultos en pantalla siguen viajando.
-- **`hora`** (`time`, opcional, en claro) es el horario de la toma, con un `<input type="time">`. Es una
-  hora de **reloj**, no un instante: **no pasa por `aUtc()`** —las 8 son las 8 en la zona de quien la
-  toma— y se guarda tal cual. MySQL la devuelve con segundos (`08:30:00`): sale por
-  `Tratamiento::horaVisible()`, que el campo y la regla `date_format:H:i` necesitan sin.
+- **Tomas por día y su horario**: `tomas_por_dia` (de 1 a 6, solo con «todos los días» o «algunos
+  días», `PeriodicidadToma::cuentaTomasPorDia()`) y `horas` (JSON, «HH:MM», uno por toma, cada uno
+  opcional), en claro. Se lee «3 veces por día · a las 08:00, 14:00 y 20:00». Son horas de **reloj**,
+  no instantes: **no pasan por `aUtc()`** —las 8 son las 8 en la zona de quien la toma—. El request
+  descarta los vacíos, los ordena, no guarda más horarios que tomas y, con otra toma, deja un solo
+  horario y el contador en `null`: lo oculto en pantalla viaja igual. Reemplazó a `hora`, que tenía uno.
+- `HorariosDeToma.vue` **sí** tiene estado local (el contador decide cuántos campos hay), y por eso es
+  un componente aparte y todo va con `v-model`: el estado redibuja solo ese componente y no pisa lo
+  tipeado en los `:value` del formulario de edición. Verificado en Chrome.
 - ⚠️ **Las casillas de los días aparecen por CSS (`group-has-[option[value=personalizada]:checked]`),
   no por un `v-model` en el select.** El formulario de edición va con `:value`, y un solo campo con
   estado local pisaría lo tipeado en los demás (la regla de la Etapa 10). `frecuencia`
