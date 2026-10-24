@@ -30,7 +30,10 @@ class RecetaMedicaFactory extends Factory
                 'Levotiroxina 50 mcg x 50 comprimidos',
                 'Metformina 850 mg, 1 caja',
             ]),
-            'fecha' => now()->subDays($this->faker->numberBetween(0, 10))->startOfDay(),
+            // Desde 1 y no desde 0: es una fecha de calendario y la validan con
+            // FechaNoFutura. Con 0, de noche en Argentina la fecha UTC ya es
+            // mañana para la cuenta (ver FechasDeLasFactoriesTest).
+            'fecha' => now()->subDays($this->faker->numberBetween(1, 10))->startOfDay(),
             'vigencia_dias' => 30,
             'estado' => EstadoReceta::Disponible,
             'notas' => null,

@@ -9,6 +9,7 @@ use App\Models\Enfermedad;
 use App\Models\Paciente;
 use App\Models\User;
 use App\Rules\FechaNoFutura;
+use App\Support\CatalogoDeLaFicha;
 use App\Support\CatalogoVisible;
 use Illuminate\Contracts\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
@@ -74,7 +75,7 @@ class EnfermedadGuardarRequest extends FormRequest
                         ->whereNull('deleted_at')
                         ->where(fn (Builder $ambito) => $ambito
                             ->where(CatalogoVisible::para($usuario?->getAuthIdentifier()))
-                            ->orWhereIn('id', $this->medicosYaUsadosEnLaFicha())
+                            ->orWhereIn('id', CatalogoDeLaFicha::elegiblesPorColumna('medico_id', $this->pacienteId(), $this->medicosYaUsadosEnLaFicha()))
                         ),
                 ),
             ],

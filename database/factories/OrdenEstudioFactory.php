@@ -30,7 +30,10 @@ class OrdenEstudioFactory extends Factory
                 'Ecografía abdominal',
                 'Electrocardiograma',
             ]).' '.$this->faker->unique()->numerify('##'),
-            'fecha' => now()->subDays($this->faker->numberBetween(0, 90)),
+            // Desde 1 y no desde 0: es una fecha de calendario y la validan con
+            // FechaNoFutura. Con 0, de noche en Argentina la fecha UTC ya es
+            // mañana para la cuenta (ver FechasDeLasFactoriesTest).
+            'fecha' => now()->subDays($this->faker->numberBetween(1, 90)),
             'estado' => EstadoOrdenEstudio::Pendiente,
             'notas' => null,
         ];

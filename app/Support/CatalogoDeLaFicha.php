@@ -5,8 +5,13 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Enums\RolPaciente;
+use App\Models\Centro;
+use App\Models\Medicamento;
+use App\Models\Medico;
 use App\Models\Paciente;
+use App\Models\TipoMedicion;
 use App\Models\User;
+use App\Models\Vacuna;
 use Illuminate\Contracts\Database\Query\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -51,6 +56,63 @@ final class CatalogoDeLaFicha
             ->whereIn('usuario_id', $duenios)
             ->pluck('id')
             ->all()));
+    }
+
+    /**
+     * Qué catálogo hay detrás de cada columna de un registro clínico.
+     *
+     * @var array<string, class-string<Model>>
+     */
+    private const MODELO_POR_COLUMNA = [
+        'medico_id' => Medico::class,
+        'centro_id' => Centro::class,
+        'medicamento_id' => Medicamento::class,
+        'vacuna_id' => Vacuna::class,
+        'tipo_medicion_id' => TipoMedicion::class,
+    ];
+
+    /**
+     * Lo que se puede elegir en un formulario de la ficha, además de lo propio
+     * y las semillas: lo que la ficha ya usa **y la lista del dueño de la
+     * ficha**. Sin lo segundo, un cuidador abría "Médico" y encontraba solo
+     * "Sin especificar": los médicos son de la cuenta del dueño, no de él.
+     *
+     * Lo usan las dos puntas, la lista del formulario y su validación, con el
+     * mismo criterio: si el `select` ofreciera algo que la validación rechaza,
+     * el error aparecería recién al guardar.
+     *
+     * `$yaUsados` llega como sale de un `pluck()->unique()->all()`: con huecos
+     * en las claves y sin tipo. Se normaliza acá, una vez, en vez de en cada uno
+     * de los treinta lugares que lo llaman.
+     *
+     * @param  class-string<Model>  $modelo
+     * @param  array<array-key, mixed>  $yaUsados
+     * @return list<int>
+     */
+    public static function elegibles(string $modelo, ?int $pacienteId, array $yaUsados): array
+    {
+        $delDuenio = $pacienteId === null ? [] : self::ids($modelo, [$pacienteId]);
+        $usados = array_map(fn (mixed $id): int => is_numeric($id) ? (int) $id : 0, array_values($yaUsados));
+
+        return array_values(array_unique([...$usados, ...$delDuenio]));
+    }
+
+    /**
+     * Lo mismo, a partir de la columna del registro (`medico_id`, …), que es lo
+     * que tienen a mano las validaciones.
+     *
+     * @param  array<array-key, mixed>  $yaUsados
+     * @return list<int>
+     */
+    public static function elegiblesPorColumna(string $columna, ?int $pacienteId, array $yaUsados): array
+    {
+        $modelo = self::MODELO_POR_COLUMNA[$columna] ?? null;
+
+        if ($modelo === null) {
+            throw new \InvalidArgumentException("La columna [{$columna}] no apunta a un catálogo.");
+        }
+
+        return self::elegibles($modelo, $pacienteId, $yaUsados);
     }
 
     /**

@@ -12,6 +12,7 @@ use App\Models\PrescripcionOcular;
 use App\Models\User;
 use App\Rules\FechaNoFutura;
 use App\Rules\PasoDeDioptria;
+use App\Support\CatalogoDeLaFicha;
 use App\Support\CatalogoVisible;
 use Illuminate\Contracts\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
@@ -130,7 +131,7 @@ class PrescripcionOcularGuardarRequest extends FormRequest
                         ->whereNull('deleted_at')
                         ->where(fn (Builder $ambito) => $ambito
                             ->where(CatalogoVisible::para($usuarioId))
-                            ->orWhereIn('id', $this->idsYaUsados('medico_id'))
+                            ->orWhereIn('id', CatalogoDeLaFicha::elegiblesPorColumna('medico_id', $this->pacienteId(), $this->idsYaUsados('medico_id')))
                         ),
                 ),
             ],
@@ -143,7 +144,7 @@ class PrescripcionOcularGuardarRequest extends FormRequest
                         ->whereNull('deleted_at')
                         ->where(fn (Builder $ambito) => $ambito
                             ->where(CatalogoVisible::para($usuarioId))
-                            ->orWhereIn('id', $this->idsYaUsados('centro_id'))
+                            ->orWhereIn('id', CatalogoDeLaFicha::elegiblesPorColumna('centro_id', $this->pacienteId(), $this->idsYaUsados('centro_id')))
                         ),
                 ),
             ],

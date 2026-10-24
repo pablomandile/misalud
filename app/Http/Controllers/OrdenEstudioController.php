@@ -11,6 +11,7 @@ use App\Models\Medico;
 use App\Models\OrdenEstudio;
 use App\Models\Paciente;
 use App\Services\AdjuntadorDeArchivos;
+use App\Support\CatalogoDeLaFicha;
 use App\Support\CatalogoVisible;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
@@ -116,7 +117,7 @@ class OrdenEstudioController extends Controller
         return array_values(Medico::query()
             ->where(fn ($consulta) => $consulta
                 ->where(CatalogoVisible::para(auth()->id()))
-                ->orWhereIn('id', $yaUsados)
+                ->orWhereIn('id', CatalogoDeLaFicha::elegibles(Medico::class, $paciente->id, $yaUsados))
             )
             ->get()
             // En PHP: `nombre` está cifrado.

@@ -15,6 +15,7 @@ use App\Models\Paciente;
 use App\Models\Turno;
 use App\Models\User;
 use App\Services\ArchivoService;
+use App\Support\CatalogoDeLaFicha;
 use App\Support\CatalogoVisible;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
@@ -220,7 +221,7 @@ class ConsultaController extends Controller
         return array_values($modelo::query()
             ->where(fn ($consulta) => $consulta
                 ->where(CatalogoVisible::para(auth()->id()))
-                ->orWhereIn('id', $yaUsados)
+                ->orWhereIn('id', CatalogoDeLaFicha::elegibles($modelo, $paciente->id, $yaUsados))
             )
             ->get()
             ->map(fn (Model $r): array => ['id' => (int) $r->getKey(), 'nombre' => (string) $r->getAttribute('nombre')])

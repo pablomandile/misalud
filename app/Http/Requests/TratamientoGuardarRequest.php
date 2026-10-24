@@ -9,6 +9,7 @@ use App\Models\Medicamento;
 use App\Models\Paciente;
 use App\Models\Tratamiento;
 use App\Services\AdjuntadorDeArchivos;
+use App\Support\CatalogoDeLaFicha;
 use App\Support\CatalogoVisible;
 use Illuminate\Contracts\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
@@ -131,7 +132,7 @@ class TratamientoGuardarRequest extends FormRequest
             ->where('nombre_hash', Medicamento::hashCiego($nombre))
             ->where(fn ($ambito) => $ambito
                 ->where(CatalogoVisible::para($usuarioId))
-                ->orWhereIn('id', $this->medicamentosYaUsadosEnLaFicha())
+                ->orWhereIn('id', CatalogoDeLaFicha::elegiblesPorColumna('medicamento_id', $this->pacienteId(), $this->medicamentosYaUsadosEnLaFicha()))
             )
             ->get(['id', 'usuario_id']);
 
@@ -173,7 +174,7 @@ class TratamientoGuardarRequest extends FormRequest
                         ->whereNull('deleted_at')
                         ->where(fn (Builder $ambito) => $ambito
                             ->where(CatalogoVisible::para($usuarioId))
-                            ->orWhereIn('id', $this->medicamentosYaUsadosEnLaFicha())
+                            ->orWhereIn('id', CatalogoDeLaFicha::elegiblesPorColumna('medicamento_id', $this->pacienteId(), $this->medicamentosYaUsadosEnLaFicha()))
                         ),
                 ),
             ],
@@ -186,7 +187,7 @@ class TratamientoGuardarRequest extends FormRequest
                         ->whereNull('deleted_at')
                         ->where(fn (Builder $ambito) => $ambito
                             ->where(CatalogoVisible::para($usuarioId))
-                            ->orWhereIn('id', $this->medicosYaUsadosEnLaFicha())
+                            ->orWhereIn('id', CatalogoDeLaFicha::elegiblesPorColumna('medico_id', $this->pacienteId(), $this->medicosYaUsadosEnLaFicha()))
                         ),
                 ),
             ],

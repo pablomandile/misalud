@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Support\AdjuntoDeCasilla;
 use App\Support\MensajeDeCasilla;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Webklex\PHPIMAP\Attachment;
 use Webklex\PHPIMAP\Client;
@@ -83,23 +84,69 @@ class LectorDeCasilla
             return;
         }
 
-        $this->conCliente(function (Client $cliente) use ($uids): void {
-            $destino = (string) config('misalud.buzon.carpeta_procesados');
+        /*
+         * ⚠️ Un fallo acá NO puede tirar el comando: para cuando se llega a
+         * mover, los documentos ya están guardados y la respuesta ya salió.
+         * Antes la excepción subía y el comando terminaba en "No se pudo leer
+         * el buzón", cada 5 minutos, con todo procesado bien.
+         */
+        try {
+            $this->conCliente(function (Client $cliente) use ($uids): void {
+                $carpeta = $cliente->getFolderByPath($this->carpeta());
 
-            if ($cliente->getFolderByPath($destino) === null) {
-                $cliente->createFolder($destino);
-            }
-
-            $carpeta = $cliente->getFolderByPath($this->carpeta());
-
-            foreach ($uids as $uid) {
-                try {
-                    $carpeta?->query()->getMessageByUid($uid)->move($destino);
-                } catch (\Throwable) {
-                    // Ver el comentario del método: no mover no cambia el resultado.
+                if ($carpeta === null) {
+                    return;
                 }
-            }
-        });
+
+                $destino = self::rutaDeProcesados(
+                    (string) config('misalud.buzon.carpeta_procesados'),
+                    $carpeta->path,
+                    $carpeta->delimiter,
+                    array_values(array_map(fn ($f): string => $f->path, $cliente->getFolders(false)->all())),
+                );
+
+                /*
+                 * ⚠️ La carpeta recién creada no se ve en la misma conexión:
+                 * los `move` de esa corrida fallan (en silencio, abajo) y los
+                 * mails se mueven en la siguiente. Medido en Hostinger. No se
+                 * pierde nada: `mails_recibidos` frena que se reprocesen.
+                 */
+                if ($cliente->getFolderByPath($destino) === null) {
+                    $cliente->createFolder($destino);
+                }
+
+                foreach ($uids as $uid) {
+                    try {
+                        $carpeta->query()->getMessageByUid($uid)->move($destino);
+                    } catch (\Throwable) {
+                        // Ver el comentario del método: no mover no cambia el resultado.
+                    }
+                }
+            });
+        } catch (\Throwable $error) {
+            // Al log la clase y nada más: el mensaje puede venir del servidor IMAP.
+            Log::warning('No se pudieron mover los mails del buzón a Procesados.', ['excepcion' => $error::class]);
+        }
+    }
+
+    /**
+     * Dónde va la carpeta de procesados.
+     *
+     * ⚠️ En Hostinger (Dovecot) todas las carpetas cuelgan del INBOX con `.`
+     * como delimitador (`INBOX.Sent`, `INBOX.Trash`) y crear `Procesados` en la
+     * raíz lo rechaza el servidor. Medido contra el buzón real. Se usa la que
+     * ya exista, en la raíz o adentro del INBOX; si no hay ninguna, se crea
+     * adentro del INBOX, que es donde el servidor deja crear.
+     *
+     * @param  list<string>  $existentes
+     */
+    public static function rutaDeProcesados(string $nombre, string $inbox, string $delimitador, array $existentes): string
+    {
+        if (in_array($nombre, $existentes, true)) {
+            return $nombre;
+        }
+
+        return $inbox.$delimitador.$nombre;
     }
 
     /**

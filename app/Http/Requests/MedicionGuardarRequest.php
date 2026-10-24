@@ -9,6 +9,7 @@ use App\Models\Medicion;
 use App\Models\Paciente;
 use App\Models\TipoMedicion;
 use App\Models\User;
+use App\Support\CatalogoDeLaFicha;
 use App\Support\CatalogoVisible;
 use Carbon\CarbonImmutable;
 use Closure;
@@ -100,7 +101,7 @@ class MedicionGuardarRequest extends FormRequest
                         ->whereNull('deleted_at')
                         ->where(fn (Builder $ambito) => $ambito
                             ->where(CatalogoVisible::para($this->user()?->getAuthIdentifier()))
-                            ->orWhereIn('id', $this->tiposYaUsadosEnLaFicha())
+                            ->orWhereIn('id', CatalogoDeLaFicha::elegiblesPorColumna('tipo_medicion_id', $this->pacienteId(), $this->tiposYaUsadosEnLaFicha()))
                         ),
                 ),
             ],

@@ -16,6 +16,7 @@ use App\Models\Tratamiento;
 use App\Models\User;
 use App\Services\AdjuntadorDeArchivos;
 use App\Services\PacientePrincipal;
+use App\Support\CatalogoDeLaFicha;
 use App\Support\CatalogoVisible;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
@@ -162,7 +163,7 @@ class TratamientoController extends Controller
         return array_values(Medicamento::query()
             ->where(fn ($consulta) => $consulta
                 ->where(CatalogoVisible::para(auth()->id()))
-                ->orWhereIn('id', $yaUsados)
+                ->orWhereIn('id', CatalogoDeLaFicha::elegibles(Medicamento::class, $paciente->id, $yaUsados))
             )
             ->get()
             ->sortBy(fn (Medicamento $m): string => mb_strtolower($m->nombre_comercial))
@@ -188,7 +189,7 @@ class TratamientoController extends Controller
         return array_values(Medico::query()
             ->where(fn ($consulta) => $consulta
                 ->where(CatalogoVisible::para(auth()->id()))
-                ->orWhereIn('id', $yaUsados)
+                ->orWhereIn('id', CatalogoDeLaFicha::elegibles(Medico::class, $paciente->id, $yaUsados))
             )
             ->get()
             ->sortBy(fn (Medico $medico): string => mb_strtolower($medico->nombre))

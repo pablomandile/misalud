@@ -9,6 +9,7 @@ use App\Models\RecetaMedica;
 use App\Models\User;
 use App\Rules\FechaNoFutura;
 use App\Services\AdjuntadorDeArchivos;
+use App\Support\CatalogoDeLaFicha;
 use App\Support\CatalogoVisible;
 use Illuminate\Contracts\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
@@ -125,9 +126,19 @@ class RecetaMedicaGuardarRequest extends FormRequest
                 ->whereNull('deleted_at')
                 ->where(fn (Builder $ambito) => $ambito
                     ->where(CatalogoVisible::para($usuarioId))
-                    ->orWhereIn('id', $this->yaUsadosEnLaFicha($columna))
+                    ->orWhereIn('id', CatalogoDeLaFicha::elegiblesPorColumna($columna, $this->pacienteIdDeLaPeticion(), $this->yaUsadosEnLaFicha($columna)))
                 ),
         );
+    }
+
+    /**
+     * La ficha de esta petición: la de la ruta al crear, la de la receta al editar.
+     */
+    private function pacienteIdDeLaPeticion(): ?int
+    {
+        $paciente = $this->route('paciente');
+
+        return $paciente instanceof Paciente ? $paciente->id : $this->recetaDeLaRuta()?->paciente_id;
     }
 
     /**

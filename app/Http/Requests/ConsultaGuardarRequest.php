@@ -7,6 +7,7 @@ namespace App\Http\Requests;
 use App\Models\Consulta;
 use App\Models\Paciente;
 use App\Models\User;
+use App\Support\CatalogoDeLaFicha;
 use App\Support\CatalogoVisible;
 use Carbon\CarbonImmutable;
 use Closure;
@@ -108,7 +109,7 @@ class ConsultaGuardarRequest extends FormRequest
                     ->whereNull('deleted_at')
                     ->where(fn (Builder $ambito) => $ambito
                         ->where(CatalogoVisible::para($usuarioId))
-                        ->orWhereIn('id', $this->idsYaUsados($columna))
+                        ->orWhereIn('id', CatalogoDeLaFicha::elegiblesPorColumna($columna, $this->pacienteId(), $this->idsYaUsados($columna)))
                     ),
             ),
         ];

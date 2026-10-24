@@ -13,6 +13,7 @@ use App\Models\GraduacionOcular;
 use App\Models\Medico;
 use App\Models\Paciente;
 use App\Models\PrescripcionOcular;
+use App\Support\CatalogoDeLaFicha;
 use App\Support\CatalogoVisible;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Collection;
@@ -145,7 +146,7 @@ class PrescripcionOcularController extends Controller
         return array_values(Medico::query()
             ->where(fn ($consulta) => $consulta
                 ->where(CatalogoVisible::para(auth()->id()))
-                ->orWhereIn('id', $yaUsados)
+                ->orWhereIn('id', CatalogoDeLaFicha::elegibles(Medico::class, $paciente->id, $yaUsados))
             )
             ->get()
             // En PHP: `nombre` está cifrado.
@@ -169,7 +170,7 @@ class PrescripcionOcularController extends Controller
         return array_values(Centro::query()
             ->where(fn ($consulta) => $consulta
                 ->where(CatalogoVisible::para(auth()->id()))
-                ->orWhereIn('id', $yaUsados)
+                ->orWhereIn('id', CatalogoDeLaFicha::elegibles(Centro::class, $paciente->id, $yaUsados))
             )
             ->get()
             ->sortBy(fn (Centro $centro): string => mb_strtolower($centro->nombre))

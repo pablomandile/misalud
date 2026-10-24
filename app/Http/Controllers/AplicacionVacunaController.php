@@ -10,6 +10,7 @@ use App\Models\AplicacionVacuna;
 use App\Models\Centro;
 use App\Models\Paciente;
 use App\Models\Vacuna;
+use App\Support\CatalogoDeLaFicha;
 use App\Support\CatalogoVisible;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
@@ -125,7 +126,7 @@ class AplicacionVacunaController extends Controller
         return array_values($modelo::query()
             ->where(fn ($consulta) => $consulta
                 ->where(CatalogoVisible::para(auth()->id()))
-                ->orWhereIn('id', $yaUsados)
+                ->orWhereIn('id', CatalogoDeLaFicha::elegibles($modelo, $paciente->id, $yaUsados))
             )
             ->get()
             ->map(fn (Model $registro): array => [

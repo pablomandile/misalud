@@ -387,3 +387,27 @@ it('la respuesta es texto plano, sin nombres en el asunto ni escapes de HTML', f
         ->and($texto)->not->toContain('&#039;')
         ->and($texto)->not->toContain('<html');
 });
+
+/*
+|--------------------------------------------------------------------------
+| Adónde se mueve lo procesado
+|--------------------------------------------------------------------------
+|
+| Medido contra el buzón real de Hostinger: las carpetas cuelgan del INBOX con
+| `.` (INBOX.Sent, INBOX.Trash) y crear `Procesados` en la raíz da error.
+*/
+
+it('crea Procesados adentro del INBOX cuando no existe', function (): void {
+    expect(LectorDeCasilla::rutaDeProcesados('Procesados', 'INBOX', '.', ['INBOX', 'INBOX.Sent', 'INBOX.Trash']))
+        ->toBe('INBOX.Procesados');
+});
+
+it('usa la de la raíz si el servidor ya la tiene ahí', function (): void {
+    expect(LectorDeCasilla::rutaDeProcesados('Procesados', 'INBOX', '/', ['INBOX', 'Procesados']))
+        ->toBe('Procesados');
+});
+
+it('respeta el delimitador del servidor', function (): void {
+    expect(LectorDeCasilla::rutaDeProcesados('Procesados', 'INBOX', '/', ['INBOX']))
+        ->toBe('INBOX/Procesados');
+});

@@ -12,6 +12,7 @@ use App\Models\TipoMedicion;
 use App\Models\User;
 use App\Services\PacientePrincipal;
 use App\Services\SeriesDeMediciones;
+use App\Support\CatalogoDeLaFicha;
 use App\Support\CatalogoVisible;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Collection;
@@ -172,7 +173,7 @@ class MedicionController extends Controller
         return array_values(TipoMedicion::query()
             ->where(fn ($consulta) => $consulta
                 ->where(CatalogoVisible::para(auth()->id()))
-                ->orWhereIn('id', $yaUsados)
+                ->orWhereIn('id', CatalogoDeLaFicha::elegibles(TipoMedicion::class, $paciente->id, $yaUsados))
             )
             ->get()
             ->sortBy(fn (TipoMedicion $tipo): string => mb_strtolower($tipo->nombre))

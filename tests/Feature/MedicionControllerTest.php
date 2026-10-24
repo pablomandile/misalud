@@ -480,12 +480,17 @@ it('el formulario del cuidador ofrece lo que la ficha ya usa', function (): void
         );
 });
 
-it('pero NO le abre el resto del catálogo del dueño', function (): void {
-    // Solo lo que la ficha ya usa -y que el cuidador ya está viendo en el
-    // listado-. El resto del catálogo del dueño sigue siendo suyo.
+it('le abre también lo del dueño que la ficha todavía no usa, pero no lo de un extraño', function (): void {
+    /*
+     * Antes era "solo lo que la ficha ya usa", y dejaba al cuidador sin poder
+     * elegir una variable que el dueño creó y no usó todavía. Desde que
+     * compartir una ficha comparte la lista completa del dueño
+     * (CatalogoDeLaFicha), los formularios de la ficha también la ofrecen.
+     */
     [$duenio, $paciente, $tipoUsado] = escenario();
     Medicion::factory()->for($paciente)->for($tipoUsado, 'tipo')->create();
     $tipoNuncaUsado = TipoMedicion::factory()->for($duenio, 'usuario')->create();
+    $tipoDeUnExtranio = TipoMedicion::factory()->for(User::factory(), 'usuario')->create();
 
     $cuidador = User::factory()->create();
     $paciente->cuidadores()->attach($cuidador, ['rol' => RolPaciente::Cuidador->value]);
@@ -493,6 +498,14 @@ it('pero NO le abre el resto del catálogo del dueño', function (): void {
     $this->actingAs($cuidador)
         ->post(route('pacientes.mediciones.store', $paciente), [
             'tipo_medicion_id' => $tipoNuncaUsado->id,
+            'fecha' => '2026-09-20T08:00',
+            'valor' => '73',
+        ])
+        ->assertSessionHasNoErrors();
+
+    $this->actingAs($cuidador)
+        ->post(route('pacientes.mediciones.store', $paciente), [
+            'tipo_medicion_id' => $tipoDeUnExtranio->id,
             'fecha' => '2026-09-20T08:00',
             'valor' => '73',
         ])

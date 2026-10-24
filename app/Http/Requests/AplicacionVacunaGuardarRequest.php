@@ -8,6 +8,7 @@ use App\Models\AplicacionVacuna;
 use App\Models\Paciente;
 use App\Models\User;
 use App\Rules\FechaNoFutura;
+use App\Support\CatalogoDeLaFicha;
 use App\Support\CatalogoVisible;
 use Illuminate\Contracts\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
@@ -58,7 +59,7 @@ class AplicacionVacunaGuardarRequest extends FormRequest
                         ->whereNull('deleted_at')
                         ->where(fn (Builder $ambito) => $ambito
                             ->where(CatalogoVisible::para($usuario->id))
-                            ->orWhereIn('id', $this->idsYaUsados('vacuna_id'))
+                            ->orWhereIn('id', CatalogoDeLaFicha::elegiblesPorColumna('vacuna_id', $this->pacienteId(), $this->idsYaUsados('vacuna_id')))
                         ),
                 ),
             ],
@@ -71,7 +72,7 @@ class AplicacionVacunaGuardarRequest extends FormRequest
                         ->whereNull('deleted_at')
                         ->where(fn (Builder $ambito) => $ambito
                             ->where(CatalogoVisible::para($usuario->id))
-                            ->orWhereIn('id', $this->idsYaUsados('centro_id'))
+                            ->orWhereIn('id', CatalogoDeLaFicha::elegiblesPorColumna('centro_id', $this->pacienteId(), $this->idsYaUsados('centro_id')))
                         ),
                 ),
             ],

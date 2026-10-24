@@ -12,6 +12,7 @@ use App\Models\Medico;
 use App\Models\Paciente;
 use App\Models\RegistroEnfermedad;
 use App\Services\SeriesDeMediciones;
+use App\Support\CatalogoDeLaFicha;
 use App\Support\CatalogoVisible;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
@@ -118,7 +119,7 @@ class EnfermedadController extends Controller
         return array_values(Medico::query()
             ->where(fn ($consulta) => $consulta
                 ->where(CatalogoVisible::para(auth()->id()))
-                ->orWhereIn('id', $yaUsados)
+                ->orWhereIn('id', CatalogoDeLaFicha::elegibles(Medico::class, $paciente->id, $yaUsados))
             )
             ->get()
             // En PHP: `nombre` está cifrado.

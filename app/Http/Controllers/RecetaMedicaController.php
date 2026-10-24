@@ -16,6 +16,7 @@ use App\Models\Paciente;
 use App\Models\RecetaMedica;
 use App\Models\User;
 use App\Services\AdjuntadorDeArchivos;
+use App\Support\CatalogoDeLaFicha;
 use App\Support\CatalogoVisible;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
@@ -142,7 +143,7 @@ class RecetaMedicaController extends Controller
         return array_values($modelo::query()
             ->where(fn ($consulta) => $consulta
                 ->where(CatalogoVisible::para(auth()->id()))
-                ->orWhereIn('id', $yaUsados)
+                ->orWhereIn('id', CatalogoDeLaFicha::elegibles($modelo, $paciente->id, $yaUsados))
             )
             ->get()
             ->map(fn (Model&EsCatalogo $registro): array => [

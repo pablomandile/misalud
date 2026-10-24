@@ -27,7 +27,10 @@ class PrescripcionOcularFactory extends Factory
             'medico_id' => null,
             'centro_id' => null,
             'tipo' => $this->faker->randomElement(TipoPrescripcionOcular::cases()),
-            'fecha' => now()->subDays($this->faker->numberBetween(0, 900)),
+            // Desde 1 y no desde 0: es una fecha de calendario y la validan con
+            // FechaNoFutura. Con 0, de noche en Argentina la fecha UTC ya es
+            // mañana para la cuenta (ver FechasDeLasFactoriesTest).
+            'fecha' => now()->subDays($this->faker->numberBetween(1, 900)),
             'dp_total' => null,
             'notas' => null,
         ];

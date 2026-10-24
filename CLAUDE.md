@@ -962,6 +962,13 @@ farmacias, medicamentos, vacunas y variables).
   semilla o lo del dueño), así ninguna pantalla lo calcula por su cuenta.
 - Contactos y los destinatarios de un envío suman lo mismo (`visiblesConFichas()`) para médicos,
   centros y farmacias; en Contactos sin enlace para editar.
+- ⚠️ **Los formularios de la ficha también** (`CatalogoDeLaFicha::elegibles()` y
+  `elegiblesPorColumna()`): el médico de una enfermedad, el medicamento de un tratamiento, la variable
+  de una medición… ofrecen lo propio, las semillas, lo que la ficha ya usa **y la lista del dueño de
+  ESA ficha**. Faltaba, y el síntoma en producción fue un cuidador que abría «Médico» en Enfermedades
+  y solo encontraba «Sin especificar». Son 15 listas y sus 16 validaciones, con el mismo criterio a
+  las dos puntas. En una ficha propia no se cuela la lista de quien me compartió otra: es el dueño de
+  esta ficha, no de todas las que veo (`CatalogoDelDuenioEnFormulariosTest`).
 
 ### Farmacias: el sexto, también sin decisiones nuevas
 
@@ -1103,12 +1110,14 @@ la escriben varios. Sin ella, un cuidador no podría sumar un peso a la serie qu
 dueño —el tipo es del dueño, no suyo— y terminaría creando un "Peso" propio: la misma variable
 partida en dos, que es justo lo que el catálogo por usuario venía a evitar.
 
-- **No expone nada nuevo**: son los tipos que esa persona ya está viendo en el listado de esa
-  misma ficha. El resto del catálogo del dueño sigue siendo suyo, y hay un test que lo fija.
+- ~~No expone nada nuevo: el resto del catálogo del dueño sigue siendo suyo.~~ Superado por la
+  decisión de compartir la lista completa del dueño (ver "Solapas por ficha compartida"): el
+  formulario ofrece también sus variables sin usar. Lo de un extraño sigue afuera, y un test lo fija.
 - El formulario y la validación usan el **mismo** criterio. Si el `select` ofreciera algo que
   la validación rechaza, el error aparecería recién al guardar.
-- Queda un hueco chico para la Etapa 14: si el dueño creó un tipo propio y **todavía no lo
-  usó**, el cuidador no puede elegirlo. Se resuelve usándolo una vez, o con una semilla.
+- ~~Si el dueño creó un tipo propio y todavía no lo usó, el cuidador no puede elegirlo.~~ Resuelto:
+  los formularios de la ficha ofrecen también la lista completa del dueño (ver "Solapas por ficha
+  compartida").
 
 ### Otras decisiones que no son obvias
 
@@ -2088,8 +2097,13 @@ si hay alguna.
   y `Authentication-Results` casi siempre ocupa varias.
 - **Un mail sin `Message-ID` necesita un reemplazo determinístico**
   (`MensajeDeCasilla::identificadorPara()`): sin él, su hash queda nulo y se reprocesaría siempre.
-- Lo procesado se **mueve a `Procesados`** (se crea si no existe). Si el servidor no deja, no pasa
-  nada: `mails_recibidos` lo frena igual. Lo que da error se queda en el INBOX, para mirarlo.
+- Lo procesado se **mueve a `INBOX.Procesados`** (se crea si no existe). ⚠️ En Hostinger todas las
+  carpetas cuelgan del INBOX con `.` y crear `Procesados` en la raíz lo rechaza el servidor: esa
+  excepción subía y el comando terminaba en "No se pudo leer el buzón" con todo ya guardado. La ruta
+  la decide `LectorDeCasilla::rutaDeProcesados()` (testeada) y un fallo al mover **no tira el
+  comando**. La carpeta recién creada no se ve en la misma conexión: esos mails se mueven en la
+  corrida siguiente. Lo que da error se queda en el INBOX, para mirarlo.
+- ⚠️ **Producción tiene `LOG_LEVEL=error`**: un `Log::warning` no queda escrito.
 - Al log van ids y la clase de la excepción, **nunca** el remitente, el asunto ni el mensaje de la
   excepción (puede venir del servidor IMAP y traer el LOGIN).
 - ⚠️ **Una propiedad pública de un mailable pisa la variable de la vista con el mismo nombre**:
@@ -3548,7 +3562,8 @@ El ingreso con Google está **encendido en producción**: el botón aparece y Go
 redirect sin `redirect_uri_mismatch`. El cron de `schedule:run` está creado en hPanel, y el
 usuario probó la app en un iPhone real (16.0).
 
-**Buzón único** (reemplaza la casilla de cada persona): ver "Buzón de documentos". ⚠️ **Falta
-medir contra el buzón real**: cargar `BUZON_DIRECCION` y `BUZON_PASSWORD` en el `.env` del server,
-mandar un mail desde Gmail y leer el `Authentication-Results` que escribe Hostinger, para confirmar
-`AutenticidadDelMail` antes de confiar en el guardado directo.
+**Buzón único** (reemplaza la casilla de cada persona): ver "Buzón de documentos". **Medido contra
+el buzón real** (24/10/2026): un mail reenviado desde Gmail con «Orden» en el asunto pasó
+`AutenticidadDelMail` y entró directo a Órdenes con su PDF. Hasta ese día no había funcionado nunca:
+`BUZON_PASSWORD` estaba vacía en el `.env` del server y el comando fallaba cada 5 minutos desde el
+19/10 sin que nadie lo viera.
