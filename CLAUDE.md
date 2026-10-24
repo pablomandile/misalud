@@ -2531,6 +2531,10 @@ duplicaría la dosis y los avisos de fin.
   dice cuáles; se elige con siete casillas L M X J V S D (la X es el miércoles) y se lee con palabras
   («Lunes, miércoles y viernes», `Tratamiento::tomaVisible()`). Con otra toma el request los **vacía**
   aunque vengan tildados: ocultos en pantalla siguen viajando.
+- **`hora`** (`time`, opcional, en claro) es el horario de la toma, con un `<input type="time">`. Es una
+  hora de **reloj**, no un instante: **no pasa por `aUtc()`** —las 8 son las 8 en la zona de quien la
+  toma— y se guarda tal cual. MySQL la devuelve con segundos (`08:30:00`): sale por
+  `Tratamiento::horaVisible()`, que el campo y la regla `date_format:H:i` necesitan sin.
 - ⚠️ **Las casillas de los días aparecen por CSS (`group-has-[option[value=personalizada]:checked]`),
   no por un `v-model` en el select.** El formulario de edición va con `:value`, y un solo campo con
   estado local pisaría lo tipeado en los demás (la regla de la Etapa 10). `frecuencia`

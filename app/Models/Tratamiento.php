@@ -35,6 +35,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $frecuencia
  * @property PeriodicidadToma|null $periodicidad
  * @property list<int>|null $dias_semana
+ * @property string|null $hora
  * @property CarbonImmutable $inicio
  * @property CarbonImmutable|null $fin
  * @property bool $activo
@@ -74,6 +75,7 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente, Tiene
         'frecuencia',
         'periodicidad',
         'dias_semana',
+        'hora',
         'inicio',
         'fin',
         'activo',
@@ -170,6 +172,15 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente, Tiene
         }
 
         return $this->periodicidad?->etiqueta();
+    }
+
+    /**
+     * "08:00": MySQL devuelve la columna `time` con segundos ("08:00:00"), y el
+     * campo de la pantalla los quiere sin.
+     */
+    public function horaVisible(): ?string
+    {
+        return $this->hora === null ? null : substr($this->hora, 0, 5);
     }
 
     public function pacienteDelRegistro(): ?Paciente

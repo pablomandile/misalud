@@ -59,6 +59,7 @@ type Tratamiento = {
     enfermedadNombre: string | null;
     dosis: string;
     frecuencia: string | null;
+    hora: string | null;
     periodicidad: string | null;
     periodicidadEtiqueta: string | null;
     diasSemana: number[];
@@ -117,7 +118,12 @@ const activos = computed(() => props.tratamientos.filter((t) => t.activo));
 const inactivos = computed(() => props.tratamientos.filter((t) => !t.activo));
 
 function detalleDeToma(t: Tratamiento): string {
-    return [t.dosis, t.periodicidadEtiqueta, t.frecuencia]
+    return [
+        t.dosis,
+        t.periodicidadEtiqueta,
+        t.hora ? `a las ${t.hora}` : null,
+        t.frecuencia,
+    ]
         .filter((parte) => parte)
         .join(' · ');
 }
@@ -442,6 +448,17 @@ function detalleDeToma(t: Tratamiento): string {
                         </div>
 
                         <div class="grid gap-2">
+                            <Label for="hora-crear">Horario (opcional)</Label>
+                            <input
+                                id="hora-crear"
+                                name="hora"
+                                type="time"
+                                :class="campoUnaLinea"
+                            />
+                            <InputError :message="errors.hora" />
+                        </div>
+
+                        <div class="grid gap-2">
                             <Label for="inicio-crear">Desde</Label>
                             <input
                                 id="inicio-crear"
@@ -673,6 +690,18 @@ function detalleDeToma(t: Tratamiento): string {
                                 :class="campoUnaLinea"
                             />
                             <InputError :message="errors.frecuencia" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="hora-editar">Horario (opcional)</Label>
+                            <input
+                                id="hora-editar"
+                                name="hora"
+                                type="time"
+                                :value="tratamientoAEditar.hora ?? ''"
+                                :class="campoUnaLinea"
+                            />
+                            <InputError :message="errors.hora" />
                         </div>
 
                         <div class="grid gap-2">

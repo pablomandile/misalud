@@ -231,6 +231,7 @@ class TratamientoController extends Controller
             'enfermedadNombre' => $tratamiento->enfermedad?->nombre,
             'dosis' => $tratamiento->dosis,
             'frecuencia' => $tratamiento->frecuencia,
+            'hora' => $tratamiento->horaVisible(),
             'periodicidad' => $tratamiento->periodicidad?->value,
             'diasSemana' => $tratamiento->dias_semana ?? [],
             'periodicidadEtiqueta' => $tratamiento->tomaVisible(),

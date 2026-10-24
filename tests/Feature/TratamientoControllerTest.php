@@ -619,3 +619,57 @@ it('suma una foto después, y un lector no puede', function (): void {
 
     expect($tratamiento->adjuntos()->count())->toBe(1);
 });
+
+/*
+|--------------------------------------------------------------------------
+| Horario de la toma
+|--------------------------------------------------------------------------
+*/
+
+it('guarda el horario tal cual, sin pasarlo a UTC, y lo manda sin segundos', function (): void {
+    [$usuario, $paciente, $medicamento] = fichaConTratamientos();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.tratamientos.store', $paciente), [
+            'medicamento_id' => $medicamento->id,
+            'dosis' => '1 comprimido',
+            'periodicidad' => 'diaria',
+            'hora' => '08:30',
+            'inicio' => '2026-09-01',
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect(Tratamiento::sole()->horaVisible())->toBe('08:30');
+
+    $this->actingAs($usuario)
+        ->get(route('pacientes.tratamientos.index', $paciente))
+        ->assertInertia(fn ($p) => $p->where('tratamientos.0.hora', '08:30'));
+});
+
+it('el horario es opcional', function (): void {
+    [$usuario, $paciente, $medicamento] = fichaConTratamientos();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.tratamientos.store', $paciente), [
+            'medicamento_id' => $medicamento->id,
+            'dosis' => '1',
+            'hora' => '',
+            'inicio' => '2026-09-01',
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect(Tratamiento::sole()->hora)->toBeNull();
+});
+
+it('rechaza una hora que no existe', function (): void {
+    [$usuario, $paciente, $medicamento] = fichaConTratamientos();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.tratamientos.store', $paciente), [
+            'medicamento_id' => $medicamento->id,
+            'dosis' => '1',
+            'hora' => '25:00',
+            'inicio' => '2026-09-01',
+        ])
+        ->assertSessionHasErrors('hora');
+});

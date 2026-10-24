@@ -180,6 +180,8 @@ class TratamientoGuardarRequest extends FormRequest
             'dias_semana.*' => ['integer', 'between:1,7'],
             // Opcional: una toma única no tiene "cada cuánto".
             'frecuencia' => ['nullable', 'string', 'max:255'],
+            // Lo que manda un <input type="time">. Hora de reloj, sin zona.
+            'hora' => ['nullable', 'date_format:H:i'],
 
             'inicio' => ['required', 'date'],
 
@@ -270,6 +272,7 @@ class TratamientoGuardarRequest extends FormRequest
             'enfermedad_id' => 'enfermedad',
             'dosis' => 'dosis',
             'frecuencia' => 'frecuencia',
+            'hora' => 'horario',
             'inicio' => 'fecha de inicio',
             'fin' => 'fecha de fin',
             'notas' => 'observaciones',
@@ -287,6 +290,7 @@ class TratamientoGuardarRequest extends FormRequest
             'medico_id.exists' => 'Elegí un médico de tu agenda.',
             'fin.after_or_equal' => 'La fecha de fin no puede ser anterior al inicio.',
             'dias_semana.required_if' => 'Elegí al menos un día.',
+            'hora.date_format' => 'Escribí la hora como 08:30.',
             'dias_semana.*.between' => 'Elegí días de la semana.',
             'dias_semana.*.integer' => 'Elegí días de la semana.',
         ];
