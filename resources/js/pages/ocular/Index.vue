@@ -14,6 +14,7 @@ import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController'
 import EnvioController from '@/actions/App/Http/Controllers/EnvioController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
 import PrescripcionOcularController from '@/actions/App/Http/Controllers/PrescripcionOcularController';
+import BotonDeArchivo from '@/components/BotonDeArchivo.vue';
 import type { ValoresDeOjo } from '@/components/DiagramaOjo.vue';
 import DiagramaOjo from '@/components/DiagramaOjo.vue';
 import GraficoEvolucion from '@/components/GraficoEvolucion.vue';
@@ -141,12 +142,6 @@ const recetaAEditar = ref<Prescripcion | null>(null);
 const recetaABorrar = ref<Prescripcion | null>(null);
 const recetaDeArchivos = ref<Prescripcion | null>(null);
 const documentoAbierto = ref<DocumentoVisible | null>(null);
-
-function pesoLegible(bytes: number): string {
-    return bytes < 1024 * 1024
-        ? `${Math.round(bytes / 1024)} KB`
-        : `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
-}
 
 // Qué recetas se están mostrando transpuestas. Ver el comentario de arriba:
 // es un `Set` de ids, no una propiedad de cada receta -no hay nada que
@@ -319,25 +314,12 @@ function resumenAccesibleDeOjo(serie: EvolucionDeOjo): string {
                                 :key="documento.id"
                                 class="flex items-center gap-2 rounded-md border p-2"
                             >
-                                <button
-                                    type="button"
-                                    class="flex min-h-11 min-w-0 flex-1 items-center gap-3 text-left"
-                                    @click="documentoAbierto = documento"
-                                >
-                                    <FileText
-                                        class="size-5 shrink-0 text-muted-foreground"
-                                    />
-                                    <span class="min-w-0">
-                                        <span class="block truncate text-sm">
-                                            {{ documento.nombre }}
-                                        </span>
-                                        <span
-                                            class="block text-sm text-muted-foreground"
-                                        >
-                                            {{ pesoLegible(documento.tamanio) }}
-                                        </span>
-                                    </span>
-                                </button>
+                                <BotonDeArchivo
+                                    :documento="documento"
+                                    :lista="receta.adjuntos"
+                                    @abrir="documentoAbierto = documento"
+                                />
+                                <span class="flex-1" aria-hidden="true" />
 
                                 <!--
                                     Para cualquiera que pueda VER el documento: mandarlo no pide más

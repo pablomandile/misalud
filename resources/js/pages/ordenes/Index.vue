@@ -13,6 +13,7 @@ import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController'
 import EnvioController from '@/actions/App/Http/Controllers/EnvioController';
 import OrdenEstudioController from '@/actions/App/Http/Controllers/OrdenEstudioController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
+import BotonDeArchivo from '@/components/BotonDeArchivo.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import SubirArchivo from '@/components/SubirArchivo.vue';
@@ -103,12 +104,6 @@ const documentoAbierto = ref<DocumentoVisible | null>(null);
 
 const pendientes = computed(() => props.ordenes.filter((o) => o.estaPendiente));
 const resto = computed(() => props.ordenes.filter((o) => !o.estaPendiente));
-
-function pesoLegible(bytes: number): string {
-    return bytes < 1024 * 1024
-        ? `${Math.round(bytes / 1024)} KB`
-        : `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
-}
 </script>
 
 <template>
@@ -204,33 +199,17 @@ function pesoLegible(bytes: number): string {
                                         :key="documento.id"
                                         class="flex items-center gap-2 rounded-md border p-2"
                                     >
-                                        <button
-                                            type="button"
-                                            class="flex min-h-11 min-w-0 flex-1 items-center gap-3 text-left"
-                                            @click="
+                                        <BotonDeArchivo
+                                            :documento="documento"
+                                            :lista="orden.adjuntos"
+                                            @abrir="
                                                 documentoAbierto = documento
                                             "
-                                        >
-                                            <FileText
-                                                class="size-5 shrink-0 text-muted-foreground"
-                                            />
-                                            <span class="min-w-0">
-                                                <span
-                                                    class="block truncate text-sm"
-                                                >
-                                                    {{ documento.nombre }}
-                                                </span>
-                                                <span
-                                                    class="block text-sm text-muted-foreground"
-                                                >
-                                                    {{
-                                                        pesoLegible(
-                                                            documento.tamanio,
-                                                        )
-                                                    }}
-                                                </span>
-                                            </span>
-                                        </button>
+                                        />
+                                        <span
+                                            class="flex-1"
+                                            aria-hidden="true"
+                                        />
 
                                         <!--
                                             Para cualquiera que pueda VER el documento: mandarlo no pide más

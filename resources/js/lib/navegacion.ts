@@ -23,7 +23,7 @@ import MedicionController from '@/actions/App/Http/Controllers/MedicionControlle
 import MedicoController from '@/actions/App/Http/Controllers/MedicoController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
 import TratamientoController from '@/actions/App/Http/Controllers/TratamientoController';
-import VacunaController from '@/actions/App/Http/Controllers/VacunaController';
+import AplicacionVacunaController from '@/actions/App/Http/Controllers/AplicacionVacunaController';
 import { dashboard } from '@/routes';
 import { edit as editarPerfil } from '@/routes/profile';
 import type { NavItem } from '@/types';
@@ -138,7 +138,7 @@ export const destinosPrincipales: NavItem[] = [
     },
     {
         title: 'Vacunas',
-        href: VacunaController.index(),
+        href: AplicacionVacunaController.principal(),
         icon: Syringe,
         tono: 'limon',
     },

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Concerns\EligeDelCatalogoOEscribe;
 use App\Enums\PeriodicidadToma;
 use App\Models\Medicamento;
 use App\Models\Paciente;
@@ -18,6 +19,8 @@ use Illuminate\Validation\Rule;
 
 class TratamientoGuardarRequest extends FormRequest
 {
+    use EligeDelCatalogoOEscribe;
+
     /**
      * Autorizar ANTES de validar: si no, a alguien sin permiso le contesta
      * primero la validación y de paso le confirma que la ficha existe.
@@ -109,40 +112,19 @@ class TratamientoGuardarRequest extends FormRequest
     }
 
     /**
-     * El formulario manda el NOMBRE del medicamento, elegido de la lista o
-     * escrito a mano. Si coincide con uno que esta persona puede usar (propio
-     * primero, después la lista compartida o lo que la ficha ya usa), se
-     * convierte acá en su `medicamento_id`, antes de que la regla lo mire. Si
-     * no coincide con ninguno, queda sin id y el controlador lo crea en el
-     * catálogo propio: nadie tiene que "copiar" una semilla para usarla.
+     * El medicamento sale de la lista o se escribe con «Otro» (ver
+     * `EligeDelCatalogoOEscribe`). Si no coincide con ninguno, queda sin id y
+     * el controlador lo crea en el catálogo propio: nadie tiene que "copiar"
+     * una semilla para usarla.
      */
     private function resolverMedicamentoPorNombre(): void
     {
-        $nombre = $this->input('medicamento_nombre');
-
-        if (! is_string($nombre) || trim($nombre) === '' || $this->filled('medicamento_id')) {
-            return;
-        }
-
-        $this->merge(['medicamento_nombre' => trim($nombre)]);
-
-        $usuarioId = $this->user()?->getAuthIdentifier();
-
-        $candidatos = Medicamento::query()
-            ->where('nombre_hash', Medicamento::hashCiego($nombre))
-            ->where(fn ($ambito) => $ambito
-                ->where(CatalogoVisible::para($usuarioId))
-                ->orWhereIn('id', CatalogoDeLaFicha::elegiblesPorColumna('medicamento_id', $this->pacienteId(), $this->medicamentosYaUsadosEnLaFicha()))
-            )
-            ->get(['id', 'usuario_id']);
-
-        $elegido = $candidatos->firstWhere('usuario_id', $usuarioId)
-            ?? $candidatos->firstWhere('usuario_id', null)
-            ?? $candidatos->first();
-
-        if ($elegido !== null) {
-            $this->merge(['medicamento_id' => $elegido->id]);
-        }
+        $this->resolverEleccionDeCatalogo(
+            Medicamento::class,
+            'medicamento_id',
+            'medicamento_nombre',
+            CatalogoDeLaFicha::elegiblesPorColumna('medicamento_id', $this->pacienteId(), $this->medicamentosYaUsadosEnLaFicha()),
+        );
     }
 
     /**

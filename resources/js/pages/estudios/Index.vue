@@ -11,6 +11,7 @@ import {
 import { computed, ref } from 'vue';
 import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
 import EnvioController from '@/actions/App/Http/Controllers/EnvioController';
+import BotonDeArchivo from '@/components/BotonDeArchivo.vue';
 import GraficoEvolucion from '@/components/GraficoEvolucion.vue';
 import EstudioController from '@/actions/App/Http/Controllers/EstudioController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
@@ -145,12 +146,6 @@ const documentoAbierto = ref<DocumentoVisible | null>(null);
 const ordenados = computed(() =>
     [...props.estudios].sort((a, b) => (a.fecha < b.fecha ? 1 : -1)),
 );
-
-function pesoLegible(bytes: number): string {
-    return bytes < 1024 * 1024
-        ? `${Math.round(bytes / 1024)} KB`
-        : `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
-}
 
 function resumenAccesibleDeParametro(serie: EvolucionDeParametro): string {
     return (
@@ -340,25 +335,12 @@ function valorCompleto(r: Resultado): string {
                                 :key="documento.id"
                                 class="flex items-center gap-2 rounded-md border p-2"
                             >
-                                <button
-                                    type="button"
-                                    class="flex min-h-11 min-w-0 flex-1 items-center gap-3 text-left"
-                                    @click="documentoAbierto = documento"
-                                >
-                                    <FileText
-                                        class="size-5 shrink-0 text-muted-foreground"
-                                    />
-                                    <span class="min-w-0">
-                                        <span class="block truncate text-sm">
-                                            {{ documento.nombre }}
-                                        </span>
-                                        <span
-                                            class="block text-sm text-muted-foreground"
-                                        >
-                                            {{ pesoLegible(documento.tamanio) }}
-                                        </span>
-                                    </span>
-                                </button>
+                                <BotonDeArchivo
+                                    :documento="documento"
+                                    :lista="estudio.adjuntos"
+                                    @abrir="documentoAbierto = documento"
+                                />
+                                <span class="flex-1" aria-hidden="true" />
 
                                 <!--
                                     Para cualquiera que pueda VER el documento: mandarlo no pide más

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Concerns\EligeDelCatalogoOEscribe;
 use App\Models\AplicacionVacuna;
 use App\Models\Paciente;
 use App\Models\User;
+use App\Models\Vacuna;
 use App\Rules\FechaNoFutura;
 use App\Support\CatalogoDeLaFicha;
 use App\Support\CatalogoVisible;
@@ -17,6 +19,23 @@ use Illuminate\Validation\Rule;
 
 class AplicacionVacunaGuardarRequest extends FormRequest
 {
+    use EligeDelCatalogoOEscribe;
+
+    /**
+     * La vacuna sale de la lista o se escribe con «Otro» (ver
+     * `EligeDelCatalogoOEscribe`). Si no coincide con ninguna, queda sin id y
+     * el controlador la crea en el catálogo propio.
+     */
+    protected function prepareForValidation(): void
+    {
+        $this->resolverEleccionDeCatalogo(
+            Vacuna::class,
+            'vacuna_id',
+            'vacuna_nombre',
+            CatalogoDeLaFicha::elegiblesPorColumna('vacuna_id', $this->pacienteId(), $this->idsYaUsados('vacuna_id')),
+        );
+    }
+
     /**
      * Autorizar ANTES de validar: si no, a alguien sin permiso le contesta
      * primero la validación y de paso le confirma que la ficha existe.
@@ -51,8 +70,10 @@ class AplicacionVacunaGuardarRequest extends FormRequest
              *
              * ⚠️ Los paréntesis no sobran: ver `CatalogoVisible`.
              */
+            'vacuna_nombre' => ['nullable', 'string', 'max:255'],
             'vacuna_id' => [
-                'required',
+                'required_without:vacuna_nombre',
+                'nullable',
                 'integer',
                 Rule::exists('vacunas', 'id')->where(
                     fn (Builder $consulta) => $consulta
@@ -140,6 +161,7 @@ class AplicacionVacunaGuardarRequest extends FormRequest
     {
         return [
             'vacuna_id' => 'vacuna',
+            'vacuna_nombre' => 'nombre de la vacuna',
             'centro_id' => 'centro',
             'fecha' => 'fecha',
             'proxima_dosis' => 'próxima dosis',
@@ -156,6 +178,7 @@ class AplicacionVacunaGuardarRequest extends FormRequest
     {
         return [
             'vacuna_id.exists' => 'Elegí una vacuna de tu lista.',
+            'vacuna_id.required_without' => 'Elegí la vacuna de la lista o escribí su nombre.',
             'centro_id.exists' => 'Elegí un centro de tu lista.',
             'proxima_dosis.after' => 'La próxima dosis tiene que ser después de esta.',
         ];

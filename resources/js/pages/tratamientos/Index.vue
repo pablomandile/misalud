@@ -12,6 +12,7 @@ import SelectorDeFicha from '@/components/SelectorDeFicha.vue';
 import SubirArchivo from '@/components/SubirArchivo.vue';
 import type { DocumentoVisible } from '@/components/VisorDocumento.vue';
 import VisorDocumento from '@/components/VisorDocumento.vue';
+import ElegirDelCatalogo from '@/components/ElegirDelCatalogo.vue';
 import DiasDeLaSemana from '@/pages/tratamientos/DiasDeLaSemana.vue';
 import HorariosDeToma from '@/pages/tratamientos/HorariosDeToma.vue';
 import { Button } from '@/components/ui/button';
@@ -41,7 +42,7 @@ import {
  * Los medicamentos que toma un paciente (en el código, `tratamientos`): cuál,
  * con qué dosis, cada cuánto, y las fotos de la caja.
  *
- * El medicamento se elige de la lista o se escribe: si no está en la lista, el
+ * El medicamento se elige de la lista o, con «Otro», se escribe: si no está, el
  * servidor lo suma al catálogo propio. Nadie tiene que "copiar" nada antes.
  *
  * Activos primero, y separados de los que ya se dejaron de tomar: uno inactivo
@@ -335,15 +336,6 @@ function detalleDeToma(t: Tratamiento): string {
             </Button>
         </div>
 
-        <!-- La lista para elegir: comunes + los propios. -->
-        <datalist id="lista-medicamentos">
-            <option
-                v-for="medicamento in medicamentos"
-                :key="medicamento.id"
-                :value="medicamento.nombre"
-            />
-        </datalist>
-
         <!-- Alta -->
         <Sheet v-model:open="sheetAlta">
             <SheetContent>
@@ -367,28 +359,19 @@ function detalleDeToma(t: Tratamiento): string {
                     </SheetHeader>
 
                     <div class="flex-1 space-y-4 overflow-y-auto px-4">
-                        <div class="grid gap-2">
-                            <Label for="medicamento-crear">Medicamento</Label>
-                            <input
-                                id="medicamento-crear"
-                                name="medicamento_nombre"
-                                type="text"
-                                list="lista-medicamentos"
-                                required
-                                autocomplete="off"
-                                placeholder="Escribí y elegí de la lista"
-                                :class="campoUnaLinea"
-                            />
-                            <p class="text-sm text-muted-foreground">
-                                Si no está en la lista, escribilo y se agrega.
-                            </p>
-                            <InputError
-                                :message="
-                                    errors.medicamento_id ??
-                                    errors.medicamento_nombre
-                                "
-                            />
-                        </div>
+                        <ElegirDelCatalogo
+                            id="medicamento-crear"
+                            etiqueta="Medicamento"
+                            nombre-id="medicamento_id"
+                            nombre-texto="medicamento_nombre"
+                            :opciones="medicamentos"
+                            etiqueta-texto="Nombre del medicamento"
+                            :error="
+                                errors.medicamento_id ??
+                                errors.medicamento_nombre
+                            "
+                            :clase-campo="campoUnaLinea"
+                        />
 
                         <div class="grid gap-2">
                             <Label for="dosis-crear">Dosis</Label>
@@ -607,25 +590,20 @@ function detalleDeToma(t: Tratamiento): string {
                     </SheetHeader>
 
                     <div class="flex-1 space-y-4 overflow-y-auto px-4">
-                        <div class="grid gap-2">
-                            <Label for="medicamento-editar">Medicamento</Label>
-                            <input
-                                id="medicamento-editar"
-                                name="medicamento_nombre"
-                                type="text"
-                                list="lista-medicamentos"
-                                required
-                                autocomplete="off"
-                                :value="tratamientoAEditar.medicamentoNombre"
-                                :class="campoUnaLinea"
-                            />
-                            <InputError
-                                :message="
-                                    errors.medicamento_id ??
-                                    errors.medicamento_nombre
-                                "
-                            />
-                        </div>
+                        <ElegirDelCatalogo
+                            id="medicamento-editar"
+                            etiqueta="Medicamento"
+                            nombre-id="medicamento_id"
+                            nombre-texto="medicamento_nombre"
+                            :opciones="medicamentos"
+                            :elegido="tratamientoAEditar.medicamento_id"
+                            etiqueta-texto="Nombre del medicamento"
+                            :error="
+                                errors.medicamento_id ??
+                                errors.medicamento_nombre
+                            "
+                            :clase-campo="campoUnaLinea"
+                        />
 
                         <div class="grid gap-2">
                             <Label for="dosis-editar">Dosis</Label>

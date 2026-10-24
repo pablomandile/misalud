@@ -2519,8 +2519,12 @@ ninguna lo tiene, la primera de la que es propietario (decisión del usuario). C
   plan y afiliado grandes y la imagen, que abre el visor. Las imágenes van por `credenciales.show`,
   la ruta que el service worker guarda para verlas sin señal. `?paciente=` de una ficha ajena da 403,
   no cae en silencio a otra.
-- **Variables** (`/variables`) y **Medicamentos** (`/medicamentos-del-paciente`) **redirigen** a la
-  pantalla de la ficha principal; no son pantallas nuevas.
+- **Variables** (`/variables`), **Medicamentos** (`/medicamentos-del-paciente`) y **Vacunas**
+  (`/vacunas-del-paciente`) **redirigen** a la pantalla de la ficha principal; no son pantallas nuevas.
+- **Vacunas, igual que Medicamentos** (decisión del usuario): el menú abre el carnet, «Agregar» ofrece
+  las comunes en el select (con «Otro»), y el catálogo (`/vacunas`, «Lista de vacunas») lista solo las
+  propias (`listaSemillas()` en `false`). Sin catálogo ya no hace falta el aviso de «primero agregá la
+  vacuna»: siempre hay comunes, y se puede escribir una.
 - **Cada variable tiene su «+ Cargar»**, con datos o sin datos todavía: abre el formulario con la
   variable elegida y la fecha de ahora, editable. Reemplazó la fila de accesos rápidos. El catálogo
   de tipos salió del menú (se llega con «Administrar variables») y su «Copiar» pasó a ser «+ Cargar»
@@ -2532,11 +2536,15 @@ Lo que **toma cada paciente**. Es la tabla `tratamientos`, que en pantalla pasó
 «Medicamentos» (decisión del usuario: por paciente, no en el catálogo). No se hizo una tabla nueva:
 duplicaría la dosis y los avisos de fin.
 
-- **El medicamento se elige de la lista o se escribe** (`<datalist>`, campo `medicamento_nombre`).
-  `TratamientoGuardarRequest::resolverMedicamentoPorNombre()` lo convierte en `medicamento_id` antes
-  de validar —primero uno propio, después la lista compartida, después lo que la ficha ya usa— y, si
-  no coincide con ninguno, el controlador lo crea en el catálogo propio. El de otra cuenta nunca
-  resuelve. Nadie tiene que «copiar» una semilla.
+- **El medicamento se elige de un `<select>` o, con «Otro: lo escribo», se escribe**
+  (`ElegirDelCatalogo.vue`; el campo de texto aparece por CSS, sin estado en Vue). ⚠️ Antes era un
+  `<datalist>`, y el usuario lo reportó como bug: sus sugerencias aparecen recién al escribir y en el
+  celular casi no se ven, así que nadie encontraba los medicamentos comunes. El trait
+  `EligeDelCatalogoOEscribe` lo resuelve antes de validar —primero uno propio, después la lista
+  compartida, después lo del dueño de la ficha o lo que la ficha ya usa— y, si no coincide con
+  ninguno, el controlador lo crea en el catálogo propio. El de un extraño nunca resuelve. Nadie tiene
+  que «copiar» una semilla. El campo de texto oculto no lleva `required`: el navegador no deja enviar
+  un formulario con un obligatorio que no se ve.
 - **El catálogo de medicamentos lista solo los propios** (`CatalogoBaseController::listaSemillas()`):
   las semillas son la lista para elegir, no tarjetas. Salió del menú; se llega con «Lista de
   medicamentos».
@@ -2809,6 +2817,14 @@ Un solo `VisorDocumento.vue` a pantalla completa para imágenes **y PDFs**, con 
   cobertura sí se sigue abriendo desde su panel, y ahí estaba el mismo bug medido: al mismo nivel,
   `elementFromPoint` sobre la X devolvía el `sheet-overlay` del panel. Con `z-[60]` la X queda
   arriba y cierra.
+
+### Los adjuntos de un registro: una pastilla, no el nombre del archivo
+
+En órdenes, estudios, recetas, anteojos, vacunas y la credencial, cada archivo se muestra como una
+pastilla «Imagen» / «PDF» / «Archivo» que abre el visor (`BotonDeArchivo.vue`, pedido del usuario):
+"IMG_20261023_174606.jpg" no le dice nada a nadie. Con varios del mismo tipo van numerados
+(«Imagen 1», «Imagen 2»), y el nombre real queda en el nombre accesible. **Documentos de la ficha
+sigue mostrando el nombre**: ahí lo escribe la persona y es lo que distingue uno de otro.
 
 ### Documentos de la ficha
 

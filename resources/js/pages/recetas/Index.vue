@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { Form, Head, Link } from '@inertiajs/vue3';
-import { FileText, Inbox, Send, Trash2 } from '@lucide/vue';
+import { Inbox, Send, Trash2 } from '@lucide/vue';
 import { ref } from 'vue';
 import CasillaController from '@/actions/App/Http/Controllers/CasillaController';
 import EnvioController from '@/actions/App/Http/Controllers/EnvioController';
 import RecetaController from '@/actions/App/Http/Controllers/RecetaController';
+import BotonDeArchivo from '@/components/BotonDeArchivo.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -97,12 +98,6 @@ function cuandoVence(receta: Receta): string {
 
 function titulo(receta: Receta): string {
     return receta.asunto && receta.asunto !== '' ? receta.asunto : 'Receta';
-}
-
-function pesoLegible(bytes: number): string {
-    return bytes < 1024 * 1024
-        ? `${Math.round(bytes / 1024)} KB`
-        : `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
 }
 </script>
 
@@ -207,25 +202,12 @@ function pesoLegible(bytes: number): string {
                                 v-for="documento in receta.adjuntos"
                                 :key="documento.id"
                             >
-                                <button
-                                    type="button"
-                                    class="flex min-h-11 w-full min-w-0 items-center gap-3 rounded-md border p-2 text-left"
-                                    @click="documentoAbierto = documento"
-                                >
-                                    <FileText
-                                        class="size-5 shrink-0 text-muted-foreground"
-                                    />
-                                    <span class="min-w-0">
-                                        <span class="block truncate text-sm">
-                                            {{ documento.nombre }}
-                                        </span>
-                                        <span
-                                            class="block text-sm text-muted-foreground"
-                                        >
-                                            {{ pesoLegible(documento.tamanio) }}
-                                        </span>
-                                    </span>
-                                </button>
+                                <BotonDeArchivo
+                                    :documento="documento"
+                                    :lista="receta.adjuntos"
+                                    @abrir="documentoAbierto = documento"
+                                />
+                                <span class="flex-1" aria-hidden="true" />
                             </li>
                         </ul>
 

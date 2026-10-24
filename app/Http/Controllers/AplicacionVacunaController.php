@@ -9,11 +9,14 @@ use App\Models\Adjunto;
 use App\Models\AplicacionVacuna;
 use App\Models\Centro;
 use App\Models\Paciente;
+use App\Models\User;
 use App\Models\Vacuna;
+use App\Services\PacientePrincipal;
 use App\Support\CatalogoDeLaFicha;
 use App\Support\CatalogoVisible;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -27,6 +30,23 @@ use Inertia\Response;
  */
 class AplicacionVacunaController extends Controller
 {
+    /**
+     * «Vacunas» del menú: el carnet de la ficha de quien usa la cuenta, igual
+     * que «Medicamentos». El catálogo, con las vacunas comunes, se elige desde
+     * el formulario y no como tarjetas (decisión del usuario).
+     */
+    public function principal(): RedirectResponse
+    {
+        $usuario = auth()->user();
+        assert($usuario instanceof User);
+
+        $paciente = PacientePrincipal::de($usuario);
+
+        return $paciente === null
+            ? to_route('pacientes.index')->with('error', 'Primero cargá una ficha para anotar sus vacunas.')
+            : to_route('pacientes.vacunas.index', $paciente);
+    }
+
     public function index(Paciente $paciente): Response
     {
         Gate::authorize('view', $paciente);
@@ -75,6 +95,7 @@ class AplicacionVacunaController extends Controller
             ],
             'vacunas' => $vacunas,
             'catalogoVacunas' => $this->disponibles($paciente, Vacuna::class, 'vacuna_id'),
+            'fichas' => $usuario instanceof User ? PacientePrincipal::opciones($usuario) : [],
             'centros' => $this->disponibles($paciente, Centro::class, 'centro_id'),
             'hoy' => $usuario?->hoyCalendario()->format('Y-m-d'),
         ]);
@@ -84,7 +105,7 @@ class AplicacionVacunaController extends Controller
     {
         Gate::authorize('crearEn', [AplicacionVacuna::class, $paciente]);
 
-        $paciente->aplicacionesVacuna()->create($peticion->validated());
+        DB::transaction(fn () => $paciente->aplicacionesVacuna()->create($this->datos($peticion)));
 
         return back()->with('exito', 'Se anotó la dosis.');
     }
@@ -93,7 +114,7 @@ class AplicacionVacunaController extends Controller
     {
         Gate::authorize('update', $aplicacion);
 
-        $aplicacion->update($peticion->validated());
+        DB::transaction(fn () => $aplicacion->update($this->datos($peticion)));
 
         return back()->with('exito', 'Se guardaron los cambios.');
     }
@@ -105,6 +126,27 @@ class AplicacionVacunaController extends Controller
         $aplicacion->delete();
 
         return back()->with('exito', 'Se eliminó la dosis.');
+    }
+
+    /**
+     * Lo validado, con la vacuna resuelta: si el nombre escrito con «Otro» no
+     * coincidió con ninguna (ver el FormRequest), se crea en el catálogo propio.
+     *
+     * @return array<string, mixed>
+     */
+    private function datos(AplicacionVacunaGuardarRequest $peticion): array
+    {
+        $datos = $peticion->safe()->except(['vacuna_nombre']);
+
+        if (empty($datos['vacuna_id'])) {
+            $vacuna = new Vacuna(['nombre' => $peticion->string('vacuna_nombre')->toString()]);
+            $vacuna->setAttribute('usuario_id', auth()->id());
+            $vacuna->save();
+
+            $datos['vacuna_id'] = $vacuna->id;
+        }
+
+        return $datos;
     }
 
     /**

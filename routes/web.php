@@ -127,6 +127,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
      */
     Route::get('credencial', [CredencialController::class, 'index'])->name('credencial.index');
     Route::get('variables', [MedicionController::class, 'principal'])->name('variables.principal');
+    Route::get('vacunas-del-paciente', [AplicacionVacunaController::class, 'principal'])
+        ->name('vacunas-del-paciente');
     Route::get('medicamentos-del-paciente', [TratamientoController::class, 'principal'])
         ->name('medicamentos-del-paciente');
 

@@ -46,6 +46,15 @@ class VacunaController extends CatalogoBaseController
     }
 
     /**
+     * Solo las propias: las comunes se eligen al anotar una dosis en el
+     * carnet, no como tarjetas para copiar (igual que los medicamentos).
+     */
+    protected function listaSemillas(): bool
+    {
+        return false;
+    }
+
+    /**
      * Una vacuna con dosis anotadas no se borra: una dosis "de algo" no se puede
      * leer. `ReferenciasACatalogosTest` falla si aparece otra FK hacia `vacunas`
      * que no figure en esta lista.

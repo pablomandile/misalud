@@ -2,7 +2,6 @@
 import { Form, Link } from '@inertiajs/vue3';
 import {
     BookUser,
-    CreditCard,
     FileText,
     Globe,
     MessageCircle,
@@ -14,6 +13,7 @@ import { ref } from 'vue';
 import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
 import CoberturaController from '@/actions/App/Http/Controllers/CoberturaController';
 import ContactoController from '@/actions/App/Http/Controllers/ContactoController';
+import BotonDeArchivo from '@/components/BotonDeArchivo.vue';
 import InputError from '@/components/InputError.vue';
 import SubirArchivo from '@/components/SubirArchivo.vue';
 import type { DocumentoVisible } from '@/components/VisorDocumento.vue';
@@ -75,12 +75,6 @@ const campoTexto =
 const agregando = ref(false);
 const coberturaEditando = ref<number | null>(null);
 const coberturaABorrar = ref<CoberturaMedica | null>(null);
-
-function pesoLegible(bytes: number): string {
-    return bytes < 1024 * 1024
-        ? `${Math.round(bytes / 1024)} KB`
-        : `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
-}
 
 function alCerrarSheet(abierto: boolean): void {
     if (!abierto) {
@@ -261,31 +255,12 @@ function alBorrarCobertura(): void {
                                     :key="documento.id"
                                     class="flex items-center gap-2 rounded-md border p-2"
                                 >
-                                    <button
-                                        type="button"
-                                        class="flex min-h-11 min-w-0 flex-1 items-center gap-3 text-left"
-                                        @click="emit('verDocumento', documento)"
-                                    >
-                                        <CreditCard
-                                            class="size-5 shrink-0 text-muted-foreground"
-                                        />
-                                        <span class="min-w-0">
-                                            <span
-                                                class="block truncate text-sm"
-                                            >
-                                                {{ documento.nombre }}
-                                            </span>
-                                            <span
-                                                class="block text-sm text-muted-foreground"
-                                            >
-                                                {{
-                                                    pesoLegible(
-                                                        documento.tamanio,
-                                                    )
-                                                }}
-                                            </span>
-                                        </span>
-                                    </button>
+                                    <BotonDeArchivo
+                                        :documento="documento"
+                                        :lista="cobertura.adjuntos"
+                                        @abrir="emit('verDocumento', documento)"
+                                    />
+                                    <span class="flex-1" aria-hidden="true" />
 
                                     <Form
                                         v-if="paciente.puedeEditar"

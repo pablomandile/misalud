@@ -1,14 +1,25 @@
 <script setup lang="ts">
 import { Form, Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, FileText, Plus, Send, Syringe, Trash2 } from '@lucide/vue';
+import {
+    ArrowLeft,
+    FileText,
+    List,
+    Plus,
+    Send,
+    Syringe,
+    Trash2,
+} from '@lucide/vue';
 import { ref } from 'vue';
 import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
 import AplicacionVacunaController from '@/actions/App/Http/Controllers/AplicacionVacunaController';
 import EnvioController from '@/actions/App/Http/Controllers/EnvioController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
 import VacunaController from '@/actions/App/Http/Controllers/VacunaController';
+import BotonDeArchivo from '@/components/BotonDeArchivo.vue';
 import Heading from '@/components/Heading.vue';
+import ElegirDelCatalogo from '@/components/ElegirDelCatalogo.vue';
 import InputError from '@/components/InputError.vue';
+import SelectorDeFicha from '@/components/SelectorDeFicha.vue';
 import SubirArchivo from '@/components/SubirArchivo.vue';
 import type { DocumentoVisible } from '@/components/VisorDocumento.vue';
 import VisorDocumento from '@/components/VisorDocumento.vue';
@@ -79,6 +90,7 @@ defineProps<{
     vacunas: GrupoVacuna[];
     catalogoVacunas: Opcion[];
     centros: Opcion[];
+    fichas: { id: number; nombre: string }[];
     hoy: string | null;
 }>();
 
@@ -90,6 +102,9 @@ defineOptions({
         ],
     },
 });
+
+const enlaceFicha = (id: number) =>
+    AplicacionVacunaController.index({ paciente: id });
 
 const campoBase =
     'flex w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm';
@@ -117,12 +132,6 @@ function cerrarFormulario(): void {
     altaAbierta.value = false;
     dosisAEditar.value = null;
 }
-
-function pesoLegible(bytes: number): string {
-    return bytes < 1024 * 1024
-        ? `${Math.round(bytes / 1024)} KB`
-        : `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
-}
 </script>
 
 <template>
@@ -135,28 +144,17 @@ function pesoLegible(bytes: number): string {
                 :title="`Vacunas de ${paciente.nombre}`"
                 description="Las dosis aplicadas y cuándo toca la próxima"
             />
-            <Button
-                v-if="paciente.puedeEditar && catalogoVacunas.length > 0"
-                @click="abrirAlta(null)"
-            >
+            <Button v-if="paciente.puedeEditar" @click="abrirAlta(null)">
                 <Plus />
-                Anotar
+                Agregar
             </Button>
         </div>
 
-        <!--
-            Sin vacunas en el catálogo no hay qué elegir: se dice, con el camino
-            para resolverlo, en vez de abrir un formulario con el desplegable vacío.
-        -->
-        <p
-            v-if="paciente.puedeEditar && catalogoVacunas.length === 0"
-            class="text-sm text-muted-foreground"
-        >
-            Para anotar una dosis, primero agregá la vacuna en
-            <Link :href="VacunaController.index()" class="underline"
-                >Vacunas</Link
-            >.
-        </p>
+        <SelectorDeFicha
+            :fichas="fichas"
+            :actual="paciente.id"
+            :enlace="enlaceFicha"
+        />
 
         <div
             v-if="vacunas.length === 0"
@@ -265,25 +263,12 @@ function pesoLegible(bytes: number): string {
                                 :key="documento.id"
                                 class="flex items-center gap-2 rounded-md border p-2"
                             >
-                                <button
-                                    type="button"
-                                    class="flex min-h-11 min-w-0 flex-1 items-center gap-3 text-left"
-                                    @click="documentoAbierto = documento"
-                                >
-                                    <FileText
-                                        class="size-5 shrink-0 text-muted-foreground"
-                                    />
-                                    <span class="min-w-0">
-                                        <span class="block truncate text-sm">
-                                            {{ documento.nombre }}
-                                        </span>
-                                        <span
-                                            class="block text-sm text-muted-foreground"
-                                        >
-                                            {{ pesoLegible(documento.tamanio) }}
-                                        </span>
-                                    </span>
-                                </button>
+                                <BotonDeArchivo
+                                    :documento="documento"
+                                    :lista="dosis.adjuntos"
+                                    @abrir="documentoAbierto = documento"
+                                />
+                                <span class="flex-1" aria-hidden="true" />
 
                                 <!-- Mandarlo pide lo mismo que verlo (ver CLAUDE.md, Etapa 14). -->
                                 <Button as-child variant="ghost" size="icon-sm">
@@ -348,7 +333,13 @@ function pesoLegible(bytes: number): string {
             </CardContent>
         </Card>
 
-        <div>
+        <div class="flex flex-wrap gap-2">
+            <Button variant="outline" as-child>
+                <Link :href="VacunaController.index()">
+                    <List />
+                    Lista de vacunas
+                </Link>
+            </Button>
             <Button variant="outline" as-child>
                 <a :href="PacienteController.index().url">
                     <ArrowLeft />
@@ -397,30 +388,19 @@ function pesoLegible(bytes: number): string {
                     </SheetHeader>
 
                     <div class="flex-1 space-y-4 overflow-y-auto px-4">
-                        <div class="grid gap-2">
-                            <Label for="vacuna-dosis">Vacuna</Label>
-                            <select
-                                id="vacuna-dosis"
-                                name="vacuna_id"
-                                required
-                                :value="
-                                    dosisAEditar?.vacuna_id ??
-                                    vacunaPreelegida ??
-                                    ''
-                                "
-                                :class="campoUnaLinea"
-                            >
-                                <option value="" disabled>Elegí una</option>
-                                <option
-                                    v-for="vacuna in catalogoVacunas"
-                                    :key="vacuna.id"
-                                    :value="vacuna.id"
-                                >
-                                    {{ vacuna.nombre }}
-                                </option>
-                            </select>
-                            <InputError :message="errors.vacuna_id" />
-                        </div>
+                        <ElegirDelCatalogo
+                            id="vacuna-dosis"
+                            etiqueta="Vacuna"
+                            nombre-id="vacuna_id"
+                            nombre-texto="vacuna_nombre"
+                            :opciones="catalogoVacunas"
+                            :elegido="
+                                dosisAEditar?.vacuna_id ?? vacunaPreelegida
+                            "
+                            etiqueta-texto="Nombre de la vacuna"
+                            :error="errors.vacuna_id ?? errors.vacuna_nombre"
+                            :clase-campo="campoUnaLinea"
+                        />
 
                         <div class="grid gap-2">
                             <Label for="fecha-dosis"

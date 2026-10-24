@@ -27,14 +27,14 @@ it('lista las vacunas propias y NO las de otro usuario', function (): void {
         );
 });
 
-it('lista también las semillas compartidas', function (): void {
+it('lista solo las propias: las comunes se eligen en el carnet, no como tarjetas', function (): void {
     $usuario = User::factory()->create();
     Vacuna::factory()->for($usuario, 'usuario')->create();
     Vacuna::factory()->semilla()->create();
 
     $this->actingAs($usuario)
         ->get(route('vacunas.index'))
-        ->assertInertia(fn ($p) => $p->has('registros', 2));
+        ->assertInertia(fn ($p) => $p->has('registros', 1));
 });
 
 it('ordena por nombre, que está cifrado', function (): void {
