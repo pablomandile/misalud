@@ -158,6 +158,19 @@ return [
     'uppercase' => 'El campo :attribute debe estar en mayúscula.',
     'url' => 'El campo :attribute debe ser una URL válida.',
     'uuid' => 'El campo :attribute debe ser un UUID válido.',
+    /*
+    | Los archivos de MiSalud: el mensaje vale para todo formulario con
+    | `archivos[]` (credencial, documentos, órdenes, estudios, recetas, cajas
+    | de medicamentos). El de Laravel listaba tipos MIME. El caso real que lo
+    | motivó: un `unnamed.jpg` guardado desde una página web era la página
+    | entera, en HTML, con nombre de foto.
+    */
+    'custom' => [
+        'archivos.*' => [
+            'mimetypes' => 'Ese archivo no es una foto ni un PDF, aunque su nombre lo parezca. Si lo bajaste de una página web, abrí la imagen y guardala con «Guardar imagen como», o sacale una captura de pantalla.',
+        ],
+    ],
+
     'attributes' => [
         'address' => 'dirección',
         'affiliate_url' => 'URL de afiliado',

@@ -2880,6 +2880,12 @@ sigue mostrando el nombre**: ahí lo escribe la persona y es lo que distingue un
   directo, pero `capture` **fuerza** la cámara y de paso **anula el `multiple`**. Sin él, el
   selector del celular ya ofrece cámara, galería y archivos, que es lo que hace falta para el
   caso más común: un PDF que llegó por mail.
+- ⚠️ **Cada instancia tiene su propio `id` (`useId()`), nunca el `name`.** El botón es un
+  `<label for>`, y con el `name` como id, dos `SubirArchivo` en la misma pantalla (una credencial
+  por cobertura) compartían el id `archivos[]`: tocar «Elegir» en la segunda cobertura abría el
+  input de la **primera**, y la segunda se mandaba vacía con «Elegí al menos un archivo.». Lo
+  reportó el usuario en producción. Un script que carga el archivo directo en el input no lo ve:
+  hay que tocar el botón (`waitForFileChooser`).
 - El botón es un `<label>`: el toque abre el selector sin JavaScript de por medio, y el
   `<input type="file">` real queda oculto pero presente dentro del `<Form>`.
 - **Sacar un archivo de la lista obliga a reconstruir un `DataTransfer`** y reasignarle

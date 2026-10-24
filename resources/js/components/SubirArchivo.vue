@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { FileText, Paperclip, X } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { computed, ref, useId } from 'vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 
@@ -46,6 +46,17 @@ const ACEPTADOS =
     'application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif';
 
 const entrada = ref<HTMLInputElement | null>(null);
+
+/*
+ * ⚠️ Un id propio por instancia, y NO el `name`. El botón es un `<label for>`,
+ * y con el `name` como id, dos `SubirArchivo` en la misma pantalla (una
+ * credencial por cobertura) tenían el mismo id "archivos[]": tocar «Elegir»
+ * en la segunda abría el input de la PRIMERA, la foto quedaba elegida en otra
+ * tarjeta, y la segunda se mandaba vacía con "Elegí al menos un archivo".
+ * Lo reportó el usuario en producción; un test que carga el archivo directo
+ * en el input no lo ve, hay que tocar el botón.
+ */
+const idEntrada = `archivo-${useId()}`;
 const elegidos = ref<File[]>([]);
 
 const demasiadoGrandes = computed(() =>
@@ -109,7 +120,7 @@ function quitar(indice: number): void {
 <template>
     <div class="grid gap-3">
         <input
-            :id="name"
+            :id="idEntrada"
             ref="entrada"
             type="file"
             :name="name"
@@ -124,7 +135,7 @@ function quitar(indice: number): void {
             de por medio, y el input real queda oculto pero presente en el form.
         -->
         <Button as-child variant="outline" class="w-full justify-start">
-            <label :for="name" class="cursor-pointer">
+            <label :for="idEntrada" class="cursor-pointer">
                 <Paperclip />
                 {{ etiqueta }}
             </label>

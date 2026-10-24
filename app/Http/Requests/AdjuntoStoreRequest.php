@@ -87,7 +87,7 @@ class AdjuntoStoreRequest extends FormRequest
     {
         return [
             'archivos.required' => 'Elegí al menos un archivo.',
-            'archivos.*.mimetypes' => 'Solo se pueden subir PDF o fotos.',
+            // `archivos.*.mimetypes` vive en lang/es/validation.php: vale para todos los formularios.
             'archivos.*.max' => 'Cada archivo tiene que pesar menos de :max kilobytes.',
         ];
     }

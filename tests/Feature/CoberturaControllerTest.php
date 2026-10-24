@@ -536,3 +536,42 @@ it('rechaza un WhatsApp con letras', function (): void {
         ])
         ->assertSessionHasErrors('whatsapp');
 });
+
+it('una página web guardada con nombre de foto se rechaza con un mensaje que explica qué hacer', function (): void {
+    /*
+     * El caso real: una credencial "unnamed.jpg" guardada desde el sitio de
+     * la obra social era la página entera, en HTML. Se rechaza por el
+     * contenido -no por el nombre- y el mensaje dice por qué y qué hacer.
+     */
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+    $cobertura = Cobertura::factory()->for($paciente)->create(['activa' => false]);
+
+    $ruta = tempnam(sys_get_temp_dir(), 'web');
+    file_put_contents($ruta, '<!DOCTYPE html><html><head><title>Omint</title></head><body>Plan de salud</body></html>');
+    $paginaConNombreDeFoto = new UploadedFile($ruta, 'unnamed.jpg', 'image/jpeg', null, true);
+
+    $this->actingAs($usuario)
+        ->post(route('coberturas.adjuntos.store', $cobertura), [
+            'archivos' => [$paginaConNombreDeFoto],
+            'tipo' => TipoAdjunto::Credencial->value,
+        ])
+        ->assertSessionHasErrors(['archivos.0' => 'Ese archivo no es una foto ni un PDF, aunque su nombre lo parezca. Si lo bajaste de una página web, abrí la imagen y guardala con «Guardar imagen como», o sacale una captura de pantalla.']);
+
+    expect($cobertura->adjuntos()->count())->toBe(0);
+});
+
+it('a una cobertura que ya no está activa se le puede subir la credencial', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+    $cobertura = Cobertura::factory()->for($paciente)->create(['activa' => false]);
+
+    $this->actingAs($usuario)
+        ->post(route('coberturas.adjuntos.store', $cobertura), [
+            'archivos' => [imagenDePrueba()],
+            'tipo' => TipoAdjunto::Credencial->value,
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect($cobertura->adjuntos()->count())->toBe(1);
+});

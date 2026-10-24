@@ -403,3 +403,22 @@ it('si el papel no es válido no queda una orden sin él', function (): void {
 
     expect($paciente->ordenesEstudio()->count())->toBe(0);
 });
+
+it('en el alta con archivo, una página web con nombre de foto da el mismo mensaje claro', function (): void {
+    $usuario = User::factory()->create();
+    $paciente = Paciente::factory()->for($usuario, 'usuario')->create();
+
+    $ruta = tempnam(sys_get_temp_dir(), 'web');
+    file_put_contents($ruta, '<!DOCTYPE html><html><body>Una página</body></html>');
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.ordenes.store', $paciente), [
+            'estudio_solicitado' => 'Análisis',
+            'fecha' => '2026-09-20',
+            'estado' => EstadoOrdenEstudio::Pendiente->value,
+            'archivos' => [new UploadedFile($ruta, 'orden.jpg', 'image/jpeg', null, true)],
+        ])
+        ->assertSessionHasErrors(['archivos.0' => 'Ese archivo no es una foto ni un PDF, aunque su nombre lo parezca. Si lo bajaste de una página web, abrí la imagen y guardala con «Guardar imagen como», o sacale una captura de pantalla.']);
+
+    expect(OrdenEstudio::count())->toBe(0);
+});
