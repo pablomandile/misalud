@@ -3,6 +3,7 @@
 use App\Console\Commands\CerrarTratamientosVencidos;
 use App\Console\Commands\EnviarRecordatorios;
 use App\Console\Commands\ProcesarBuzon;
+use App\Console\Commands\RenovarAplicacionesAnuales;
 use App\Console\Commands\VaciarPapelera;
 use App\Http\Middleware\AceptoTerminos;
 use App\Http\Middleware\HandleAppearance;
@@ -41,6 +42,12 @@ return Application::configure(basePath: dirname(__DIR__))
          * `deploy-hostinger`); acá solo se declara QUÉ correr y cuándo.
          */
         $schedule->command(CerrarTratamientosVencidos::class)->daily();
+
+        /*
+         * Una vez al día: pasada la aplicación de un medicamento de "una vez
+         * por año", sus dos avisos se mueven al año siguiente.
+         */
+        $schedule->command(RenovarAplicacionesAnuales::class)->daily();
 
         /*
          * Una vez al día: lo que lleva más de 30 días en la papelera se borra

@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -38,7 +39,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property list<int>|null $dias_semana
  * @property int|null $tomas_por_dia
  * @property list<string>|null $horas
- * @property CarbonImmutable|null $proxima_aplicacion
+ * @property int|null $aplicacion_dia
+ * @property int|null $aplicacion_mes
  * @property CarbonImmutable $inicio
  * @property CarbonImmutable|null $fin
  * @property bool $activo
@@ -80,7 +82,8 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente, Tiene
         'dias_semana',
         'tomas_por_dia',
         'horas',
-        'proxima_aplicacion',
+        'aplicacion_dia',
+        'aplicacion_mes',
         'inicio',
         'fin',
         'activo',
@@ -98,7 +101,8 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente, Tiene
             'periodicidad' => PeriodicidadToma::class,
             'dias_semana' => 'array',
             'horas' => 'array',
-            'proxima_aplicacion' => 'date',
+            'aplicacion_dia' => 'integer',
+            'aplicacion_mes' => 'integer',
             'notas' => 'encrypted',
             'inicio' => 'date',
             'fin' => 'date',
@@ -169,6 +173,16 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente, Tiene
     }
 
     /**
+     * Cada aplicación o toma anotada en la sección «Tratamiento».
+     *
+     * @return HasMany<AplicacionMedicamento, $this>
+     */
+    public function aplicaciones(): HasMany
+    {
+        return $this->hasMany(AplicacionMedicamento::class);
+    }
+
+    /**
      * Cómo se lee la toma: la etiqueta de la periodicidad, o los días cuando
      * es "algunos días de la semana".
      */
@@ -197,6 +211,47 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente, Tiene
     public function horarioVisible(): ?string
     {
         return empty($this->horas) ? null : 'a las '.Enumeracion::unir($this->horas);
+    }
+
+    /**
+     * La próxima vez que toca la aplicación de "una vez por año": el día y el
+     * mes cargados, este año si todavía no pasó (hoy cuenta) y si no el que
+     * viene. Un 29 de febrero cae el 28 en los años que no lo tienen.
+     */
+    public function proximaAplicacion(CarbonImmutable $hoy): ?CarbonImmutable
+    {
+        if ($this->periodicidad !== PeriodicidadToma::Anual
+            || $this->aplicacion_dia === null
+            || $this->aplicacion_mes === null) {
+            return null;
+        }
+
+        $hoy = $hoy->startOfDay();
+        $fecha = $this->aplicacionEn($hoy->year);
+
+        return $fecha->lessThan($hoy) ? $this->aplicacionEn($hoy->year + 1) : $fecha;
+    }
+
+    /**
+     * "Cada año el 15 de marzo".
+     */
+    public function aplicacionVisible(): ?string
+    {
+        if ($this->aplicacion_dia === null || $this->aplicacion_mes === null) {
+            return null;
+        }
+
+        $mes = CarbonImmutable::create(2000, $this->aplicacion_mes, 1)?->translatedFormat('F');
+
+        return "Cada año el {$this->aplicacion_dia} de {$mes}";
+    }
+
+    private function aplicacionEn(int $anio): CarbonImmutable
+    {
+        $primero = CarbonImmutable::create($anio, (int) $this->aplicacion_mes, 1, 0, 0, 0, 'UTC');
+        assert($primero instanceof CarbonImmutable);
+
+        return $primero->setDay(min((int) $this->aplicacion_dia, $primero->daysInMonth));
     }
 
     public function pacienteDelRegistro(): ?Paciente

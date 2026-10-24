@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdjuntoController;
 use App\Http\Controllers\AlergiaController;
+use App\Http\Controllers\AplicacionMedicamentoController;
 use App\Http\Controllers\AplicacionVacunaController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\CasillaController;
@@ -27,6 +28,7 @@ use App\Http\Controllers\MedicoController;
 use App\Http\Controllers\OrdenEstudioController;
 use App\Http\Controllers\PacienteActivoController;
 use App\Http\Controllers\PacienteController;
+use App\Http\Controllers\PedidoMedicamentosController;
 use App\Http\Controllers\PrescripcionOcularController;
 use App\Http\Controllers\RecetaController;
 use App\Http\Controllers\RecetaMedicaController;
@@ -283,6 +285,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
      */
     Route::get('pacientes/{paciente}/vacunas', [AplicacionVacunaController::class, 'index'])
         ->name('pacientes.vacunas.index');
+
+    // La sección «Tratamiento»: cada aplicación de un medicamento que no es diario.
+    Route::get('pacientes/{paciente}/tratamiento', [AplicacionMedicamentoController::class, 'index'])
+        ->name('pacientes.aplicaciones-medicamento.index');
+    Route::post('pacientes/{paciente}/tratamiento', [AplicacionMedicamentoController::class, 'store'])
+        ->name('pacientes.aplicaciones-medicamento.store');
+    Route::put('aplicaciones-medicamento/{aplicacionMedicamento}', [AplicacionMedicamentoController::class, 'update'])
+        ->name('aplicaciones-medicamento.update');
+    Route::delete('aplicaciones-medicamento/{aplicacionMedicamento}', [AplicacionMedicamentoController::class, 'destroy'])
+        ->name('aplicaciones-medicamento.destroy');
     Route::post('pacientes/{paciente}/vacunas', [AplicacionVacunaController::class, 'store'])
         ->name('pacientes.vacunas.store');
     Route::put('vacunas-aplicadas/{aplicacion}', [AplicacionVacunaController::class, 'update'])
@@ -448,6 +460,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('envios', [EnvioController::class, 'store'])
         ->middleware('throttle:10,1')
         ->name('envios.store');
+
+    // Pedirle medicamentos por mail al médico, un centro o una farmacia. Mismo freno que un envío.
+    Route::get('pedido-de-medicamentos', [PedidoMedicamentosController::class, 'index'])
+        ->name('pedidos.index');
+    Route::post('pedido-de-medicamentos', [PedidoMedicamentosController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('pedidos.store');
 
     Route::get('pacientes', [PacienteController::class, 'index'])->name('pacientes.index');
     Route::post('pacientes', [PacienteController::class, 'store'])->name('pacientes.store');

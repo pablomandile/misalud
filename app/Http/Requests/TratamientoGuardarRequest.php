@@ -58,7 +58,7 @@ class TratamientoGuardarRequest extends FormRequest
 
         // Solo vale con "una vez por año": oculto en pantalla, viaja igual.
         if ($this->input('periodicidad') !== PeriodicidadToma::Anual->value) {
-            $this->merge(['proxima_aplicacion' => null]);
+            $this->merge(['aplicacion_dia' => null, 'aplicacion_mes' => null]);
         }
     }
 
@@ -201,8 +201,26 @@ class TratamientoGuardarRequest extends FormRequest
             // Opcional: una toma única no tiene "cada cuánto".
             'frecuencia' => ['nullable', 'string', 'max:255'],
             'tomas_por_dia' => ['nullable', 'integer', 'between:1,6'],
-            // De ella salen los avisos de un mes y una semana antes.
-            'proxima_aplicacion' => ['nullable', 'date'],
+            /*
+             * Día y mes de la aplicación de "una vez por año", sin año: la
+             * próxima se calcula sola (ver `Tratamiento::proximaAplicacion()`).
+             * Van juntos o no van, y el día tiene que existir en ese mes (el 29
+             * de febrero sí: cae el 28 los años que no lo tienen).
+             */
+            'aplicacion_dia' => [
+                'nullable',
+                'required_with:aplicacion_mes',
+                'integer',
+                'between:1,31',
+                function (string $atributo, mixed $dia, \Closure $fallar): void {
+                    $mes = $this->input('aplicacion_mes');
+
+                    if (is_numeric($mes) && is_numeric($dia) && ! checkdate((int) $mes, (int) $dia, 2000)) {
+                        $fallar('Ese mes no tiene ese día.');
+                    }
+                },
+            ],
+            'aplicacion_mes' => ['nullable', 'required_with:aplicacion_dia', 'integer', 'between:1,12'],
             'horas' => ['nullable', 'array', 'max:6'],
             // Lo que manda un <input type="time">. Hora de reloj, sin zona.
             'horas.*' => ['string', 'date_format:H:i'],
@@ -297,7 +315,8 @@ class TratamientoGuardarRequest extends FormRequest
             'dosis' => 'dosis',
             'frecuencia' => 'frecuencia',
             'tomas_por_dia' => 'tomas por día',
-            'proxima_aplicacion' => 'próxima aplicación',
+            'aplicacion_dia' => 'día',
+            'aplicacion_mes' => 'mes',
             'horas' => 'horarios',
             'inicio' => 'fecha de inicio',
             'fin' => 'fecha de fin',
@@ -316,6 +335,8 @@ class TratamientoGuardarRequest extends FormRequest
             'medico_id.exists' => 'Elegí un médico de tu agenda.',
             'fin.after_or_equal' => 'La fecha de fin no puede ser anterior al inicio.',
             'dias_semana.required_if' => 'Elegí al menos un día.',
+            'aplicacion_dia.required_with' => 'Elegí también el día.',
+            'aplicacion_mes.required_with' => 'Elegí también el mes.',
             'horas.*.date_format' => 'Escribí la hora como 08:30.',
             'tomas_por_dia.between' => 'Pueden ser de 1 a 6 tomas por día.',
             'dias_semana.*.between' => 'Elegí días de la semana.',

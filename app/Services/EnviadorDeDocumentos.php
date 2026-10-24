@@ -6,10 +6,13 @@ namespace App\Services;
 
 use App\Enums\EstadoEnvio;
 use App\Mail\EnvioDeDocumentos;
+use App\Mail\PedidoDeMedicamentos;
 use App\Models\Adjunto;
 use App\Models\Envio;
 use App\Models\User;
 use App\Support\Destinatario;
+use Closure;
+use Illuminate\Mail\Mailable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -54,7 +57,7 @@ class EnviadorDeDocumentos
         string $asunto,
         ?string $mensaje,
     ): Envio {
-        try {
+        return $this->mandar($usuario, $destinatario, $adjuntos, $asunto, $mensaje, function () use ($usuario, $adjuntos, $asunto, $mensaje): Mailable {
             $archivos = array_values($adjuntos
                 ->map(fn (Adjunto $adjunto): array => [
                     'nombre' => $adjunto->nombre_original,
@@ -63,8 +66,50 @@ class EnviadorDeDocumentos
                 ])
                 ->all());
 
-            Mail::to($destinatario->email, $destinatario->nombre)
-                ->send(new EnvioDeDocumentos($usuario, $asunto, $mensaje, $archivos));
+            return new EnvioDeDocumentos($usuario, $asunto, $mensaje, $archivos);
+        });
+    }
+
+    /**
+     * Un pedido de medicamentos: el mismo camino que un envío -destino ya
+     * cargado, síncrono, al historial aunque falle-, sin archivos.
+     *
+     * @param  list<string>  $medicamentos
+     */
+    public function pedir(User $usuario, Destinatario $destinatario, string $mensaje, array $medicamentos): Envio
+    {
+        $cuerpo = $mensaje.'
+
+'.implode('
+', array_map(fn (string $m): string => "- {$m}", $medicamentos));
+
+        return $this->mandar(
+            $usuario,
+            $destinatario,
+            collect(),
+            PedidoDeMedicamentos::ASUNTO,
+            $cuerpo,
+            fn (): Mailable => new PedidoDeMedicamentos($usuario, $mensaje, $medicamentos),
+        );
+    }
+
+    /**
+     * Intenta mandar y registra el resultado. El mail se arma DENTRO del intento:
+     * descifrar un archivo también puede fallar, y eso es un envío fallido.
+     *
+     * @param  Collection<int, Adjunto>  $adjuntos
+     * @param  Closure(): Mailable  $armar
+     */
+    private function mandar(
+        User $usuario,
+        Destinatario $destinatario,
+        Collection $adjuntos,
+        string $asunto,
+        ?string $mensaje,
+        Closure $armar,
+    ): Envio {
+        try {
+            Mail::to($destinatario->email, $destinatario->nombre)->send($armar());
 
             $estado = EstadoEnvio::Enviado;
         } catch (Throwable $e) {
@@ -74,7 +119,7 @@ class EnviadorDeDocumentos
              * tercero-, y un log es un archivo de texto que termina en cualquier
              * lado. Misma regla que los avisos y la casilla.
              */
-            Log::error('No se pudo mandar un envío de documentación', [
+            Log::error('No se pudo mandar un envío', [
                 'usuario_id' => $usuario->id,
                 'destinatario' => $destinatario->origen.':'.$destinatario->id,
                 'archivos' => $adjuntos->pluck('id')->all(),

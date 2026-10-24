@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Enums\RolPaciente;
 use App\Enums\TipoAdjunto;
 use App\Models\Alergia;
+use App\Models\AplicacionMedicamento;
 use App\Models\AplicacionVacuna;
 use App\Models\Centro;
 use App\Models\Clave;
@@ -120,6 +121,7 @@ function fichaParaBarrer(User $duenio, User $cuidador): array
         'aplicacion' => AplicacionVacuna::factory()->for($paciente)->create([
             'vacuna_id' => Vacuna::factory()->for($duenio, 'usuario')->create()->id,
         ]),
+        'aplicacionMedicamento' => AplicacionMedicamento::factory()->for($paciente)->create(),
         'turno' => $turno,
         'recordatorio' => $turno->recordatorios()->sole(),
         'adjunto' => $credencial,
@@ -143,7 +145,7 @@ function parametrosDeLaFicha(): array
 {
     return [
         'paciente', 'cobertura', 'enfermedad', 'registro', 'alergia', 'clave', 'medicion',
-        'tratamiento', 'orden', 'recetaMedica', 'documento', 'estudio', 'resultado', 'prescripcion', 'aplicacion', 'consulta', 'turno',
+        'tratamiento', 'orden', 'recetaMedica', 'documento', 'estudio', 'resultado', 'prescripcion', 'aplicacion', 'aplicacionMedicamento', 'consulta', 'turno',
         'recordatorio', 'adjunto', 'usuario',
     ];
 }

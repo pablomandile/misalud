@@ -18,6 +18,7 @@ use App\Services\AdjuntadorDeArchivos;
 use App\Services\PacientePrincipal;
 use App\Support\CatalogoDeLaFicha;
 use App\Support\CatalogoVisible;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -54,6 +55,8 @@ class TratamientoController extends Controller
         Gate::authorize('view', $paciente);
 
         $usuario = auth()->user();
+        // La próxima aplicación de un anual, contada desde el día de quien mira.
+        $hoy = $usuario instanceof User ? $usuario->hoyCalendario() : CarbonImmutable::now('UTC')->startOfDay();
 
         $tratamientos = $paciente->tratamientos()
             // Explícito: sin esto es una consulta por cada fila del listado.
@@ -68,7 +71,7 @@ class TratamientoController extends Controller
              */
             ->sortByDesc(fn (Tratamiento $t): string => ($t->activo ? '1' : '0').$t->inicio->format('Ymd'))
             ->values()
-            ->map(fn (Tratamiento $t): array => $this->serializar($t))
+            ->map(fn (Tratamiento $t): array => $this->serializar($t, $hoy))
             ->all();
 
         return Inertia::render('tratamientos/Index', [
@@ -220,7 +223,7 @@ class TratamientoController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function serializar(Tratamiento $tratamiento): array
+    private function serializar(Tratamiento $tratamiento, CarbonImmutable $hoy): array
     {
         return [
             'id' => $tratamiento->id,
@@ -236,8 +239,10 @@ class TratamientoController extends Controller
             'horas' => $tratamiento->horas ?? [],
             'tomasVisible' => $tratamiento->tomasVisible(),
             'horarioVisible' => $tratamiento->horarioVisible(),
-            'proxima_aplicacion' => $tratamiento->proxima_aplicacion?->format('Y-m-d'),
-            'proximaAplicacionVisible' => $tratamiento->proxima_aplicacion?->format('d/m/Y'),
+            'aplicacion_dia' => $tratamiento->aplicacion_dia,
+            'aplicacion_mes' => $tratamiento->aplicacion_mes,
+            'aplicacionVisible' => $tratamiento->aplicacionVisible(),
+            'proximaAplicacionVisible' => $tratamiento->proximaAplicacion($hoy)?->format('d/m/Y'),
             'periodicidad' => $tratamiento->periodicidad?->value,
             'diasSemana' => $tratamiento->dias_semana ?? [],
             'periodicidadEtiqueta' => $tratamiento->tomaVisible(),

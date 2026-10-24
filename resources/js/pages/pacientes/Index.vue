@@ -4,6 +4,7 @@ import {
     Activity,
     ClipboardList,
     CreditCard,
+    CalendarCheck,
     CalendarClock,
     Eye,
     FlaskConical,
@@ -33,6 +34,7 @@ import PrescripcionOcularController from '@/actions/App/Http/Controllers/Prescri
 import RecetaMedicaController from '@/actions/App/Http/Controllers/RecetaMedicaController';
 import TurnoController from '@/actions/App/Http/Controllers/TurnoController';
 import ConsultaController from '@/actions/App/Http/Controllers/ConsultaController';
+import AplicacionMedicamentoController from '@/actions/App/Http/Controllers/AplicacionMedicamentoController';
 import AplicacionVacunaController from '@/actions/App/Http/Controllers/AplicacionVacunaController';
 import TratamientoController from '@/actions/App/Http/Controllers/TratamientoController';
 import Heading from '@/components/Heading.vue';
@@ -226,6 +228,13 @@ const seccionesDeLaFicha: Array<{
         icon: Pill,
         tono: 'rosa',
         ruta: (paciente) => TratamientoController.index({ paciente }),
+    },
+    {
+        // Cada aplicación de lo que no es diario, por enfermedad.
+        titulo: 'Tratamiento',
+        icon: CalendarCheck,
+        tono: 'rosa',
+        ruta: (paciente) => AplicacionMedicamentoController.index({ paciente }),
     },
     {
         titulo: 'Variables',

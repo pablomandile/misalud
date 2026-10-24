@@ -54,6 +54,7 @@ final class ExportadorDeDatos
         'mediciones' => [],
         'tratamientos' => [],
         'aplicacionesVacuna' => [],
+        'aplicacionesMedicamento' => [],
         'ordenesEstudio' => [],
         'recetasMedicas' => [],
         'documentosPorRevisar' => [],

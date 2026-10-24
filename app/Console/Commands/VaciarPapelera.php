@@ -12,6 +12,7 @@ use App\Http\Controllers\MedicoController;
 use App\Http\Controllers\TipoMedicionController;
 use App\Http\Controllers\VacunaController;
 use App\Models\Adjunto;
+use App\Models\AplicacionMedicamento;
 use App\Models\AplicacionVacuna;
 use App\Models\Centro;
 use App\Models\Consulta;
@@ -89,6 +90,7 @@ class VaciarPapelera extends Command
         Enfermedad::class,
         Tratamiento::class,
         AplicacionVacuna::class,
+        AplicacionMedicamento::class,
         ResultadoEstudio::class,
         Estudio::class,
         OrdenEstudio::class,

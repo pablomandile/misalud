@@ -1,6 +1,7 @@
 import {
     Activity,
     BookUser,
+    ClipboardPen,
     Cross,
     Building2,
     IdCard,
@@ -21,6 +22,7 @@ import ContactoController from '@/actions/App/Http/Controllers/ContactoControlle
 import FarmaciaController from '@/actions/App/Http/Controllers/FarmaciaController';
 import MedicionController from '@/actions/App/Http/Controllers/MedicionController';
 import MedicoController from '@/actions/App/Http/Controllers/MedicoController';
+import PedidoMedicamentosController from '@/actions/App/Http/Controllers/PedidoMedicamentosController';
 import PacienteController from '@/actions/App/Http/Controllers/PacienteController';
 import TratamientoController from '@/actions/App/Http/Controllers/TratamientoController';
 import AplicacionVacunaController from '@/actions/App/Http/Controllers/AplicacionVacunaController';
@@ -91,6 +93,13 @@ export const destinosPrincipales: NavItem[] = [
         href: TratamientoController.principal(),
         icon: Pill,
         tono: 'lavanda',
+    },
+    // Pedirle por mail los medicamentos al médico, un centro o una farmacia.
+    {
+        title: 'Pedido de medicamentos',
+        href: PedidoMedicamentosController.index(),
+        icon: ClipboardPen,
+        tono: 'durazno',
     },
     /*
      * La libreta y, en la misma pantalla, lo que se le mandó a cada uno. Un

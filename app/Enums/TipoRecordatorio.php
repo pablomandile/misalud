@@ -53,8 +53,9 @@ enum TipoRecordatorio: string
     case VacunaProxima = 'vacuna_proxima';
 
     /**
-     * Se acerca la aplicación de un medicamento de "una vez por año". Sale de
-     * `tratamientos.proxima_aplicacion`, fecha de calendario. Son DOS avisos
+     * Se acerca la aplicación de un medicamento de "una vez por año". Sale del
+     * día y el mes cargados (`Tratamiento::proximaAplicacion()`), fecha de
+     * calendario. Son DOS avisos
      * del mismo origen —un mes antes y una semana antes— y por eso dos tipos:
      * la clave de idempotencia es origen + tipo (pedido del usuario).
      */

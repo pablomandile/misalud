@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Observers;
 
-use App\Enums\PeriodicidadToma;
 use App\Enums\TipoRecordatorio;
 use App\Models\Tratamiento;
 use App\Services\GeneradorDeRecordatorios;
+use Carbon\CarbonImmutable;
 
 /**
  * Avisa cuando un tratamiento está por terminar.
@@ -62,17 +62,51 @@ class TratamientoObserver
             $corresponde ? $tratamiento->fin : null,
         );
 
-        /*
-         * Un medicamento de "una vez por año" avisa de su próxima aplicación
-         * un mes antes y una semana antes. Sin fecha cargada, con otra toma o
-         * suspendido, no hay de qué avisar: los dos se limpian.
-         */
-        $aplicacion = $tratamiento->activo && $tratamiento->periodicidad === PeriodicidadToma::Anual
-            ? $tratamiento->proxima_aplicacion
+        $this->sincronizarAplicacion($tratamiento);
+    }
+
+    /**
+     * Un medicamento de "una vez por año" avisa de su próxima aplicación un mes
+     * antes y una semana antes. La fecha no se guarda: sale del día y el mes
+     * (`Tratamiento::proximaAplicacion()`), y por eso también la llama todos
+     * los días `misalud:renovar-aplicaciones-anuales`, que pasa los avisos al
+     * año siguiente cuando la fecha ya pasó. Hoy en UTC: es un proceso de
+     * fondo, sin un usuario del que tomar la zona (como el cierre de vencidos).
+     *
+     * Sin día y mes, con otra toma o suspendido, los dos se limpian. Y **un
+     * aviso cuya fecha ya pasó no se genera**: cargar la aplicación cuatro días
+     * antes no puede mandar «en un mes toca…».
+     */
+    public function sincronizarAplicacion(Tratamiento $tratamiento): void
+    {
+        $aplicacion = $tratamiento->activo
+            ? $tratamiento->proximaAplicacion(CarbonImmutable::now('UTC'))
             : null;
 
         foreach (self::AVISOS_DE_APLICACION as $tipo) {
-            $this->recordatorios->sincronizar($tratamiento, $tipo, $aplicacion);
+            $this->recordatorios->sincronizar(
+                $tratamiento,
+                $tipo,
+                $aplicacion !== null && $this->correspondeAvisar($tratamiento, $tipo, $aplicacion) ? $aplicacion : null,
+            );
         }
+    }
+
+    /**
+     * Un aviso cuya fecha ya pasó no se CREA, pero el que ya existe para esa
+     * misma fecha se deja: es el que salió (o venció) este año, y borrarlo al
+     * día siguiente lo sacaría de la pantalla de avisos.
+     */
+    private function correspondeAvisar(Tratamiento $tratamiento, TipoRecordatorio $tipo, CarbonImmutable $aplicacion): bool
+    {
+        $aviso = $aplicacion->subHours($tipo->horasDeAnticipacion());
+
+        if ($aviso->greaterThanOrEqualTo(CarbonImmutable::now('UTC')->startOfDay())) {
+            return true;
+        }
+
+        $existente = $tratamiento->recordatorios()->where('tipo', $tipo)->first();
+
+        return $existente !== null && $existente->fecha->format('Y-m-d H:i:s') === $aviso->format('Y-m-d H:i:s');
     }
 }

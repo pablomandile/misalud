@@ -40,6 +40,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $telefono
  * @property string|null $email
  * @property string|null $notas
+ * @property string|null $plantilla_pedido
  * @property-read int|null $edad
  */
 #[ObservedBy(PacienteObserver::class)]
@@ -90,6 +91,8 @@ class Paciente extends Model implements CifraDatos, TieneArchivos
             'telefono' => 'encrypted',
             'email' => 'encrypted',
             'notas' => 'encrypted',
+            // El mensaje del último pedido de medicamentos. No es fillable: lo escribe el pedido.
+            'plantilla_pedido' => 'encrypted',
         ];
     }
 
@@ -172,6 +175,14 @@ class Paciente extends Model implements CifraDatos, TieneArchivos
     public function tratamientos(): HasMany
     {
         return $this->hasMany(Tratamiento::class);
+    }
+
+    /**
+     * @return HasMany<AplicacionMedicamento, $this>
+     */
+    public function aplicacionesMedicamento(): HasMany
+    {
+        return $this->hasMany(AplicacionMedicamento::class);
     }
 
     /**

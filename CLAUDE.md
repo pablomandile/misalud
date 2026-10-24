@@ -2358,6 +2358,26 @@ compara por SHA-256 con los PDF originales. Ver "Estado".
   el campo. Medirlo da "18 px" en algo que está bien. Los que **envuelven** un radio o un
   checkbox sí son la fila que se toca, y esos se miden con `label:not([for])`.
 
+### Pedido de medicamentos
+
+En el menú principal (`/pedido-de-medicamentos`, `PedidoMedicamentosController`, pedido del
+usuario): se tildan **varios medicamentos de la ficha**, se elige **un médico, centro o farmacia
+con correo** y se manda **por mail**. Abre la ficha principal y tiene `SelectorDeFicha`.
+
+- **Es un envío más**: `EnviadorDeDocumentos::pedir()` comparte con `enviar()` el intento, el log
+  sin datos y el registro **después** de intentar, así que queda en el historial de Contactos aunque
+  falle. Mailable propio (`PedidoDeMedicamentos`, texto plano), asunto fijo «Pedido de medicamentos»
+  sin nombres, `Reply-To` la persona.
+- **Destino**: `LibretaDeDestinatarios`, filtrada a médicos, centros y farmacias
+  (`PedidoMedicamentosGuardarRequest::ORIGENES`); los contactos de la libreta no entran (decisión
+  del usuario). Nunca una dirección tipeada, como en todo envío.
+- **El mensaje queda como plantilla de la ficha** (`pacientes.plantilla_pedido`, cifrada, no
+  fillable): se guarda al mandar —aunque el mail falle— y se precarga en el próximo. La lista de
+  medicamentos («- Losartán · 50 mg») la agrega el sistema abajo, y la pantalla muestra la vista
+  previa.
+- **Pide `update` sobre la ficha**, no `view` como un envío de documentos: mandar escribe la
+  plantilla. Un lector ve el aviso. Los medicamentos tienen que ser de esa ficha.
+
 ## Compartir la ficha
 
 Un propietario invita a otra persona a ver (`Lector`) o a cargar datos (`Cuidador`) en una
@@ -2559,12 +2579,22 @@ duplicaría la dosis y los avisos de fin.
   no instantes: **no pasan por `aUtc()`** —las 8 son las 8 en la zona de quien la toma—. El request
   descarta los vacíos, los ordena, no guarda más horarios que tomas y, con otra toma, deja un solo
   horario y el contador en `null`: lo oculto en pantalla viaja igual. Reemplazó a `hora`, que tenía uno.
-- **«Una vez por año» pide la fecha de la próxima aplicación** (`tratamientos.proxima_aplicacion`,
-  `date`, en claro; con otra toma el request la vacía). De ella salen **dos avisos por mail**, a 30 y
-  a 7 días (`TipoRecordatorio::AplicacionAnualMes` y `AplicacionAnualSemana`): dos tipos porque la
-  clave de idempotencia es origen + tipo. Los genera `TratamientoObserver` solo si está activo, es
-  anual y tiene fecha; si no, los limpia. El mail dice cuándo y no qué medicamento, como todos.
-  `recordatorios.tipo` es `string(40)`, no un ENUM: sumar un tipo no pide migración.
+- **«Una vez por año» pide día y mes, sin año** (`aplicacion_dia`, `aplicacion_mes`, en claro; con
+  otra toma el request los vacía; un 31/4 se rechaza, el 29/2 cae el 28 los años que no lo tienen).
+  La próxima aplicación **no se guarda**: la calcula `Tratamiento::proximaAplicacion($hoy)`, hoy
+  inclusive. De ella salen **dos avisos por mail**, a 30 y a 7 días
+  (`TipoRecordatorio::AplicacionAnualMes` y `AplicacionAnualSemana`): dos tipos porque la clave de
+  idempotencia es origen + tipo. Los genera `TratamientoObserver::sincronizarAplicacion()` solo si
+  está activo, es anual y tiene día y mes; si no, los limpia. El mail dice cuándo y no qué
+  medicamento, como todos. `recordatorios.tipo` es `string(40)`, no un ENUM.
+    - ⚠️ **Como la fecha no está en la fila, nada dispara el observer cuando pasa.**
+      `misalud:renovar-aplicaciones-anuales` (diario, hoy en UTC como el cierre de vencidos) le pide
+      el mismo cálculo, y pasada la aplicación los avisos van al año siguiente y se reabren.
+    - **Un aviso que ya tendría que haber salido no se crea** (cargar el día y mes a cuatro días no
+      manda «en un mes toca…»), **pero el que ya existe para esa fecha se deja**: si no, el comando
+      diario borraría el aviso enviado al día siguiente de mandarlo.
+    - Reemplazó a `proxima_aplicacion` (fecha completa, un día en producción); la migración copió
+      día y mes.
 - `HorariosDeToma.vue` **sí** tiene estado local (el contador decide cuántos campos hay), y por eso es
   un componente aparte y todo va con `v-model`: el estado redibuja solo ese componente y no pisa lo
   tipeado en los `:value` del formulario de edición. Verificado en Chrome.
@@ -2576,6 +2606,24 @@ duplicaría la dosis y los avisos de fin.
 - **Fotos de la caja**: `Tratamiento` es el **undécimo dueño de archivos**
   (`TipoAdjunto::CajaMedicamento`; `adjuntos.tipo` es `string(40)`, no hubo ENUM que ensanchar). En
   el alta, o después con `tratamientos.adjuntos.store`.
+
+### Tratamiento: el historial de aplicaciones
+
+La baldosa **«Tratamiento»** (`/pacientes/{paciente}/tratamiento`, `AplicacionMedicamentoController`,
+pedido del usuario) anota **cada aplicación o toma** de un medicamento que no es de todos los días:
+fecha, medicamento, enfermedad y observaciones (cifradas), **agrupado por enfermedad** —la de la
+aplicación más reciente arriba, «Sin enfermedad» al final—. Tabla `aplicaciones_medicamento`.
+
+- **Medicamentos de esta ficha y no diarios**, a las dos puntas: el `select` y `Rule::exists`. La
+  enfermedad, de esta ficha. La fecha lleva `FechaNoFutura`.
+- **Elegir el medicamento precarga su enfermedad**, editable. Por eso el formulario va entero con
+  `v-model` (regla de la Etapa 10). «Otra aplicación» abre con el mismo medicamento y enfermedad.
+- **No mueve los avisos del anual**: esos salen del día y mes del medicamento (decisión del usuario).
+- `tratamiento_id` va con **cascada**, no `restrict`: con `restrict`, vaciar la papelera o eliminar la
+  cuenta reventaría por estas filas. Un medicamento en la papelera saca su historial de la pantalla.
+- ⚠️ El parámetro de ruta es **`{aplicacionMedicamento}`**, no `{aplicacion}`: ese ya es de las
+  vacunas, y `BarridoDePrivacidadTest` arma cada parámetro por su nombre (con el mismo, medía las
+  rutas con el id de una dosis de vacuna y daba 404).
 
 ## Claves
 
