@@ -226,6 +226,33 @@ class ArchivoService
     }
 
     /**
+     * Cambia el contenido de un archivo ya guardado (una foto girada).
+     *
+     * Se escribe en una ruta NUEVA, se apunta la fila ahí y recién después se
+     * borra el archivo viejo. Pisar el mismo archivo dejaría, si el proceso se
+     * corta a mitad de la escritura, una foto rota y sin copia.
+     */
+    public function reemplazarContenido(Adjunto $adjunto, string $contenido): void
+    {
+        if (! $adjunto->tipo->seGuardaCifrado()) {
+            throw new RuntimeException('Ese archivo no está cifrado: no se reemplaza por acá.');
+        }
+
+        $rutaVieja = $adjunto->ruta;
+        $carpeta = dirname(str_replace('\\', '/', $rutaVieja));
+        $rutaNueva = trim($carpeta, '/').'/'.Str::ulid()->toString().'.cif';
+
+        $this->disco()->put($rutaNueva, Crypt::encryptString($contenido));
+
+        $adjunto->update([
+            'ruta' => $rutaNueva,
+            'tamanio_bytes' => strlen($contenido),
+        ]);
+
+        $this->disco()->delete($rutaVieja);
+    }
+
+    /**
      * Borra el archivo del disco.
      *
      * Devuelve `false` si no estaba, sin explotar: un adjunto cuyo archivo ya no

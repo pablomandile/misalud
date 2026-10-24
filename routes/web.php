@@ -137,6 +137,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('pacientes.adjuntos.store');
     Route::get('adjuntos/{adjunto}', [AdjuntoController::class, 'show'])->name('adjuntos.show');
     Route::put('adjuntos/{adjunto}', [AdjuntoController::class, 'update'])->name('adjuntos.update');
+    Route::put('adjuntos/{adjunto}/girar', [AdjuntoController::class, 'girar'])->name('adjuntos.girar');
     Route::delete('adjuntos/{adjunto}', [AdjuntoController::class, 'destroy'])->name('adjuntos.destroy');
 
     /*

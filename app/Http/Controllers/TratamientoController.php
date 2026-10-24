@@ -78,6 +78,7 @@ class TratamientoController extends Controller
             ],
             'fichas' => $usuario instanceof User ? PacientePrincipal::opciones($usuario) : [],
             'periodicidades' => PeriodicidadToma::opciones(),
+            'diasDeLaSemana' => PeriodicidadToma::opcionesDeDias(),
             'tratamientos' => $tratamientos,
             'medicamentos' => $this->medicamentosDisponibles($paciente),
             'medicos' => $this->medicosDisponibles($paciente),
@@ -231,7 +232,8 @@ class TratamientoController extends Controller
             'dosis' => $tratamiento->dosis,
             'frecuencia' => $tratamiento->frecuencia,
             'periodicidad' => $tratamiento->periodicidad?->value,
-            'periodicidadEtiqueta' => $tratamiento->periodicidad?->etiqueta(),
+            'diasSemana' => $tratamiento->dias_semana ?? [],
+            'periodicidadEtiqueta' => $tratamiento->tomaVisible(),
             'fotos' => $tratamiento->adjuntos
                 ->sortBy('id')
                 ->values()

@@ -9,6 +9,7 @@ use App\Contracts\CifraDatos;
 use App\Database\Eloquent\ConsultaVigilada;
 use App\Enums\TipoAdjunto;
 use App\Policies\AdjuntoPolicy;
+use App\Services\GiradorDeImagenes;
 use Database\Factories\AdjuntoFactory;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -123,6 +124,15 @@ class Adjunto extends Model implements CifraDatos
     }
 
     /**
+     * Una marca corta que cambia cada vez que cambia el archivo. Sale de la
+     * ruta, que es un ULID nuevo en cada escritura; la ruta misma no viaja.
+     */
+    public function version(): string
+    {
+        return substr(hash('xxh3', $this->ruta), 0, 8);
+    }
+
+    /**
      * Cómo viaja a la pantalla un documento de la ficha. Lo usan la ficha (para
      * el contador) y la pantalla de Documentos: una sola forma, así no se
      * separan.
@@ -144,7 +154,13 @@ class Adjunto extends Model implements CifraDatos
             'mime' => $this->mime,
             'tamanio' => $this->tamanio_bytes,
             'tipo' => $this->tipo->etiqueta(),
-            'url' => route('adjuntos.show', $this),
+            /*
+             * `v` cambia cuando cambia el archivo (una foto girada se escribe en
+             * una ruta nueva): sin eso, el navegador sigue mostrando la imagen
+             * vieja, porque el `src` es el mismo y no vuelve a pedirla.
+             */
+            'url' => route('adjuntos.show', ['adjunto' => $this, 'v' => $this->version()]),
+            'girable' => app(GiradorDeImagenes::class)->admite($this->mime),
         ];
     }
 }

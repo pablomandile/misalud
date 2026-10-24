@@ -341,7 +341,7 @@ it('el listado de pacientes trae sus documentos con la URL del controlador', fun
         ->assertInertia(fn ($p) => $p
             ->has('pacientes.0.adjuntos', 1)
             ->where('pacientes.0.adjuntos.0.nombre', 'informe.pdf')
-            ->where('pacientes.0.adjuntos.0.url', route('adjuntos.show', $adjunto))
+            ->where('pacientes.0.adjuntos.0.url', route('adjuntos.show', ['adjunto' => $adjunto, 'v' => $adjunto->version()]))
         );
 });
 

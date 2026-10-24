@@ -49,6 +49,30 @@ class TratamientoGuardarRequest extends FormRequest
         }
 
         $this->resolverMedicamentoPorNombre();
+        $this->normalizarDias();
+    }
+
+    /**
+     * Los días solo valen con "algunos días de la semana". Con otra toma se
+     * vacían, aunque vengan: al pasar de "algunos días" a "todos los días", los
+     * que estaban tildados no pueden quedar guardados sin que se vean.
+     */
+    private function normalizarDias(): void
+    {
+        if ($this->input('periodicidad') !== PeriodicidadToma::Personalizada->value) {
+            $this->merge(['dias_semana' => null]);
+
+            return;
+        }
+
+        $dias = $this->input('dias_semana');
+
+        if (is_array($dias)) {
+            $dias = array_map(fn ($dia) => is_numeric($dia) ? (int) $dia : $dia, $dias);
+            $dias = array_values(array_unique($dias, SORT_REGULAR));
+            sort($dias);
+            $this->merge(['dias_semana' => $dias]);
+        }
     }
 
     /**
@@ -152,6 +176,8 @@ class TratamientoGuardarRequest extends FormRequest
 
             'dosis' => ['required', 'string', 'max:255'],
             'periodicidad' => ['nullable', Rule::enum(PeriodicidadToma::class)],
+            'dias_semana' => ['nullable', 'required_if:periodicidad,'.PeriodicidadToma::Personalizada->value, 'array'],
+            'dias_semana.*' => ['integer', 'between:1,7'],
             // Opcional: una toma única no tiene "cada cuánto".
             'frecuencia' => ['nullable', 'string', 'max:255'],
 
@@ -239,6 +265,7 @@ class TratamientoGuardarRequest extends FormRequest
             'medicamento_id' => 'medicamento',
             'medicamento_nombre' => 'medicamento',
             'periodicidad' => 'toma',
+            'dias_semana' => 'días',
             'medico_id' => 'médico',
             'enfermedad_id' => 'enfermedad',
             'dosis' => 'dosis',
@@ -259,6 +286,9 @@ class TratamientoGuardarRequest extends FormRequest
             'medicamento_id.exists' => 'Elegí un medicamento de tu catálogo.',
             'medico_id.exists' => 'Elegí un médico de tu agenda.',
             'fin.after_or_equal' => 'La fecha de fin no puede ser anterior al inicio.',
+            'dias_semana.required_if' => 'Elegí al menos un día.',
+            'dias_semana.*.between' => 'Elegí días de la semana.',
+            'dias_semana.*.integer' => 'Elegí días de la semana.',
         ];
     }
 }

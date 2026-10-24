@@ -366,6 +366,7 @@ function pesoLegible(bytes: number): string {
         <!-- El visor a pantalla completa, con su X. -->
         <VisorDocumento
             :documento="documentoAbierto"
+            :puede-girar="paciente.puedeEditar"
             @cerrar="documentoAbierto = null"
         />
     </div>

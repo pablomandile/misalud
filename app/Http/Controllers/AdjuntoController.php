@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Contracts\TieneArchivos;
 use App\Enums\TipoAdjunto;
 use App\Http\Requests\AdjuntoActualizarRequest;
+use App\Http\Requests\AdjuntoGirarRequest;
 use App\Http\Requests\AdjuntoStoreRequest;
 use App\Http\Requests\AudioStoreRequest;
 use App\Models\Adjunto;
@@ -22,9 +23,12 @@ use App\Models\RecetaMedica;
 use App\Models\Tratamiento;
 use App\Services\AdjuntadorDeArchivos;
 use App\Services\ArchivoService;
+use App\Services\GiradorDeImagenes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -307,6 +311,38 @@ class AdjuntoController extends Controller
         $adjunto->update($peticion->validated());
 
         return back()->with('exito', 'Se guardaron los cambios.');
+    }
+
+    /**
+     * Gira una foto 90°. Queda girada en todos lados: la miniatura, el visor y
+     * lo que se mande por mail.
+     */
+    public function girar(AdjuntoGirarRequest $peticion, Adjunto $adjunto, GiradorDeImagenes $girador): RedirectResponse
+    {
+        Gate::authorize('update', $adjunto);
+
+        if (! $girador->admite($adjunto->mime)) {
+            return back()->with('error', 'Ese archivo no se puede girar.');
+        }
+
+        try {
+            $girada = $girador->girar(
+                $this->archivos->contenido($adjunto),
+                $adjunto->mime,
+                $peticion->grados(),
+            );
+            $this->archivos->reemplazarContenido($adjunto, $girada);
+        } catch (RuntimeException $e) {
+            // Al log la clase y el id, nunca el contenido.
+            Log::warning('No se pudo girar un adjunto.', [
+                'adjunto_id' => $adjunto->id,
+                'excepcion' => $e::class,
+            ]);
+
+            return back()->with('error', 'No se pudo girar la foto.');
+        }
+
+        return back()->with('exito', 'Se giró la foto.');
     }
 
     public function destroy(Adjunto $adjunto): RedirectResponse

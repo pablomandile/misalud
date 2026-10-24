@@ -2526,7 +2526,14 @@ duplicaría la dosis y los avisos de fin.
 - **El catálogo de medicamentos lista solo los propios** (`CatalogoBaseController::listaSemillas()`):
   las semillas son la lista para elegir, no tarjetas. Salió del menú; se llega con «Lista de
   medicamentos».
-- **`periodicidad`** (`PeriodicidadToma`: diaria, mensual, anual, única), ENUM en claro. `frecuencia`
+- **`periodicidad`** (`PeriodicidadToma`: diaria, semanal, algunos días de la semana, mensual, anual,
+  única), ENUM en claro. Con «algunos días», **`dias_semana`** (JSON en claro, días ISO: 1 = lunes)
+  dice cuáles; se elige con siete casillas L M X J V S D (la X es el miércoles) y se lee con palabras
+  («Lunes, miércoles y viernes», `Tratamiento::tomaVisible()`). Con otra toma el request los **vacía**
+  aunque vengan tildados: ocultos en pantalla siguen viajando.
+- ⚠️ **Las casillas de los días aparecen por CSS (`group-has-[option[value=personalizada]:checked]`),
+  no por un `v-model` en el select.** El formulario de edición va con `:value`, y un solo campo con
+  estado local pisaría lo tipeado en los demás (la regla de la Etapa 10). `frecuencia`
   pasó a opcional («cada 8 horas»): una toma única no tiene cada cuánto. `notas` se rotula
   «Observaciones» y va al final del formulario.
 - **Fotos de la caja**: `Tratamiento` es el **undécimo dueño de archivos**
@@ -2789,6 +2796,18 @@ Un solo `VisorDocumento.vue` a pantalla completa para imágenes **y PDFs**, con 
 - Se editan después por `PUT adjuntos/{adjunto}` (`AdjuntoActualizarRequest`), sin archivo: pide
   `update` del adjunto, que delega en su dueño.
 - `Adjunto::paraLista()` es la forma única en que viaja un documento a la pantalla.
+- **Las fotos se pueden girar** de a 90° desde el visor («Girar a la izquierda / a la derecha»),
+  y queda guardado: `PUT adjuntos/{adjunto}/girar` pide `update` del adjunto, `GiradorDeImagenes`
+  gira con GD (JPEG, PNG y WebP; HEIC no, GD no lo lee) y `ArchivoService::reemplazarContenido()`
+  escribe cifrado en una **ruta nueva** antes de borrar la vieja. La pantalla lo ofrece pasándole
+  `puede-girar` al visor y el documento con `id` y `girable` (`Adjunto::paraLista()`; hoy en
+  Medicamentos y Documentos).
+    - ⚠️ **Antes de girar se aplica la orientación EXIF.** El celular guarda los píxeles como salen
+      del sensor y anota en el EXIF cómo mostrarlos; GD lo ignora y al escribir lo descarta, así que
+      sin ese paso la foto saltaría a otra orientación además de la pedida.
+    - ⚠️ **La URL lleva `?v=`** (`Adjunto::version()`, sale de la ruta): con el mismo `src` el navegador
+      no vuelve a pedir la foto girada. El visor suma además su propio contador, porque la página
+      guarda el documento que abrió con la URL de ese momento.
 - **`object-contain`, nunca `cover`**: recortar algo que la persona abrió para leer es perder
   justo lo que fue a ver.
 - **Se cierra antes de borrar** lo que está mostrando, o queda con un `src` que ya da 404.

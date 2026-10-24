@@ -459,10 +459,119 @@ it('rechaza una toma que no existe', function (): void {
         ->post(route('pacientes.tratamientos.store', $paciente), [
             'medicamento_id' => $medicamento->id,
             'dosis' => '1',
-            'periodicidad' => 'semanal',
+            'periodicidad' => 'quincenal',
             'inicio' => '2026-09-01',
         ])
         ->assertSessionHasErrors('periodicidad');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Una vez por semana y algunos días de la semana
+|--------------------------------------------------------------------------
+*/
+
+it('guarda una toma semanal', function (): void {
+    [$usuario, $paciente, $medicamento] = fichaConTratamientos();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.tratamientos.store', $paciente), [
+            'medicamento_id' => $medicamento->id,
+            'dosis' => '1 comprimido',
+            'periodicidad' => 'semanal',
+            'inicio' => '2026-09-01',
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect(Tratamiento::sole()->periodicidad)->toBe(PeriodicidadToma::Semanal)
+        ->and(Tratamiento::sole()->dias_semana)->toBeNull();
+});
+
+it('guarda los días elegidos, ordenados y sin repetir, y los dice con palabras', function (): void {
+    [$usuario, $paciente, $medicamento] = fichaConTratamientos();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.tratamientos.store', $paciente), [
+            'medicamento_id' => $medicamento->id,
+            'dosis' => '1 comprimido',
+            'periodicidad' => 'personalizada',
+            // Como lo manda el formulario: strings.
+            'dias_semana' => ['5', '1', '3', '1'],
+            'inicio' => '2026-09-01',
+        ])
+        ->assertSessionHasNoErrors();
+
+    $tratamiento = Tratamiento::sole();
+
+    expect($tratamiento->dias_semana)->toBe([1, 3, 5])
+        ->and($tratamiento->tomaVisible())->toBe('Lunes, miércoles y viernes');
+
+    $this->actingAs($usuario)
+        ->get(route('pacientes.tratamientos.index', $paciente))
+        ->assertInertia(fn ($p) => $p
+            ->where('tratamientos.0.diasSemana', [1, 3, 5])
+            ->where('tratamientos.0.periodicidadEtiqueta', 'Lunes, miércoles y viernes')
+            ->has('diasDeLaSemana', 7)
+        );
+});
+
+it('un solo día se lee solo', function (): void {
+    expect(PeriodicidadToma::nombrarDias([7]))->toBe('Domingo')
+        ->and(PeriodicidadToma::nombrarDias([2, 4]))->toBe('Martes y jueves');
+});
+
+it('con algunos días de la semana, hay que elegir al menos uno', function (): void {
+    [$usuario, $paciente, $medicamento] = fichaConTratamientos();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.tratamientos.store', $paciente), [
+            'medicamento_id' => $medicamento->id,
+            'dosis' => '1',
+            'periodicidad' => 'personalizada',
+            'inicio' => '2026-09-01',
+        ])
+        ->assertSessionHasErrors('dias_semana');
+});
+
+it('rechaza un día que no existe', function (): void {
+    [$usuario, $paciente, $medicamento] = fichaConTratamientos();
+
+    $this->actingAs($usuario)
+        ->post(route('pacientes.tratamientos.store', $paciente), [
+            'medicamento_id' => $medicamento->id,
+            'dosis' => '1',
+            'periodicidad' => 'personalizada',
+            'dias_semana' => ['8'],
+            'inicio' => '2026-09-01',
+        ])
+        ->assertSessionHasErrors('dias_semana.0');
+});
+
+it('al pasar a otra toma, los días tildados no quedan guardados', function (): void {
+    [$usuario, $paciente, $medicamento] = fichaConTratamientos();
+    $tratamiento = $paciente->tratamientos()->create([
+        'medicamento_id' => $medicamento->id,
+        'dosis' => '1',
+        'periodicidad' => PeriodicidadToma::Personalizada,
+        'dias_semana' => [1, 3],
+        'inicio' => '2026-09-01',
+        'activo' => true,
+    ]);
+
+    $this->actingAs($usuario)
+        ->put(route('tratamientos.update', $tratamiento), [
+            'medicamento_id' => $medicamento->id,
+            'dosis' => '1',
+            'periodicidad' => 'diaria',
+            // Ocultas en pantalla, pero siguen tildadas y viajan igual.
+            'dias_semana' => ['1', '3'],
+            'inicio' => '2026-09-01',
+            'activo' => '1',
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect($tratamiento->refresh()->dias_semana)->toBeNull()
+        ->and($tratamiento->tomaVisible())->toBe('Todos los días');
 });
 
 it('guarda las fotos de la caja en el mismo alta', function (): void {

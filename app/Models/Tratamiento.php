@@ -34,6 +34,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string $dosis
  * @property string|null $frecuencia
  * @property PeriodicidadToma|null $periodicidad
+ * @property list<int>|null $dias_semana
  * @property CarbonImmutable $inicio
  * @property CarbonImmutable|null $fin
  * @property bool $activo
@@ -72,6 +73,7 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente, Tiene
         'dosis',
         'frecuencia',
         'periodicidad',
+        'dias_semana',
         'inicio',
         'fin',
         'activo',
@@ -87,6 +89,7 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente, Tiene
             'dosis' => 'encrypted',
             'frecuencia' => 'encrypted',
             'periodicidad' => PeriodicidadToma::class,
+            'dias_semana' => 'array',
             'notas' => 'encrypted',
             'inicio' => 'date',
             'fin' => 'date',
@@ -154,6 +157,19 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente, Tiene
     public function enfermedad(): BelongsTo
     {
         return $this->belongsTo(Enfermedad::class);
+    }
+
+    /**
+     * Cómo se lee la toma: la etiqueta de la periodicidad, o los días cuando
+     * es "algunos días de la semana".
+     */
+    public function tomaVisible(): ?string
+    {
+        if ($this->periodicidad === PeriodicidadToma::Personalizada && ! empty($this->dias_semana)) {
+            return PeriodicidadToma::nombrarDias($this->dias_semana);
+        }
+
+        return $this->periodicidad?->etiqueta();
     }
 
     public function pacienteDelRegistro(): ?Paciente

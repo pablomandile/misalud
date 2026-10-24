@@ -12,6 +12,7 @@ import SelectorDeFicha from '@/components/SelectorDeFicha.vue';
 import SubirArchivo from '@/components/SubirArchivo.vue';
 import type { DocumentoVisible } from '@/components/VisorDocumento.vue';
 import VisorDocumento from '@/components/VisorDocumento.vue';
+import DiasDeLaSemana from '@/pages/tratamientos/DiasDeLaSemana.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -60,6 +61,7 @@ type Tratamiento = {
     frecuencia: string | null;
     periodicidad: string | null;
     periodicidadEtiqueta: string | null;
+    diasSemana: number[];
     inicio: string;
     inicioVisible: string;
     fin: string | null;
@@ -73,6 +75,7 @@ const props = defineProps<{
     paciente: { id: number; nombre: string; puedeEditar: boolean };
     fichas: { id: number; nombre: string }[];
     periodicidades: { valor: string; etiqueta: string }[];
+    diasDeLaSemana: { valor: number; inicial: string; nombre: string }[];
     tratamientos: Tratamiento[];
     medicamentos: Array<{ id: number; nombre: string }>;
     medicos: Array<{ id: number; nombre: string }>;
@@ -389,7 +392,12 @@ function detalleDeToma(t: Tratamiento): string {
                             <InputError :message="errors.dosis" />
                         </div>
 
-                        <div class="grid gap-2">
+                        <!--
+                            Los días aparecen solo con "Algunos días de la
+                            semana", y lo decide el CSS (:has sobre la opción
+                            elegida), sin estado en Vue: ver DiasDeLaSemana.
+                        -->
+                        <div class="group/toma grid gap-2">
                             <Label for="periodicidad-crear">Toma</Label>
                             <select
                                 id="periodicidad-crear"
@@ -412,6 +420,11 @@ function detalleDeToma(t: Tratamiento): string {
                                 </option>
                             </select>
                             <InputError :message="errors.periodicidad" />
+                            <DiasDeLaSemana
+                                class="hidden group-has-[option[value=personalizada]:checked]/toma:grid"
+                                :dias="diasDeLaSemana"
+                                :error="errors.dias_semana"
+                            />
                         </div>
 
                         <div class="grid gap-2">
@@ -611,7 +624,12 @@ function detalleDeToma(t: Tratamiento): string {
                             <InputError :message="errors.dosis" />
                         </div>
 
-                        <div class="grid gap-2">
+                        <!--
+                            Los días aparecen solo con "Algunos días de la
+                            semana", y lo decide el CSS (:has sobre la opción
+                            elegida), sin estado en Vue: ver DiasDeLaSemana.
+                        -->
+                        <div class="group/toma grid gap-2">
                             <Label for="periodicidad-editar">Toma</Label>
                             <select
                                 id="periodicidad-editar"
@@ -635,6 +653,12 @@ function detalleDeToma(t: Tratamiento): string {
                                 </option>
                             </select>
                             <InputError :message="errors.periodicidad" />
+                            <DiasDeLaSemana
+                                class="hidden group-has-[option[value=personalizada]:checked]/toma:grid"
+                                :dias="diasDeLaSemana"
+                                :seleccionados="tratamientoAEditar.diasSemana"
+                                :error="errors.dias_semana"
+                            />
                         </div>
 
                         <div class="grid gap-2">
@@ -878,6 +902,10 @@ function detalleDeToma(t: Tratamiento): string {
             </DialogContent>
         </Dialog>
 
-        <VisorDocumento :documento="fotoAbierta" @cerrar="fotoAbierta = null" />
+        <VisorDocumento
+            :documento="fotoAbierta"
+            :puede-girar="paciente.puedeEditar"
+            @cerrar="fotoAbierta = null"
+        />
     </div>
 </template>

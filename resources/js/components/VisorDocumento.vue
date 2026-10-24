@@ -3,6 +3,8 @@ import {
     ChevronLeft,
     ChevronRight,
     ExternalLink,
+    RotateCcw,
+    RotateCw,
     X,
     ZoomIn,
     ZoomOut,
@@ -15,7 +17,9 @@ import {
     DialogRoot,
     DialogTitle,
 } from 'reka-ui';
+import { router } from '@inertiajs/vue3';
 import { computed, nextTick, ref, shallowRef, watch } from 'vue';
+import AdjuntoController from '@/actions/App/Http/Controllers/AdjuntoController';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -38,6 +42,9 @@ export type DocumentoVisible = {
     url: string;
     nombre: string;
     mime: string;
+    /** Con `id` y `girable`, y si la pantalla deja editar, se ofrece girarla. */
+    id?: number;
+    girable?: boolean;
 };
 
 /**
@@ -49,7 +56,11 @@ export type DocumentoVisible = {
  */
 const ESPERA_MAXIMA = 45000;
 
-const props = defineProps<{ documento: DocumentoVisible | null }>();
+const props = defineProps<{
+    documento: DocumentoVisible | null;
+    /** Quien mira puede editar el dueño del archivo (girar es editarlo). */
+    puedeGirar?: boolean;
+}>();
 const emit = defineEmits<{ cerrar: [] }>();
 
 const abierto = computed(() => props.documento !== null);
@@ -62,6 +73,52 @@ const paginas = ref(0);
 const escala = ref(1);
 
 const lienzo = ref<HTMLCanvasElement | null>(null);
+
+const girando = ref(false);
+
+/*
+ * Cuántas veces se giró desde que se abrió. Va en el `src` de la imagen: la
+ * página guarda el documento que abrió con la URL de ese momento, y con el
+ * mismo `src` el navegador no vuelve a pedir la foto ya girada.
+ */
+const giros = ref(0);
+
+const ofrecerGiro = computed(
+    () =>
+        props.puedeGirar === true &&
+        props.documento?.id !== undefined &&
+        props.documento.girable === true,
+);
+
+const srcImagen = computed(() => {
+    const url = props.documento?.url ?? '';
+
+    if (giros.value === 0) {
+        return url;
+    }
+
+    return `${url}${url.includes('?') ? '&' : '?'}g=${giros.value}`;
+});
+
+function girar(sentido: 'izquierda' | 'derecha'): void {
+    const id = props.documento?.id;
+
+    if (id === undefined || girando.value) {
+        return;
+    }
+
+    router.put(
+        AdjuntoController.girar.url(id),
+        { sentido },
+        {
+            preserveScroll: true,
+            preserveState: true,
+            onStart: () => (girando.value = true),
+            onSuccess: () => giros.value++,
+            onFinish: () => (girando.value = false),
+        },
+    );
+}
 
 /*
  * `shallowRef` y no `ref`: el documento de pdf.js es un objeto grande con
@@ -208,6 +265,7 @@ async function soltar(): Promise<void> {
 watch(
     () => props.documento,
     async (documento) => {
+        giros.value = 0;
         await soltar();
 
         if (documento && documento.mime === 'application/pdf') {
@@ -343,7 +401,7 @@ function cerrar(): void {
                          persona abrió para leer es perder lo que fue a ver. -->
                     <img
                         v-else-if="documento && !esPdf"
-                        :src="documento.url"
+                        :src="srcImagen"
                         :alt="documento.nombre"
                         class="max-h-full max-w-full object-contain"
                     />
@@ -353,6 +411,32 @@ function cerrar(): void {
                         ref="lienzo"
                         class="mx-auto"
                     />
+                </div>
+
+                <!--
+                    Girar la foto: queda guardada así, no es solo para mirarla.
+                    Con el nombre escrito, no solo el ícono.
+                -->
+                <div
+                    v-if="ofrecerGiro && !esPdf"
+                    class="flex flex-wrap items-center justify-center gap-2 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+                >
+                    <Button
+                        variant="secondary"
+                        :disabled="girando"
+                        @click="girar('izquierda')"
+                    >
+                        <RotateCcw />
+                        Girar a la izquierda
+                    </Button>
+                    <Button
+                        variant="secondary"
+                        :disabled="girando"
+                        @click="girar('derecha')"
+                    >
+                        <RotateCw />
+                        Girar a la derecha
+                    </Button>
                 </div>
 
                 <!-- Controles abajo, donde llega el pulgar. -->
