@@ -2559,6 +2559,12 @@ duplicaría la dosis y los avisos de fin.
   no instantes: **no pasan por `aUtc()`** —las 8 son las 8 en la zona de quien la toma—. El request
   descarta los vacíos, los ordena, no guarda más horarios que tomas y, con otra toma, deja un solo
   horario y el contador en `null`: lo oculto en pantalla viaja igual. Reemplazó a `hora`, que tenía uno.
+- **«Una vez por año» pide la fecha de la próxima aplicación** (`tratamientos.proxima_aplicacion`,
+  `date`, en claro; con otra toma el request la vacía). De ella salen **dos avisos por mail**, a 30 y
+  a 7 días (`TipoRecordatorio::AplicacionAnualMes` y `AplicacionAnualSemana`): dos tipos porque la
+  clave de idempotencia es origen + tipo. Los genera `TratamientoObserver` solo si está activo, es
+  anual y tiene fecha; si no, los limpia. El mail dice cuándo y no qué medicamento, como todos.
+  `recordatorios.tipo` es `string(40)`, no un ENUM: sumar un tipo no pide migración.
 - `HorariosDeToma.vue` **sí** tiene estado local (el contador decide cuántos campos hay), y por eso es
   un componente aparte y todo va con `v-model`: el estado redibuja solo ese componente y no pisa lo
   tipeado en los `:value` del formulario de edición. Verificado en Chrome.

@@ -236,6 +236,8 @@ class TratamientoController extends Controller
             'horas' => $tratamiento->horas ?? [],
             'tomasVisible' => $tratamiento->tomasVisible(),
             'horarioVisible' => $tratamiento->horarioVisible(),
+            'proxima_aplicacion' => $tratamiento->proxima_aplicacion?->format('Y-m-d'),
+            'proximaAplicacionVisible' => $tratamiento->proxima_aplicacion?->format('d/m/Y'),
             'periodicidad' => $tratamiento->periodicidad?->value,
             'diasSemana' => $tratamiento->dias_semana ?? [],
             'periodicidadEtiqueta' => $tratamiento->tomaVisible(),

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Observers;
 
+use App\Enums\PeriodicidadToma;
 use App\Enums\TipoRecordatorio;
 use App\Models\Tratamiento;
 use App\Services\GeneradorDeRecordatorios;
@@ -26,6 +27,11 @@ use App\Services\GeneradorDeRecordatorios;
  */
 class TratamientoObserver
 {
+    private const AVISOS_DE_APLICACION = [
+        TipoRecordatorio::AplicacionAnualMes,
+        TipoRecordatorio::AplicacionAnualSemana,
+    ];
+
     public function __construct(private readonly GeneradorDeRecordatorios $recordatorios) {}
 
     public function saved(Tratamiento $tratamiento): void
@@ -35,11 +41,9 @@ class TratamientoObserver
 
     public function deleted(Tratamiento $tratamiento): void
     {
-        $this->recordatorios->sincronizar(
-            $tratamiento,
-            TipoRecordatorio::TratamientoTermina,
-            null,
-        );
+        foreach ([TipoRecordatorio::TratamientoTermina, ...self::AVISOS_DE_APLICACION] as $tipo) {
+            $this->recordatorios->sincronizar($tratamiento, $tipo, null);
+        }
     }
 
     /**
@@ -57,5 +61,18 @@ class TratamientoObserver
             TipoRecordatorio::TratamientoTermina,
             $corresponde ? $tratamiento->fin : null,
         );
+
+        /*
+         * Un medicamento de "una vez por año" avisa de su próxima aplicación
+         * un mes antes y una semana antes. Sin fecha cargada, con otra toma o
+         * suspendido, no hay de qué avisar: los dos se limpian.
+         */
+        $aplicacion = $tratamiento->activo && $tratamiento->periodicidad === PeriodicidadToma::Anual
+            ? $tratamiento->proxima_aplicacion
+            : null;
+
+        foreach (self::AVISOS_DE_APLICACION as $tipo) {
+            $this->recordatorios->sincronizar($tratamiento, $tipo, $aplicacion);
+        }
     }
 }

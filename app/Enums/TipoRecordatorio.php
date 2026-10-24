@@ -52,12 +52,23 @@ enum TipoRecordatorio: string
      */
     case VacunaProxima = 'vacuna_proxima';
 
+    /**
+     * Se acerca la aplicación de un medicamento de "una vez por año". Sale de
+     * `tratamientos.proxima_aplicacion`, fecha de calendario. Son DOS avisos
+     * del mismo origen —un mes antes y una semana antes— y por eso dos tipos:
+     * la clave de idempotencia es origen + tipo (pedido del usuario).
+     */
+    case AplicacionAnualMes = 'aplicacion_anual_mes';
+
+    case AplicacionAnualSemana = 'aplicacion_anual_semana';
+
     public function etiqueta(): string
     {
         return match ($this) {
             self::TurnoProximo => 'Turno próximo',
             self::TratamientoTermina => 'Tratamiento que termina',
             self::VacunaProxima => 'Próxima dosis de vacuna',
+            self::AplicacionAnualMes, self::AplicacionAnualSemana => 'Próxima aplicación de un medicamento',
         };
     }
 
@@ -76,6 +87,8 @@ enum TipoRecordatorio: string
             self::TurnoProximo => 'MiSalud: tenés un turno próximo',
             self::TratamientoTermina => 'MiSalud: un tratamiento está por terminar',
             self::VacunaProxima => 'MiSalud: se acerca la próxima dosis de una vacuna',
+            self::AplicacionAnualMes => 'MiSalud: en un mes toca la aplicación de un medicamento',
+            self::AplicacionAnualSemana => 'MiSalud: en una semana toca la aplicación de un medicamento',
         };
     }
 
@@ -93,16 +106,24 @@ enum TipoRecordatorio: string
     {
         return match ($this) {
             self::TurnoProximo => false,
-            self::TratamientoTermina, self::VacunaProxima => true,
+            self::TratamientoTermina,
+            self::VacunaProxima,
+            self::AplicacionAnualMes,
+            self::AplicacionAnualSemana => true,
         };
     }
 
     /**
      * Cuánto antes del evento se avisa.
      *
-     * Las tres van a 24 horas: es el aviso que sirve —"mañana tenés que
-     * hacer algo"— y el que deja tiempo de reaccionar sin ser tan temprano
-     * que uno se lo olvide de nuevo.
+     * Turnos, tratamientos y vacunas van a 24 horas: es el aviso que sirve
+     * —"mañana tenés que hacer algo"— y el que deja tiempo de reaccionar sin
+     * ser tan temprano que uno se lo olvide de nuevo.
+     *
+     * La aplicación anual avisa con más tiempo, porque suele haber que pedir
+     * turno o conseguir el medicamento: a 30 días ("un mes antes") y a 7. Son
+     * días corridos, no meses de calendario: la anticipación es aritmética de
+     * instantes, igual que las demás.
      */
     public function horasDeAnticipacion(): int
     {
@@ -110,6 +131,8 @@ enum TipoRecordatorio: string
             self::TurnoProximo => 24,
             self::TratamientoTermina => 24,
             self::VacunaProxima => 24,
+            self::AplicacionAnualMes => 30 * 24,
+            self::AplicacionAnualSemana => 7 * 24,
         };
     }
 }

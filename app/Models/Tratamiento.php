@@ -38,6 +38,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property list<int>|null $dias_semana
  * @property int|null $tomas_por_dia
  * @property list<string>|null $horas
+ * @property CarbonImmutable|null $proxima_aplicacion
  * @property CarbonImmutable $inicio
  * @property CarbonImmutable|null $fin
  * @property bool $activo
@@ -79,6 +80,7 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente, Tiene
         'dias_semana',
         'tomas_por_dia',
         'horas',
+        'proxima_aplicacion',
         'inicio',
         'fin',
         'activo',
@@ -96,6 +98,7 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente, Tiene
             'periodicidad' => PeriodicidadToma::class,
             'dias_semana' => 'array',
             'horas' => 'array',
+            'proxima_aplicacion' => 'date',
             'notas' => 'encrypted',
             'inicio' => 'date',
             'fin' => 'date',

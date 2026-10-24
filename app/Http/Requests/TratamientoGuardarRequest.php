@@ -55,6 +55,11 @@ class TratamientoGuardarRequest extends FormRequest
         $this->resolverMedicamentoPorNombre();
         $this->normalizarDias();
         $this->normalizarTomas();
+
+        // Solo vale con "una vez por año": oculto en pantalla, viaja igual.
+        if ($this->input('periodicidad') !== PeriodicidadToma::Anual->value) {
+            $this->merge(['proxima_aplicacion' => null]);
+        }
     }
 
     /**
@@ -196,6 +201,8 @@ class TratamientoGuardarRequest extends FormRequest
             // Opcional: una toma única no tiene "cada cuánto".
             'frecuencia' => ['nullable', 'string', 'max:255'],
             'tomas_por_dia' => ['nullable', 'integer', 'between:1,6'],
+            // De ella salen los avisos de un mes y una semana antes.
+            'proxima_aplicacion' => ['nullable', 'date'],
             'horas' => ['nullable', 'array', 'max:6'],
             // Lo que manda un <input type="time">. Hora de reloj, sin zona.
             'horas.*' => ['string', 'date_format:H:i'],
@@ -290,6 +297,7 @@ class TratamientoGuardarRequest extends FormRequest
             'dosis' => 'dosis',
             'frecuencia' => 'frecuencia',
             'tomas_por_dia' => 'tomas por día',
+            'proxima_aplicacion' => 'próxima aplicación',
             'horas' => 'horarios',
             'inicio' => 'fecha de inicio',
             'fin' => 'fecha de fin',

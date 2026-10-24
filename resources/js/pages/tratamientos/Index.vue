@@ -65,6 +65,8 @@ type Tratamiento = {
     horas: string[];
     tomasVisible: string | null;
     horarioVisible: string | null;
+    proxima_aplicacion: string | null;
+    proximaAplicacionVisible: string | null;
     periodicidad: string | null;
     periodicidadEtiqueta: string | null;
     diasSemana: number[];
@@ -191,6 +193,17 @@ function detalleDeToma(t: Tratamiento): string {
                                     </p>
                                     <p class="text-sm text-muted-foreground">
                                         {{ detalleDeToma(tratamiento) }}
+                                    </p>
+                                    <p
+                                        v-if="
+                                            tratamiento.proximaAplicacionVisible
+                                        "
+                                        class="text-sm"
+                                    >
+                                        Próxima aplicación:
+                                        {{
+                                            tratamiento.proximaAplicacionVisible
+                                        }}
                                     </p>
                                     <p class="text-sm text-muted-foreground">
                                         Desde {{ tratamiento.inicioVisible
@@ -424,6 +437,31 @@ function detalleDeToma(t: Tratamiento): string {
                                 :errores="errors"
                                 :clase-campo="campoUnaLinea"
                             />
+                            <!--
+                                Solo con "Una vez por año", y lo decide el CSS
+                                del contenedor de la toma, sin estado en Vue.
+                                De esta fecha salen los avisos por mail.
+                            -->
+                            <div
+                                class="hidden gap-2 group-has-[option[value=anual]:checked]/toma:grid"
+                            >
+                                <Label for="proxima-aplicacion-crear">
+                                    Fecha de la próxima aplicación
+                                </Label>
+                                <input
+                                    id="proxima-aplicacion-crear"
+                                    name="proxima_aplicacion"
+                                    type="date"
+                                    :class="campoUnaLinea"
+                                />
+                                <p class="text-sm text-muted-foreground">
+                                    Te avisamos por mail un mes antes y una
+                                    semana antes.
+                                </p>
+                                <InputError
+                                    :message="errors.proxima_aplicacion"
+                                />
+                            </div>
                         </div>
 
                         <div class="grid gap-2">
@@ -663,6 +701,35 @@ function detalleDeToma(t: Tratamiento): string {
                                 :errores="errors"
                                 :clase-campo="campoUnaLinea"
                             />
+                            <!--
+                                Solo con "Una vez por año", y lo decide el CSS
+                                del contenedor de la toma, sin estado en Vue.
+                                De esta fecha salen los avisos por mail.
+                            -->
+                            <div
+                                class="hidden gap-2 group-has-[option[value=anual]:checked]/toma:grid"
+                            >
+                                <Label for="proxima-aplicacion-editar">
+                                    Fecha de la próxima aplicación
+                                </Label>
+                                <input
+                                    id="proxima-aplicacion-editar"
+                                    name="proxima_aplicacion"
+                                    type="date"
+                                    :value="
+                                        tratamientoAEditar.proxima_aplicacion ??
+                                        ''
+                                    "
+                                    :class="campoUnaLinea"
+                                />
+                                <p class="text-sm text-muted-foreground">
+                                    Te avisamos por mail un mes antes y una
+                                    semana antes.
+                                </p>
+                                <InputError
+                                    :message="errors.proxima_aplicacion"
+                                />
+                            </div>
                         </div>
 
                         <div class="grid gap-2">
