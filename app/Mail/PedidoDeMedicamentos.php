@@ -24,12 +24,13 @@ class PedidoDeMedicamentos extends Mailable
     public const ASUNTO = 'Pedido de medicamentos';
 
     /**
-     * @param  list<string>  $medicamentos
+     * Un renglón por medicamento, cada uno con su mensaje.
+     *
+     * @param  list<array{medicamento: string, mensaje: string}>  $renglones
      */
     public function __construct(
         private readonly User $remitente,
-        private readonly string $mensaje,
-        private readonly array $medicamentos,
+        private readonly array $renglones,
     ) {}
 
     public function envelope(): Envelope
@@ -46,8 +47,7 @@ class PedidoDeMedicamentos extends Mailable
             text: 'mail.pedido-medicamentos',
             with: [
                 'remitente' => $this->remitente->name,
-                'mensaje' => $this->mensaje,
-                'medicamentos' => $this->medicamentos,
+                'renglones' => $this->renglones,
             ],
         );
     }

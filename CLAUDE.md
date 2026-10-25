@@ -2361,8 +2361,9 @@ compara por SHA-256 con los PDF originales. Ver "Estado".
 ### Pedido de medicamentos
 
 En el menú principal (`/pedido-de-medicamentos`, `PedidoMedicamentosController`, pedido del
-usuario): se tildan **varios medicamentos de la ficha**, se elige **un médico, centro o farmacia
-con correo** y se manda **por mail**. Abre la ficha principal y tiene `SelectorDeFicha`.
+usuario): se suman **medicamentos de la ficha** de a uno con un **select arriba de todo** (no
+casillas), cada uno **con su propio mensaje**, se elige **un médico, centro o farmacia con correo**
+y se manda **por mail**. Abre la ficha principal y tiene `SelectorDeFicha`.
 
 - **Es un envío más**: `EnviadorDeDocumentos::pedir()` comparte con `enviar()` el intento, el log
   sin datos y el registro **después** de intentar, así que queda en el historial de Contactos aunque
@@ -2371,10 +2372,14 @@ con correo** y se manda **por mail**. Abre la ficha principal y tiene `SelectorD
 - **Destino**: `LibretaDeDestinatarios`, filtrada a médicos, centros y farmacias
   (`PedidoMedicamentosGuardarRequest::ORIGENES`); los contactos de la libreta no entran (decisión
   del usuario). Nunca una dirección tipeada, como en todo envío.
-- **El mensaje queda como plantilla de la ficha** (`pacientes.plantilla_pedido`, cifrada, no
-  fillable): se guarda al mandar —aunque el mail falle— y se precarga en el próximo. La lista de
-  medicamentos («- Losartán · 50 mg») la agrega el sistema abajo, y la pantalla muestra la vista
-  previa.
+- **El mensaje es por medicamento y queda como SU plantilla** (`tratamientos.plantilla_pedido`,
+  cifrada, no fillable; decisión del usuario: no hay un mensaje general). Se guarda al mandar
+  —aunque el mail falle— y vuelve precargado al sumar ese medicamento la próxima vez; sin
+  plantilla, «Hola, ¿me podrías hacer la receta de Losartán para Marta?». El formulario manda
+  `pedidos[i][tratamiento_id]` y `pedidos[i][mensaje]` (`distinct`: un medicamento una sola vez), y
+  el mail va renglón por renglón: «- Losartán · 50 mg» y abajo su mensaje. La pantalla muestra la
+  vista previa. La plantilla general que tuvo la ficha un día (`pacientes.plantilla_pedido`) se
+  borró sin copiarla: decía «estos medicamentos» y no servía para uno solo.
 - **Pide `update` sobre la ficha**, no `view` como un envío de documentos: mandar escribe la
   plantilla. Un lector ve el aviso. Los medicamentos tienen que ser de esa ficha.
 

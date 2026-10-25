@@ -45,6 +45,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property CarbonImmutable|null $fin
  * @property bool $activo
  * @property string|null $notas
+ * @property string|null $plantilla_pedido
  */
 #[ObservedBy(TratamientoObserver::class)]
 #[UsePolicy(RegistroClinicoPolicy::class)]
@@ -104,6 +105,8 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente, Tiene
             'aplicacion_dia' => 'integer',
             'aplicacion_mes' => 'integer',
             'notas' => 'encrypted',
+            // El mensaje del último pedido de este medicamento. No es fillable: lo escribe el pedido.
+            'plantilla_pedido' => 'encrypted',
             'inicio' => 'date',
             'fin' => 'date',
             'activo' => 'boolean',

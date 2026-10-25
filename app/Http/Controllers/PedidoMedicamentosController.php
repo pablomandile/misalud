@@ -21,9 +21,9 @@ use Inertia\Response;
 
 /**
  * Pedirle por mail los medicamentos (o la receta) al médico, a un centro o a una
- * farmacia. El mensaje queda como plantilla de la ficha para el próximo pedido,
- * y el pedido sale por el mismo camino que un envío de documentación: queda en
- * el historial de Contactos.
+ * farmacia. Cada medicamento lleva su propio mensaje, que queda como plantilla
+ * de ESE medicamento para el próximo pedido, y el pedido sale por el mismo camino
+ * que un envío de documentación: queda en el historial de Contactos.
  */
 class PedidoMedicamentosController extends Controller
 {
@@ -52,6 +52,7 @@ class PedidoMedicamentosController extends Controller
                     'nombre' => $t->medicamento->nombre_comercial,
                     'dosis' => $t->dosis,
                     'activo' => $t->activo,
+                    'plantilla' => $this->plantillaDe($t, $paciente),
                 ])
                 ->all(),
             'destinatarios' => $libreta->para($usuario)
@@ -64,7 +65,6 @@ class PedidoMedicamentosController extends Controller
                     'etiqueta' => $d->etiqueta,
                 ])
                 ->all(),
-            'plantilla' => $paciente === null ? '' : $this->plantillaDe($paciente),
         ]);
     }
 
@@ -75,32 +75,43 @@ class PedidoMedicamentosController extends Controller
         $destinatario = $peticion->destinatario();
         assert($usuario instanceof User && $paciente !== null && $destinatario !== null);
 
-        $mensaje = $peticion->string('mensaje')->trim()->toString();
+        /** @var list<array{tratamiento_id: int|string, mensaje: string}> $pedidos */
+        $pedidos = $peticion->validated('pedidos');
 
-        // La plantilla se guarda aunque el mail falle: es lo que la persona escribió.
-        $paciente->setAttribute('plantilla_pedido', $mensaje);
-        $paciente->save();
-
-        $ids = array_map('intval', (array) $peticion->validated('tratamientos'));
-
-        $medicamentos = array_values($paciente->tratamientos()
+        $tratamientos = $paciente->tratamientos()
             ->with('medicamento')
-            ->whereIn('id', $ids)
+            ->whereIn('id', array_map(fn (array $p): int => (int) $p['tratamiento_id'], $pedidos))
             ->get()
-            ->map(fn (Tratamiento $t): string => $t->medicamento->nombre_comercial.' · '.$t->dosis)
-            ->all());
+            ->keyBy('id');
 
-        $envio = $enviador->pedir($usuario, $destinatario, $mensaje, $medicamentos);
+        // En el orden del formulario. Cada plantilla se guarda aunque el mail
+        // falle: es lo que la persona escribió.
+        $renglones = [];
+        foreach ($pedidos as $pedido) {
+            $tratamiento = $tratamientos->get((int) $pedido['tratamiento_id']);
+            assert($tratamiento instanceof Tratamiento);
+
+            $mensaje = trim($pedido['mensaje']);
+            $tratamiento->setAttribute('plantilla_pedido', $mensaje);
+            $tratamiento->save();
+
+            $renglones[] = [
+                'medicamento' => $tratamiento->medicamento->nombre_comercial.' · '.$tratamiento->dosis,
+                'mensaje' => $mensaje,
+            ];
+        }
+
+        $envio = $enviador->pedir($usuario, $destinatario, $renglones);
 
         return $envio->estado === EstadoEnvio::Enviado
             ? back()->with('exito', "Se mandó el pedido a {$destinatario->nombre}.")
             : back()->with('error', 'No se pudo mandar el pedido. Quedó anotado en el historial de Contactos: probá de nuevo en un rato.');
     }
 
-    private function plantillaDe(Paciente $paciente): string
+    private function plantillaDe(Tratamiento $tratamiento, Paciente $paciente): string
     {
-        return $paciente->plantilla_pedido
-            ?? "Hola, ¿me podrías hacer la receta de estos medicamentos para {$paciente->nombre}? Gracias.";
+        return $tratamiento->plantilla_pedido
+            ?? "Hola, ¿me podrías hacer la receta de {$tratamiento->medicamento->nombre_comercial} para {$paciente->nombre}? Gracias.";
     }
 
     private function pacienteElegido(Request $peticion, User $usuario): ?Paciente

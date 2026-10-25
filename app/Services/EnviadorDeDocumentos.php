@@ -74,14 +74,14 @@ class EnviadorDeDocumentos
      * Un pedido de medicamentos: el mismo camino que un envío -destino ya
      * cargado, síncrono, al historial aunque falle-, sin archivos.
      *
-     * @param  list<string>  $medicamentos
+     * @param  list<array{medicamento: string, mensaje: string}>  $renglones
      */
-    public function pedir(User $usuario, Destinatario $destinatario, string $mensaje, array $medicamentos): Envio
+    public function pedir(User $usuario, Destinatario $destinatario, array $renglones): Envio
     {
-        $cuerpo = $mensaje.'
-
-'.implode('
-', array_map(fn (string $m): string => "- {$m}", $medicamentos));
+        $cuerpo = implode("\n\n", array_map(
+            fn (array $r): string => "- {$r['medicamento']}\n{$r['mensaje']}",
+            $renglones,
+        ));
 
         return $this->mandar(
             $usuario,
@@ -89,7 +89,7 @@ class EnviadorDeDocumentos
             collect(),
             PedidoDeMedicamentos::ASUNTO,
             $cuerpo,
-            fn (): Mailable => new PedidoDeMedicamentos($usuario, $mensaje, $medicamentos),
+            fn (): Mailable => new PedidoDeMedicamentos($usuario, $renglones),
         );
     }
 

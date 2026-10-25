@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Form, Head, Link, usePage } from '@inertiajs/vue3';
-import { ClipboardPen, Pill, Send } from '@lucide/vue';
+import { ClipboardPen, Pill, Send, X } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 import CentroController from '@/actions/App/Http/Controllers/CentroController';
 import FarmaciaController from '@/actions/App/Http/Controllers/FarmaciaController';
@@ -14,11 +14,12 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 
 /*
- * Pedirle por mail los medicamentos al médico, un centro o una farmacia. El
- * mensaje se guarda como plantilla de la ficha y vuelve precargado.
+ * Pedirle por mail los medicamentos al médico, un centro o una farmacia. Se
+ * suman de a uno con el select de arriba, y cada uno lleva su propio mensaje,
+ * que se guarda como plantilla de ESE medicamento y vuelve precargado.
  *
- * ⚠️ Todo con `v-model`: las casillas y la vista previa tienen estado local, y
- * un `:value` en un hermano se pisaría (la regla de la Etapa 10). Al cambiar de
+ * ⚠️ Todo con `v-model`: la lista y la vista previa tienen estado local, y un
+ * `:value` en un hermano se pisaría (la regla de la Etapa 10). Al cambiar de
  * ficha la página no se remonta, así que el estado se reinicia con un `watch`.
  */
 
@@ -27,7 +28,10 @@ type Medicamento = {
     nombre: string;
     dosis: string;
     activo: boolean;
+    plantilla: string;
 };
+
+type Renglon = { id: number; mensaje: string };
 
 type DestinatarioOpcion = {
     clave: string;
@@ -41,7 +45,6 @@ const props = defineProps<{
     fichas: { id: number; nombre: string }[];
     medicamentos: Medicamento[];
     destinatarios: DestinatarioOpcion[];
-    plantilla: string;
 }>();
 
 defineOptions({
@@ -56,17 +59,45 @@ const enlaceFicha = (id: number) =>
 const campoBase =
     'flex w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm';
 
-const elegidos = ref<number[]>([]);
+const renglones = ref<Renglon[]>([]);
+const aSumar = ref('');
 const destinatario = ref('');
-const mensaje = ref(props.plantilla);
 
 watch(
     () => props.paciente?.id,
     () => {
-        elegidos.value = [];
-        mensaje.value = props.plantilla;
+        renglones.value = [];
     },
 );
+
+const medicamentoDe = (id: number) =>
+    props.medicamentos.find((m) => m.id === id);
+
+const disponibles = computed(() =>
+    props.medicamentos.filter(
+        (m) => !renglones.value.some((r) => r.id === m.id),
+    ),
+);
+
+// Elegir en el select lo suma con su plantilla, y el select vuelve a "Sumá…".
+watch(aSumar, (valor) => {
+    const medicamento = medicamentoDe(Number(valor));
+
+    if (medicamento) {
+        renglones.value.push({
+            id: medicamento.id,
+            mensaje: medicamento.plantilla,
+        });
+    }
+
+    if (valor !== '') {
+        aSumar.value = '';
+    }
+});
+
+function sacar(id: number): void {
+    renglones.value = renglones.value.filter((r) => r.id !== id);
+}
 
 const remitente = computed(
     () => (usePage().props.auth as { user?: { name?: string } })?.user?.name,
@@ -76,22 +107,16 @@ const elegido = computed(() =>
     props.destinatarios.find((d) => d.clave === destinatario.value),
 );
 
-const lista = computed(() =>
-    props.medicamentos
-        .filter((m) => elegidos.value.includes(m.id))
-        .map((m) => `- ${m.nombre} · ${m.dosis}`),
-);
-
 const listo = computed(
     () =>
-        elegidos.value.length > 0 &&
-        !!elegido.value &&
-        mensaje.value.trim() !== '',
+        renglones.value.length > 0 &&
+        renglones.value.every((r) => r.mensaje.trim() !== '') &&
+        !!elegido.value,
 );
 
-// Al mandar queda la plantilla; lo que se elige es de cada pedido.
+// Al mandar quedan las plantillas; lo que se elige es de cada pedido.
 function alMandar(): void {
-    elegidos.value = [];
+    renglones.value = [];
     destinatario.value = '';
 }
 </script>
@@ -161,48 +186,106 @@ function alMandar(): void {
         >
             <input type="hidden" name="paciente_id" :value="paciente.id" />
 
-            <!-- 1. Qué -->
+            <!-- 1. Qué, y qué le pedís de cada uno -->
             <section class="space-y-3">
                 <h2 class="font-medium">¿Qué medicamentos?</h2>
-                <ul class="grid gap-2">
-                    <li
-                        v-for="medicamento in medicamentos"
-                        :key="medicamento.id"
-                        class="rounded-md border p-2"
+                <div class="grid gap-2">
+                    <Label for="sumar-medicamento">Sumar un medicamento</Label>
+                    <select
+                        id="sumar-medicamento"
+                        v-model="aSumar"
+                        :disabled="disponibles.length === 0"
+                        :class="`${campoBase} min-h-11`"
                     >
-                        <label
-                            class="flex min-h-11 min-w-0 cursor-pointer items-center gap-3"
+                        <option
+                            value=""
+                            disabled
+                            class="bg-background text-foreground"
                         >
-                            <input
-                                v-model="elegidos"
-                                type="checkbox"
-                                name="tratamientos[]"
-                                :value="medicamento.id"
-                                class="size-5 shrink-0"
-                            />
-                            <span class="min-w-0">
-                                <span
-                                    class="block text-sm font-medium break-words"
+                            {{
+                                disponibles.length === 0
+                                    ? 'Ya están todos en el pedido'
+                                    : 'Elegí un medicamento'
+                            }}
+                        </option>
+                        <option
+                            v-for="medicamento in disponibles"
+                            :key="medicamento.id"
+                            :value="String(medicamento.id)"
+                            class="bg-background text-foreground"
+                        >
+                            {{ medicamento.nombre }} · {{ medicamento.dosis
+                            }}{{ medicamento.activo ? '' : ' (suspendido)' }}
+                        </option>
+                    </select>
+                    <InputError :message="errors.pedidos" />
+                </div>
+
+                <ul v-if="renglones.length > 0" class="grid gap-3">
+                    <li
+                        v-for="(renglon, i) in renglones"
+                        :key="renglon.id"
+                        class="space-y-2 rounded-md border p-3"
+                    >
+                        <input
+                            type="hidden"
+                            :name="`pedidos[${i}][tratamiento_id]`"
+                            :value="renglon.id"
+                        />
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <p class="font-medium break-words">
+                                    {{ medicamentoDe(renglon.id)?.nombre }}
+                                </p>
+                                <p
+                                    class="text-sm break-words text-muted-foreground"
                                 >
-                                    {{ medicamento.nombre }}
-                                </span>
-                                <span
-                                    class="block text-sm break-words text-muted-foreground"
-                                >
-                                    {{ medicamento.dosis
+                                    {{ medicamentoDe(renglon.id)?.dosis
                                     }}{{
-                                        medicamento.activo
+                                        medicamentoDe(renglon.id)?.activo
                                             ? ''
                                             : ' · suspendido'
                                     }}
-                                </span>
-                            </span>
-                        </label>
+                                </p>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                class="shrink-0"
+                                @click="sacar(renglon.id)"
+                            >
+                                <X />
+                                Sacar
+                            </Button>
+                        </div>
+                        <div class="grid gap-2">
+                            <Label :for="`mensaje-pedido-${renglon.id}`">
+                                Mensaje para este medicamento
+                            </Label>
+                            <textarea
+                                :id="`mensaje-pedido-${renglon.id}`"
+                                v-model="renglon.mensaje"
+                                :name="`pedidos[${i}][mensaje]`"
+                                rows="3"
+                                :class="`${campoBase} min-h-20`"
+                            />
+                            <InputError
+                                :message="
+                                    errors[`pedidos.${i}.mensaje`] ??
+                                    errors[`pedidos.${i}.tratamiento_id`]
+                                "
+                            />
+                        </div>
                     </li>
                 </ul>
-                <InputError
-                    :message="errors.tratamientos ?? errors['tratamientos.0']"
-                />
+                <p
+                    v-if="renglones.length > 0"
+                    class="text-sm text-muted-foreground"
+                >
+                    El mensaje de cada medicamento se guarda para el próximo
+                    pedido.
+                </p>
             </section>
 
             <!-- 2. A quién -->
@@ -265,31 +348,7 @@ function alMandar(): void {
                 </div>
             </section>
 
-            <!-- 3. El mensaje -->
-            <section class="space-y-3">
-                <h2 class="font-medium">El mensaje</h2>
-                <div class="grid gap-2">
-                    <Label for="mensaje-pedido">Mensaje</Label>
-                    <textarea
-                        id="mensaje-pedido"
-                        v-model="mensaje"
-                        name="mensaje"
-                        rows="4"
-                        aria-describedby="mensaje-pedido-ayuda"
-                        :class="`${campoBase} min-h-24`"
-                    />
-                    <p
-                        id="mensaje-pedido-ayuda"
-                        class="text-sm text-muted-foreground"
-                    >
-                        Se guarda para el próximo pedido de esta ficha. La lista
-                        de medicamentos se agrega sola abajo.
-                    </p>
-                    <InputError :message="errors.mensaje" />
-                </div>
-            </section>
-
-            <!-- 4. Cómo llega -->
+            <!-- 3. Cómo llega -->
             <section class="space-y-3">
                 <h2 class="flex items-center gap-2 font-medium">
                     <ClipboardPen class="size-4" />
@@ -304,13 +363,21 @@ function alMandar(): void {
                     <p class="mt-3">
                         {{ remitente }} te manda este pedido desde MiSalud.
                     </p>
-                    <p class="mt-3">{{ mensaje }}</p>
-                    <p class="mt-3">
-                        {{
-                            lista.length > 0
-                                ? lista.join('\n')
-                                : '(elegí los medicamentos)'
-                        }}
+                    <template v-if="renglones.length > 0">
+                        <div
+                            v-for="renglon in renglones"
+                            :key="renglon.id"
+                            class="mt-3"
+                        >
+                            <p>
+                                - {{ medicamentoDe(renglon.id)?.nombre }} ·
+                                {{ medicamentoDe(renglon.id)?.dosis }}
+                            </p>
+                            <p>{{ renglon.mensaje }}</p>
+                        </div>
+                    </template>
+                    <p v-else class="mt-3 text-muted-foreground">
+                        (elegí los medicamentos)
                     </p>
                 </div>
             </section>

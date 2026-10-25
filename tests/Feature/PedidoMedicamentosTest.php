@@ -18,7 +18,7 @@ use Inertia\Testing\AssertableInertia as Assert;
 
 /*
 |--------------------------------------------------------------------------
-| Pedido de medicamentos: por mail, con la plantilla de la ficha
+| Pedido de medicamentos: por mail, con un mensaje por medicamento
 |--------------------------------------------------------------------------
 */
 
@@ -47,9 +47,8 @@ it('manda el pedido al médico con el mensaje y la lista, y queda en el historia
     $this->actingAs($usuario)
         ->post(route('pedidos.store'), [
             'paciente_id' => $paciente->id,
-            'tratamientos' => [$tratamiento->id],
+            'pedidos' => [['tratamiento_id' => $tratamiento->id, 'mensaje' => 'Hola, necesito la receta para Marta.']],
             'destinatario' => "medico:{$medico->id}",
-            'mensaje' => 'Hola, necesito la receta para Marta.',
         ])
         ->assertSessionHasNoErrors()
         ->assertSessionHas('exito', 'Se mandó el pedido a Dra. López.');
@@ -60,8 +59,7 @@ it('manda el pedido al médico con el mensaje y la lista, y queda en el historia
         return $mail->hasTo('lopez@example.com')
             && $mail->hasReplyTo($usuario->email)
             && $mail->hasSubject('Pedido de medicamentos')
-            && str_contains($texto, 'Hola, necesito la receta para Marta.')
-            && str_contains($texto, '- Losartán · 50 mg');
+            && str_contains($texto, "- Losartán · 50 mg\nHola, necesito la receta para Marta.");
     });
 
     $envio = Envio::sole();
@@ -70,30 +68,72 @@ it('manda el pedido al médico con el mensaje y la lista, y queda en el historia
         ->and($envio->cuerpo)->toContain('- Losartán · 50 mg');
 });
 
-it('guarda el mensaje como plantilla cifrada de la ficha y lo precarga la próxima vez', function (): void {
+it('guarda el mensaje de cada medicamento como su plantilla cifrada y lo precarga la próxima vez', function (): void {
     Mail::fake();
     [$usuario, $paciente, $tratamiento, $medico] = fichaParaPedido();
+    $otro = Tratamiento::factory()->create([
+        'paciente_id' => $paciente->id,
+        'medicamento_id' => Medicamento::factory()->for($usuario, 'usuario')->create(['nombre_comercial' => 'Atorvastatina'])->id,
+        'dosis' => '20 mg',
+    ]);
 
     $this->actingAs($usuario)
         ->get(route('pedidos.index', ['paciente' => $paciente->id]))
         ->assertInertia(fn (Assert $pagina) => $pagina
             ->component('pedidos/Index')
-            ->where('plantilla', 'Hola, ¿me podrías hacer la receta de estos medicamentos para Marta? Gracias.')
-            ->has('medicamentos', 1)
+            ->has('medicamentos', 2)
+            ->where('medicamentos.0.plantilla', 'Hola, ¿me podrías hacer la receta de Atorvastatina para Marta? Gracias.')
+            ->where('medicamentos.1.plantilla', 'Hola, ¿me podrías hacer la receta de Losartán para Marta? Gracias.')
             ->has('destinatarios', 1));
 
-    $this->actingAs($usuario)->post(route('pedidos.store'), [
-        'paciente_id' => $paciente->id,
-        'tratamientos' => [$tratamiento->id],
-        'destinatario' => "medico:{$medico->id}",
-        'mensaje' => 'Mi texto de siempre',
-    ]);
+    $this->actingAs($usuario)
+        ->post(route('pedidos.store'), [
+            'paciente_id' => $paciente->id,
+            'pedidos' => [
+                ['tratamiento_id' => $tratamiento->id, 'mensaje' => 'Dos cajas, como siempre'],
+                ['tratamiento_id' => $otro->id, 'mensaje' => 'Una caja de 30'],
+            ],
+            'destinatario' => "medico:{$medico->id}",
+        ])
+        ->assertSessionHasNoErrors();
 
-    expect(DB::table('pacientes')->where('id', $paciente->id)->value('plantilla_pedido'))->not->toContain('siempre');
+    Mail::assertSent(PedidoDeMedicamentos::class, fn (PedidoDeMedicamentos $mail): bool => str_contains(
+        $mail->render(),
+        "- Losartán · 50 mg\nDos cajas, como siempre\n\n- Atorvastatina · 20 mg\nUna caja de 30",
+    ));
+
+    expect(DB::table('tratamientos')->where('id', $tratamiento->id)->value('plantilla_pedido'))->not->toContain('cajas');
 
     $this->actingAs($usuario)
         ->get(route('pedidos.index', ['paciente' => $paciente->id]))
-        ->assertInertia(fn (Assert $pagina) => $pagina->where('plantilla', 'Mi texto de siempre'));
+        ->assertInertia(fn (Assert $pagina) => $pagina
+            ->where('medicamentos.0.plantilla', 'Una caja de 30')
+            ->where('medicamentos.1.plantilla', 'Dos cajas, como siempre'));
+});
+
+it('pide un mensaje para cada medicamento y no deja repetir uno', function (): void {
+    Mail::fake();
+    [$usuario, $paciente, $tratamiento, $medico] = fichaParaPedido();
+
+    $this->actingAs($usuario)
+        ->post(route('pedidos.store'), [
+            'paciente_id' => $paciente->id,
+            'pedidos' => [
+                ['tratamiento_id' => $tratamiento->id, 'mensaje' => ''],
+                ['tratamiento_id' => $tratamiento->id, 'mensaje' => 'Hola'],
+            ],
+            'destinatario' => "medico:{$medico->id}",
+        ])
+        ->assertSessionHasErrors(['pedidos.0.mensaje', 'pedidos.1.tratamiento_id']);
+
+    $this->actingAs($usuario)
+        ->post(route('pedidos.store'), [
+            'paciente_id' => $paciente->id,
+            'destinatario' => "medico:{$medico->id}",
+        ])
+        ->assertSessionHasErrors(['pedidos' => 'Elegí al menos un medicamento.']);
+
+    Mail::assertNothingSent();
 });
 
 it('no acepta un medicamento de otra ficha, un médico ajeno ni un contacto de la libreta', function (): void {
@@ -106,11 +146,10 @@ it('no acepta un medicamento de otra ficha, un médico ajeno ni un contacto de l
         $this->actingAs($usuario)
             ->post(route('pedidos.store'), [
                 'paciente_id' => $paciente->id,
-                'tratamientos' => [$tratamientoAjeno->id],
+                'pedidos' => [['tratamiento_id' => $tratamientoAjeno->id, 'mensaje' => 'Hola']],
                 'destinatario' => $clave,
-                'mensaje' => 'Hola',
             ])
-            ->assertSessionHasErrors(['tratamientos.0', 'destinatario']);
+            ->assertSessionHasErrors(['pedidos.0.tratamiento_id', 'destinatario']);
     }
 
     Mail::assertNothingSent();
@@ -127,9 +166,8 @@ it('un lector no puede mandar pedidos de la ficha', function (): void {
     $this->actingAs($lector)
         ->post(route('pedidos.store'), [
             'paciente_id' => $paciente->id,
-            'tratamientos' => [$tratamiento->id],
+            'pedidos' => [['tratamiento_id' => $tratamiento->id, 'mensaje' => 'Hola']],
             'destinatario' => "medico:{$medico->id}",
-            'mensaje' => 'Hola',
         ])
         ->assertForbidden();
 
@@ -143,9 +181,8 @@ it('si el mail falla, lo anota como fallido y avisa', function (): void {
     $this->actingAs($usuario)
         ->post(route('pedidos.store'), [
             'paciente_id' => $paciente->id,
-            'tratamientos' => [$tratamiento->id],
+            'pedidos' => [['tratamiento_id' => $tratamiento->id, 'mensaje' => 'Hola']],
             'destinatario' => "medico:{$medico->id}",
-            'mensaje' => 'Hola',
         ])
         ->assertSessionHas('error');
 

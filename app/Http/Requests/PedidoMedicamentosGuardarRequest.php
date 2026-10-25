@@ -21,7 +21,7 @@ class PedidoMedicamentosGuardarRequest extends FormRequest
 
     /**
      * Autorizar ANTES de validar, y pidiendo `update`: mandar el pedido guarda la
-     * plantilla en la ficha. Una ficha que no existe contesta igual que una ajena.
+     * plantilla de cada medicamento. Una ficha que no existe contesta igual que una ajena.
      */
     public function authorize(): bool
     {
@@ -38,16 +38,19 @@ class PedidoMedicamentosGuardarRequest extends FormRequest
         return [
             'paciente_id' => ['required', 'integer'],
 
-            // Medicamentos de ESTA ficha: un id ajeno pondría en el mail lo que toma otra persona.
-            'tratamientos' => ['required', 'array', 'min:1'],
-            'tratamientos.*' => [
+            // Un mensaje por medicamento, de ESTA ficha: un id ajeno pondría en el mail lo que toma otra persona.
+            'pedidos' => ['required', 'array', 'min:1'],
+            'pedidos.*.tratamiento_id' => [
+                'required',
                 'integer',
+                'distinct',
                 Rule::exists('tratamientos', 'id')->where(
                     fn (Builder $consulta) => $consulta
                         ->whereNull('deleted_at')
                         ->where('paciente_id', $this->paciente()?->id),
                 ),
             ],
+            'pedidos.*.mensaje' => ['required', 'string', 'max:2000'],
 
             // Una clave de la lista, nunca una dirección (ver LibretaDeDestinatarios).
             'destinatario' => [
@@ -60,7 +63,6 @@ class PedidoMedicamentosGuardarRequest extends FormRequest
                 },
             ],
 
-            'mensaje' => ['required', 'string', 'max:2000'],
         ];
     }
 
@@ -93,9 +95,9 @@ class PedidoMedicamentosGuardarRequest extends FormRequest
     public function attributes(): array
     {
         return [
-            'tratamientos' => 'medicamentos',
+            'pedidos' => 'medicamentos',
+            'pedidos.*.mensaje' => 'mensaje',
             'destinatario' => 'a quién',
-            'mensaje' => 'mensaje',
         ];
     }
 
@@ -105,8 +107,10 @@ class PedidoMedicamentosGuardarRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'tratamientos.required' => 'Elegí al menos un medicamento.',
-            'tratamientos.*.exists' => 'Elegí medicamentos de esta ficha.',
+            'pedidos.required' => 'Elegí al menos un medicamento.',
+            'pedidos.*.tratamiento_id.exists' => 'Elegí medicamentos de esta ficha.',
+            'pedidos.*.tratamiento_id.distinct' => 'Ese medicamento ya está en el pedido.',
+            'pedidos.*.mensaje.required' => 'Escribí qué le pedís de este medicamento.',
             'destinatario.required' => 'Elegí a quién mandarle el pedido.',
         ];
     }
