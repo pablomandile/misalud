@@ -3653,6 +3653,6 @@ el buzón real** (24/10/2026): un mail reenviado desde Gmail con «Orden» en el
 `APP_KEY` (todo lo cifrado viaja tal cual), la base copiada con las 44 tablas idénticas y
 `storage/app` **entero** —los archivos cifrados viven en `private`, no en `public`—. El correo
 sale de `misalud@bambudev.com.ar` y el ingreso con Google usa un cliente propio del dominio
-nuevo. El buzón sigue siendo el de antes, para no romper lo que la gente ya reenvía. La copia
+nuevo. El buzón pasó a esa misma casilla: envía y recibe la misma dirección. La copia
 vieja redirige a la nueva; para volverla demo, además de vaciar la base hay que borrar
 `storage/app/private` y dejar los `BUZON_*` vacíos, o leería el buzón real cada 5 minutos.
