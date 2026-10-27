@@ -6,7 +6,7 @@ lo que dice no coincide con lo que ves, escribinos.
 ## Quién es el responsable
 
 MiSalud es un proyecto personal de **Pablo Mandile**, que es el responsable de los
-datos. Contacto: **misalud@pablomandile.com.ar**.
+datos. Contacto: **misalud@bambudev.com.ar**.
 
 ## Qué datos guardamos
 
@@ -142,7 +142,7 @@ y los tres directamente desde la app:
 - **Supresión:** podés eliminar tu cuenta en _Configuración → Perfil → Eliminar
   cuenta_.
 
-Para cualquier otro pedido, escribinos a **misalud@pablomandile.com.ar** y te
+Para cualquier otro pedido, escribinos a **misalud@bambudev.com.ar** y te
 respondemos dentro de los plazos de la ley: 10 días corridos para el acceso y 5 días
 hábiles para la rectificación o la supresión.
 

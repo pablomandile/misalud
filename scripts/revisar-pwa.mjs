@@ -6,7 +6,7 @@
  * Preguntarle es más rápido y más confiable que revisar el manifest a ojo.
  *
  *   npm run revisar:pwa
- *   BASE=https://misalud.pablomandile.com.ar npm run revisar:pwa
+ *   BASE=https://misalud.bambudev.com.ar npm run revisar:pwa
  *
  * ⚠️ Esto hay que correrlo también **en producción**, no solo en local: ahí
  * aparecen los problemas de CDN y de cabeceras que en `artisan serve` no

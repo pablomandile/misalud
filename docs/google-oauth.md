@@ -15,7 +15,7 @@ y la app funciona exactamente como antes.
 2. **APIs y servicios → Pantalla de consentimiento de OAuth**:
     - Tipo de usuario: **Externo**.
     - Nombre de la app: `MiSalud`. Email de asistencia: el tuyo.
-    - Dominio autorizado: `pablomandile.com.ar`.
+    - Dominio autorizado: `bambudev.com.ar`.
     - Permisos: alcanzan los tres básicos —`userinfo.email`, `userinfo.profile` y
       `openid`—. **No pidas nada más**: cualquier permiso extra dispara una
       revisión de Google que tarda semanas, y esta app no necesita leer nada de
@@ -28,7 +28,7 @@ y la app funciona exactamente como antes.
    autorizados** va el de producción:
 
     ```
-    https://misalud.pablomandile.com.ar/auth/google/callback
+    https://misalud.bambudev.com.ar/auth/google/callback
     ```
 
     Tiene que coincidir **carácter por carácter** con lo que manda la app:
@@ -83,7 +83,7 @@ autorización y mirar qué contesta:
 
 ```bash
 CID=<el client id>
-RU=https://misalud.pablomandile.com.ar/auth/google/callback
+RU=https://misalud.bambudev.com.ar/auth/google/callback
 curl -sL -A "Mozilla/5.0 Chrome/140"   "https://accounts.google.com/o/oauth2/auth?client_id=$CID&redirect_uri=$(python -c    "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$RU")&scope=openid+profile+email&response_type=code&state=chequeo"   | grep -oiE "redirect_uri_mismatch|invalid_client|Sign in"
 ```
 
@@ -98,7 +98,7 @@ casos se ven casi iguales.
 Ya desplegado, además:
 
 ```bash
-curl -s https://misalud.pablomandile.com.ar/login | grep -o 'googleHabilitado":[a-z]*'
+curl -s https://misalud.bambudev.com.ar/login | grep -o 'googleHabilitado":[a-z]*'
 # esperado: googleHabilitado":true
 ```
 

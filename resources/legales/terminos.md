@@ -84,4 +84,4 @@ tu cuenta sin aceptarla.
 ## Ley aplicable y contacto
 
 Estos términos se rigen por las leyes de la República Argentina. Para cualquier
-consulta escribinos a **misalud@pablomandile.com.ar**.
+consulta escribinos a **misalud@bambudev.com.ar**.

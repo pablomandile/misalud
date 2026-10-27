@@ -596,7 +596,7 @@ separan o si una salida deja de llamarla.
 Armado con la skill `terminos-y-privacidad`. Los textos viven en `resources/legales/*.md`, se
 convierten con `Str::markdown(..., ['html_input' => 'escape'])` en `LegalesController` y se
 muestran en una sola página (`Legal.vue`), pública. **Responsable: Pablo Mandile; contacto:
-misalud@pablomandile.com.ar** (decidido por el usuario).
+misalud@bambudev.com.ar** (decidido por el usuario).
 
 > ⚠️ **Cada frase de la política tiene que poder señalarse en el código.** Una promesa falsa en
 > una política de privacidad es peor que no tenerla. Cambiar un texto obliga a revisar el código
@@ -3648,3 +3648,11 @@ el buzón real** (24/10/2026): un mail reenviado desde Gmail con «Orden» en el
 `AutenticidadDelMail` y entró directo a Órdenes con su PDF. Hasta ese día no había funcionado nunca:
 `BUZON_PASSWORD` estaba vacía en el `.env` del server y el comando fallaba cada 5 minutos desde el
 19/10 sin que nadie lo viera.
+
+**Migrada a `misalud.bambudev.com.ar`** (27/10/2026), con la skill `migrar-a-bambudev`: la misma
+`APP_KEY` (todo lo cifrado viaja tal cual), la base copiada con las 44 tablas idénticas y
+`storage/app` **entero** —los archivos cifrados viven en `private`, no en `public`—. El correo
+sale de `misalud@bambudev.com.ar` y el ingreso con Google usa un cliente propio del dominio
+nuevo. El buzón sigue siendo el de antes, para no romper lo que la gente ya reenvía. La copia
+vieja redirige a la nueva; para volverla demo, además de vaciar la base hay que borrar
+`storage/app/private` y dejar los `BUZON_*` vacíos, o leería el buzón real cada 5 minutos.
