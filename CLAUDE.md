@@ -3049,6 +3049,11 @@ mibilletera (skill `migrar-a-bambudev`).
   `ArchivoService::guardarContenido()`, como los del buzón.
 - `demo:reset` borra **todo** el disco privado y no una lista de carpetas: cada dueño de archivos
   tiene la suya, y una lista dejaría afuera al próximo.
+- ⚠️ **`demo:reset` levanta `prohibitDestructiveCommands` para sí mismo.** `AppServiceProvider`
+  prohíbe `migrate:fresh` en producción, y la demo corre con `APP_ENV=production`. La primera
+  corrida en el server se encontró eso: `migrate:fresh` contestó con un aviso, el comando siguió
+  de largo, borró los archivos y sembró la demo **encima** de los datos que había. Ahora corta si
+  la base no se vació. Los tests no lo ven: corren en `testing`.
 - **Nunca correr `demo:reset` contra la productiva**: se niega sin el flag, pero no se prueba ahí.
 
 ## Reglas de negocio

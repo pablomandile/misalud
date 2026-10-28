@@ -7,6 +7,7 @@ namespace App\Console\Commands;
 use Database\Seeders\CatalogosSeeder;
 use Database\Seeders\DemoSeeder;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 
@@ -33,7 +34,17 @@ class DemoReset extends Command
             return self::FAILURE;
         }
 
-        $this->call('migrate:fresh', ['--force' => true]);
+        // En producción `AppServiceProvider` prohíbe `migrate:fresh`, y la demo
+        // corre con APP_ENV=production. Se levanta solo acá, que ya exige el flag.
+        DB::prohibitDestructiveCommands(false);
+
+        // Si la base no se vació, no se sigue: sembrar encima mezclaría la demo
+        // con lo que hubiera, y borrar los archivos dejaría filas sin su archivo.
+        if ($this->call('migrate:fresh', ['--force' => true]) !== self::SUCCESS) {
+            $this->error('No se pudo vaciar la base. No se tocó nada más.');
+
+            return self::FAILURE;
+        }
 
         $disco = Storage::disk('local');
         foreach ($disco->directories() as $carpeta) {
