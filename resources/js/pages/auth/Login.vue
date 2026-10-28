@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
+import { Form, Head, router, usePage } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 import BotonGoogle from '@/components/BotonGoogle.vue';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
@@ -25,6 +26,25 @@ defineProps<{
     status?: string;
     canResetPassword: boolean;
 }>();
+
+// Solo en la demo: los datos de acceso a la vista y un botón que entra directo.
+const demo = computed(() => usePage().props.demo);
+const entrando = ref(false);
+
+function entrarALaDemo(): void {
+    if (!demo.value) {
+        return;
+    }
+
+    router.post(
+        store().url,
+        { email: demo.value.email, password: demo.value.password },
+        {
+            onStart: () => (entrando.value = true),
+            onFinish: () => (entrando.value = false),
+        },
+    );
+}
 </script>
 
 <template>
@@ -36,6 +56,33 @@ defineProps<{
     >
         {{ status }}
     </div>
+
+    <section
+        v-if="demo"
+        class="mb-4 space-y-3 rounded-lg border border-primary/40 bg-primary/5 p-4"
+        aria-labelledby="titulo-demo"
+    >
+        <h2 id="titulo-demo" class="font-semibold">Probá la demo</h2>
+        <p class="text-sm text-muted-foreground">
+            Una familia inventada, con su historia clínica cargada. Los datos se
+            borran y vuelven a cargarse cada noche.
+        </p>
+        <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+            <dt class="text-muted-foreground">Email</dt>
+            <dd class="break-all">{{ demo.email }}</dd>
+            <dt class="text-muted-foreground">Contraseña</dt>
+            <dd>{{ demo.password }}</dd>
+        </dl>
+        <Button
+            type="button"
+            class="w-full"
+            :disabled="entrando"
+            @click="entrarALaDemo"
+        >
+            <Spinner v-if="entrando" />
+            Entrar a la demo
+        </Button>
+    </section>
 
     <BotonGoogle :con-separador="false" class="mb-2" />
 
@@ -67,7 +114,7 @@ defineProps<{
                 <div class="flex items-center justify-between">
                     <Label for="password">Contraseña</Label>
                     <TextLink
-                        v-if="canResetPassword"
+                        v-if="canResetPassword && !demo"
                         :href="request()"
                         class="text-sm"
                         :tabindex="5"
@@ -105,7 +152,7 @@ defineProps<{
             </Button>
         </div>
 
-        <div class="text-center text-sm text-muted-foreground">
+        <div v-if="!demo" class="text-center text-sm text-muted-foreground">
             ¿Todavía no tenés cuenta?
             <TextLink :href="register()" :tabindex="5">Crear cuenta</TextLink>
         </div>

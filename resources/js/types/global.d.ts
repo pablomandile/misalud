@@ -22,6 +22,8 @@ declare module '@inertiajs/core' {
             sidebarOpen: boolean;
             /** Hay credenciales de Google en el .env. Lo mira BotonGoogle. */
             googleHabilitado: boolean;
+            /** Datos de acceso de la demo (APP_DEMO=true); null en la productiva. */
+            demo: { email: string; password: string } | null;
             [key: string]: unknown;
         };
     }

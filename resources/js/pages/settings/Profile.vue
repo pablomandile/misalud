@@ -38,10 +38,15 @@ const user = computed(() => page.props.auth.user);
         <Heading
             variant="small"
             title="Perfil"
-            description="Actualizá tu nombre y tu email"
+            :description="
+                page.props.demo
+                    ? 'En la demo no se puede cambiar el nombre ni el email: la cuenta es la misma para todos los visitantes.'
+                    : 'Actualizá tu nombre y tu email'
+            "
         />
 
         <Form
+            v-if="!page.props.demo"
             v-bind="ProfileController.update.form()"
             class="space-y-6"
             v-slot="{ errors, processing }"
@@ -122,5 +127,5 @@ const user = computed(() => page.props.auth.user);
         </Button>
     </div>
 
-    <DeleteUser />
+    <DeleteUser v-if="!page.props.demo" />
 </template>

@@ -88,6 +88,10 @@ class HandleInertiaRequests extends Middleware
              * igual sería una puerta pintada en la pared.
              */
             'googleHabilitado' => IngresoConGoogleService::configurado(),
+            // Datos de acceso de la demo (solo con APP_DEMO=true), para el login y la franja.
+            'demo' => config('demo.enabled')
+                ? ['email' => config('demo.email'), 'password' => config('demo.password')]
+                : null,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
 
             /*

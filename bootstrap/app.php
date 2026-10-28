@@ -1,6 +1,7 @@
 <?php
 
 use App\Console\Commands\CerrarTratamientosVencidos;
+use App\Console\Commands\DemoReset;
 use App\Console\Commands\EnviarRecordatorios;
 use App\Console\Commands\ProcesarBuzon;
 use App\Console\Commands\RenovarAplicacionesAnuales;
@@ -9,6 +10,7 @@ use App\Http\Middleware\AceptoTerminos;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\HandleTamanioTexto;
+use App\Http\Middleware\ProtegerDemo;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -29,6 +31,8 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleAppearance::class,
             HandleTamanioTexto::class,
             HandleInertiaRequests::class,
+            // Solo con APP_DEMO: la cuenta compartida no se cambia y no salen mails.
+            ProtegerDemo::class,
             // Frena a quien no aceptó los términos vigentes (ver EXENTAS).
             AceptoTerminos::class,
             AddLinkHeadersForPreloadedAssets::class,
@@ -68,7 +72,8 @@ return Application::configure(basePath: dirname(__DIR__))
          * ninguna la marque. Usa el lock de caché, y la tabla `cache_locks`
          * existe.
          */
-        $schedule->command(EnviarRecordatorios::class)->hourly()->withoutOverlapping();
+        $schedule->command(EnviarRecordatorios::class)->hourly()->withoutOverlapping()
+            ->when(fn (): bool => ! config('demo.enabled'));
 
         /*
          * El buzón de la app, cada cinco minutos: quien manda una receta espera
@@ -77,7 +82,16 @@ return Application::configure(basePath: dirname(__DIR__))
          * tardar; dos solapadas leerían los mismos mails (los frenaría
          * `mails_recibidos`, pero recién después de bajarlos dos veces).
          */
-        $schedule->command(ProcesarBuzon::class)->everyFiveMinutes()->withoutOverlapping();
+        $schedule->command(ProcesarBuzon::class)->everyFiveMinutes()->withoutOverlapping()
+            ->when(fn (): bool => ! config('demo.enabled'));
+
+        /*
+         * Solo en la demo (APP_DEMO=true): vuelve a dejarla como nueva todas
+         * las noches, a las 04:00 de Argentina (la app corre en UTC). La demo
+         * tampoco lee ningún buzón ni manda avisos (los dos `unless` de arriba).
+         */
+        $schedule->command(DemoReset::class)->dailyAt('07:00')
+            ->when(fn (): bool => (bool) config('demo.enabled'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

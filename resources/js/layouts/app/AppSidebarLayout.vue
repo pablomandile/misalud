@@ -42,6 +42,14 @@ const posicion = computed(() =>
         <AppSidebar />
         <AppContent variant="sidebar" class="min-w-0 overflow-x-clip">
             <AppSidebarHeader :breadcrumbs="breadcrumbs" />
+            <!-- Solo en la demo: que nadie cargue su historia real en una cuenta compartida. -->
+            <p
+                v-if="$page.props.demo"
+                class="border-b bg-limon px-4 py-2 text-sm text-limon-fuerte md:px-6"
+            >
+                Estás en la demo: los datos son inventados, se borran cada noche
+                y los mails no salen. No cargues datos reales.
+            </p>
             <!--
                 El margen de TODAS las pantallas vive acá, en un solo lugar. Lo
                 daba el contenedor del panel del starter kit; al reescribir el

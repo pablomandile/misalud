@@ -3018,6 +3018,39 @@ pestaña inactiva y después la restaura, esa navegación es de historial y reus
 - El `sw.js` lleva además una red de seguridad para las entradas que ya quedaron guardadas en
   los navegadores. Detalle completo en la skill `inertia-json-crudo`.
 
+## Modo demo
+
+La copia de pablomandile es la demo del portfolio. **Todo actúa solo con `APP_DEMO=true`**: el
+mismo código va a la productiva, apagado, y `DemoModeTest` cuida las dos puntas. Es el patrón de
+mibilletera (skill `migrar-a-bambudev`).
+
+| Pieza              | Qué hace                                                                 |
+| ------------------ | ------------------------------------------------------------------------ |
+| `config/demo.php`  | El flag y los datos de acceso (`demo@pablomandile.com.ar` / `demo1234`)  |
+| `ProtegerDemo`     | Sin registro, Google ni recuperar clave; la cuenta no se toca; sin mails |
+| `DemoSeeder`       | La familia inventada, con sus archivos de ejemplo                        |
+| `demo:reset`       | Base de cero, disco privado vacío, semillas. A las 04:00 de Argentina    |
+
+- ⚠️ **2FA y passkeys se rechazan** (también por fetch, con un 403): la cuenta la comparten todos
+  los visitantes, y uno que los active deja afuera a los demás hasta el reset.
+- **Invitar, mandar documentos y pedir medicamentos vuelven con un aviso** y no registran nada
+  (decisión del usuario). Además el `.env` de la demo va con `MAIL_MAILER=log`, por las dudas.
+- **La demo no lee ningún buzón ni manda avisos**: el scheduler saltea `procesar-buzon` y
+  `enviar-recordatorios` con el flag, aunque el `.env` tenga algo cargado.
+- **La familia**: Ana (la cuenta, con su ficha como principal), su padre Roberto (la ficha más
+  cargada: presión de un año, tres laboratorios para la evolución, dos recetas de anteojos,
+  turnos con aviso) y su hijo Tomás (el carnet de vacunas). Laura, otra cuenta con una clave que
+  nadie conoce, le comparte a Ana la ficha de la abuela Elena como cuidadora: así se ven las
+  solapas «De Elena».
+- **Fechas relativas a hoy, y lo pasado desde ayer**: el reset corre de madrugada, y una medición
+  "de hoy a las 8" todavía sería futura.
+- **Los archivos se generan**: un PDF de una página escrito a mano (Helvetica en WinAnsi, que
+  pdf.js dibuja con tildes y eñes) y la credencial como PNG con GD. Se guardan cifrados con
+  `ArchivoService::guardarContenido()`, como los del buzón.
+- `demo:reset` borra **todo** el disco privado y no una lista de carpetas: cada dueño de archivos
+  tiene la suya, y una lista dejaría afuera al próximo.
+- **Nunca correr `demo:reset` contra la productiva**: se niega sin el flag, pero no se prueba ahí.
+
 ## Reglas de negocio
 
 1. **El sistema registra, no aconseja.** Ninguna recomendación clínica, ningún semáforo que
@@ -3654,5 +3687,5 @@ el buzón real** (24/10/2026): un mail reenviado desde Gmail con «Orden» en el
 `storage/app` **entero** —los archivos cifrados viven en `private`, no en `public`—. El correo
 sale de `misalud@bambudev.com.ar` y el ingreso con Google usa un cliente propio del dominio
 nuevo. El buzón pasó a esa misma casilla: envía y recibe la misma dirección. La copia
-vieja redirige a la nueva; para volverla demo, además de vaciar la base hay que borrar
-`storage/app/private` y dejar los `BUZON_*` vacíos, o leería el buzón real cada 5 minutos.
+vieja pasó a ser la demo del portfolio (ver "Modo demo"), con su propia `APP_KEY`, la base
+resembrada, el disco privado vacío y los `BUZON_*` vacíos.

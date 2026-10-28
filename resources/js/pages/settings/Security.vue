@@ -40,7 +40,20 @@ defineOptions({
 
     <h1 class="sr-only">Configuración de seguridad</h1>
 
-    <div class="space-y-6">
+    <!--
+        En la demo la cuenta la comparten todos los visitantes: una clave nueva,
+        un 2FA o una passkey dejarían afuera a los demás hasta el reset. El
+        servidor ya lo rechaza (ProtegerDemo); acá solo no se ofrece.
+    -->
+    <div v-if="$page.props.demo" class="space-y-2">
+        <Heading
+            variant="small"
+            title="Seguridad"
+            description="En la demo no se puede cambiar la contraseña ni activar la verificación en dos pasos o las llaves de acceso: la cuenta es la misma para todos los visitantes."
+        />
+    </div>
+
+    <div v-else class="space-y-6">
         <!--
             Quien entró con Google no tiene contraseña: se le ofrece DEFINIR una
             -para poder entrar también por email- en vez de cambiarla, y no se
@@ -129,12 +142,14 @@ defineOptions({
     </div>
 
     <ManageTwoFactor
+        v-if="!$page.props.demo"
         :canManageTwoFactor="canManageTwoFactor"
         :requiresConfirmation="requiresConfirmation"
         :twoFactorEnabled="twoFactorEnabled"
     />
 
     <ManagePasskeys
+        v-if="!$page.props.demo"
         :canManagePasskeys="canManagePasskeys"
         :passkeys="passkeys"
     />
