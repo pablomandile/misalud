@@ -56,6 +56,8 @@ type TipoMedicion = {
     esSemilla: boolean;
     /** Lo que no es de esta cuenta: una semilla o lo de una ficha compartida. */
     soloLectura: boolean;
+    /** De esta cuenta: lo único que se puede eliminar. */
+    propio: boolean;
 };
 
 defineProps<{
@@ -213,6 +215,7 @@ function rango(min: number | null, max: number | null): string | null {
                                 size="icon-sm"
                                 class="text-destructive hover:bg-destructive/10 hover:text-destructive"
                                 :aria-label="`Eliminar ${tipo.nombre}`"
+                                v-if="tipo.propio"
                                 @click="tipoABorrar = tipo"
                             >
                                 <Trash2 class="size-4" />

@@ -138,6 +138,8 @@ abstract class CatalogoBaseController extends Controller
         assert($usuario instanceof User);
 
         $ficha = $this->fichaElegida($peticion);
+        // Una vez para todo el listado: la Policy lo consultaría por fila.
+        $queCuida = CatalogoDeLaFicha::dueniosQueCuida($usuario);
 
         $registros = $modelo::query()
             ->with($this->conEager())
@@ -149,12 +151,20 @@ abstract class CatalogoBaseController extends Controller
             ->get()
             ->sortBy(fn (Model&EsCatalogo $registro): string => mb_strtolower($registro->nombreVisible()))
             ->values()
-            ->map(fn (Model&EsCatalogo $registro): array => [
-                ...$this->serializar($registro),
-                // Lo que no es de esta cuenta (una semilla, o lo del dueño de
-                // una ficha compartida) se mira y se copia, no se edita.
-                'soloLectura' => $registro->getAttribute('usuario_id') !== $usuario->id,
-            ])
+            ->map(function (Model&EsCatalogo $registro) use ($usuario, $queCuida): array {
+                $duenio = $registro->getAttribute('usuario_id');
+                $propio = $duenio === $usuario->id;
+
+                return [
+                    ...$this->serializar($registro),
+                    // Lo propio se edita y se borra. Lo del dueño de una ficha
+                    // que esta persona cuida se edita pero no se borra; una
+                    // semilla, o lo de una ficha donde es lectora, se mira y
+                    // se copia. Mismo criterio que `CatalogoPolicy`.
+                    'propio' => $propio,
+                    'soloLectura' => ! $propio && ! in_array($duenio, $queCuida, true),
+                ];
+            })
             ->all();
 
         return Inertia::render($this->pagina(), [

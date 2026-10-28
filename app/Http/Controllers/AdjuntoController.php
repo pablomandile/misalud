@@ -12,6 +12,7 @@ use App\Http\Requests\AdjuntoStoreRequest;
 use App\Http\Requests\AudioStoreRequest;
 use App\Models\Adjunto;
 use App\Models\AplicacionVacuna;
+use App\Models\Centro;
 use App\Models\Cobertura;
 use App\Models\Consulta;
 use App\Models\Estudio;
@@ -82,6 +83,16 @@ class AdjuntoController extends Controller
     public function storeParaMedicamento(AdjuntoStoreRequest $peticion, Medicamento $medicamento): RedirectResponse
     {
         return $this->guardarEn($peticion, $medicamento);
+    }
+
+    /**
+     * Una imagen de un centro del catálogo: el frente del edificio, el QR de
+     * WhatsApp. Igual que el prospecto: una semilla no admite imágenes propias,
+     * y el cuidador puede sumarlas al centro del dueño que puede editar.
+     */
+    public function storeParaCentro(AdjuntoStoreRequest $peticion, Centro $centro): RedirectResponse
+    {
+        return $this->guardarEn($peticion, $centro);
     }
 
     /**

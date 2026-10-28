@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Contracts\EsCatalogo;
+use App\Enums\TipoAdjunto;
 use App\Http\Requests\CentroGuardarRequest;
+use App\Models\Adjunto;
 use App\Models\AplicacionVacuna;
 use App\Models\Centro;
 use App\Models\Consulta;
@@ -13,6 +15,8 @@ use App\Models\Estudio;
 use App\Models\Medico;
 use App\Models\PrescripcionOcular;
 use App\Models\Turno;
+use App\Models\User;
+use App\Support\CatalogoDeLaFicha;
 use App\Support\UsoDeCatalogo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
@@ -47,22 +51,43 @@ class CentroController extends CatalogoBaseController
     }
 
     /**
+     * Los médicos y las imágenes de cada centro, con el listado: sin esto, cada
+     * tarjeta dispara dos consultas propias.
+     */
+    protected function conEager(): array
+    {
+        return ['medicos', 'adjuntos'];
+    }
+
+    /**
      * El catálogo de médicos, para armar el checklist de "quién atiende
-     * acá". Mismo criterio de visibilidad que `index()` -propios más
-     * semillas-, y ordenado en PHP por el mismo motivo de siempre: el
-     * nombre está cifrado.
+     * acá": los propios, las semillas y los de los dueños de las fichas que
+     * esta persona cuida, porque puede editar sus centros. Cada médico dice de
+     * quién es (`usuarioId`) y la pantalla ofrece, para cada centro, solo los
+     * de su mismo catálogo: la misma regla que valida `CentroGuardarRequest`.
+     * Ordenado en PHP por el mismo motivo de siempre: el nombre está cifrado.
      *
      * @return array<string, mixed>
      */
     protected function propsExtra(): array
     {
+        $usuario = auth()->user();
+        assert($usuario instanceof User);
+        $queCuida = CatalogoDeLaFicha::dueniosQueCuida($usuario);
+
         return [
             'medicosDisponibles' => Medico::query()
-                ->where($this->visiblesPara(auth()->user()))
+                ->where(fn ($consulta) => $consulta
+                    ->where($this->visiblesPara($usuario))
+                    ->orWhereIn('usuario_id', $queCuida))
                 ->get()
                 ->sortBy(fn (Medico $medico): string => mb_strtolower($medico->nombre))
                 ->values()
-                ->map(fn (Medico $medico): array => ['id' => $medico->id, 'nombre' => $medico->nombre])
+                ->map(fn (Medico $medico): array => [
+                    'id' => $medico->id,
+                    'nombre' => $medico->nombre,
+                    'usuarioId' => $medico->usuario_id,
+                ])
                 ->all(),
         ];
     }
@@ -87,6 +112,13 @@ class CentroController extends CatalogoBaseController
             'horarios' => $registro->horarios,
             'notas' => $registro->notas,
             'esSemilla' => $registro->esSemilla(),
+            // Las fotos del edificio, el QR de WhatsApp: lo que se subió al centro.
+            'imagenes' => $registro->adjuntosDe(TipoAdjunto::ImagenCentro)
+                ->map(fn (Adjunto $adjunto): array => $adjunto->paraLista())
+                ->values()
+                ->all(),
+            // De qué catálogo son los médicos que se le pueden vincular.
+            'usuarioId' => $registro->usuario_id,
             /*
              * Nombres ya en claro y no ids sueltos: la pantalla los muestra
              * tal cual, sin tener que pedir el catálogo de médicos aparte

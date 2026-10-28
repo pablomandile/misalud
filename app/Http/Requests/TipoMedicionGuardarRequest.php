@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Concerns\AutorizaSobreLaRuta;
+use App\Concerns\CatalogoDeLaRuta;
 use App\Concerns\NormalizaDecimales;
 use App\Models\TipoMedicion;
 use App\Rules\IndiceCiegoUnico;
@@ -14,6 +15,7 @@ use Illuminate\Validation\Rule;
 class TipoMedicionGuardarRequest extends FormRequest
 {
     use AutorizaSobreLaRuta;
+    use CatalogoDeLaRuta;
 
     /**
      * Autorizar ANTES de validar: sin esto, a un extraño le contestaba la
@@ -57,7 +59,7 @@ class TipoMedicionGuardarRequest extends FormRequest
                 new IndiceCiegoUnico(
                     TipoMedicion::class,
                     'nombre',
-                    ['usuario_id' => auth()->id()],
+                    ['usuario_id' => $this->duenioDelCatalogo('tipo_medicion')],
                     $this->tipoDeLaRuta()?->id,
                 ),
             ],

@@ -187,6 +187,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('centros/{centro}', [CentroController::class, 'destroy'])->name('centros.destroy');
     Route::post('centros/{centro}/duplicar', [CentroController::class, 'duplicar'])
         ->name('centros.duplicar');
+    // Las imágenes del centro: mismo patrón que el prospecto de un medicamento.
+    Route::post('centros/{centro}/adjuntos', [AdjuntoController::class, 'storeParaCentro'])
+        ->name('centros.adjuntos.store');
 
     Route::get('farmacias', [FarmaciaController::class, 'index'])->name('farmacias.index');
     Route::post('farmacias', [FarmaciaController::class, 'store'])->name('farmacias.store');

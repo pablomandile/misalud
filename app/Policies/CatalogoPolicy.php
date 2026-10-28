@@ -47,21 +47,35 @@ class CatalogoPolicy
     }
 
     /**
-     * Editar: **solo lo propio, nunca una semilla**.
+     * Editar: **lo propio, o lo del dueño de una ficha que cuida. Nunca una
+     * semilla.**
      *
      * Una semilla la comparten todos los usuarios: dejar que alguien la
      * edite sería dejarlo cambiarle el catálogo a desconocidos. La salida es
      * `duplicar()`, que se la lleva a su propio catálogo y ahí sí la
      * modifica (regla 5 de CLAUDE.md).
+     *
+     * El cuidador de una ficha corrige la lista del dueño de esa ficha
+     * (decisión del usuario): es la misma persona que ya carga y corrige la
+     * historia. Un lector no, y un extraño tampoco.
      */
     public function update(User $usuario, Model&EsCatalogo $registro): bool
     {
-        return ! $registro->esSemilla() && $this->esSuyo($usuario, $registro);
+        if ($registro->esSemilla()) {
+            return false;
+        }
+
+        return $this->esSuyo($usuario, $registro)
+            || in_array($registro->getAttribute('usuario_id'), CatalogoDeLaFicha::dueniosQueCuida($usuario), true);
     }
 
+    /**
+     * Borrar: **solo lo propio**. Corregir un teléfono se deshace; sacar algo
+     * de la lista de otro no (decisión del usuario).
+     */
     public function delete(User $usuario, Model&EsCatalogo $registro): bool
     {
-        return $this->update($usuario, $registro);
+        return ! $registro->esSemilla() && $this->esSuyo($usuario, $registro);
     }
 
     /**

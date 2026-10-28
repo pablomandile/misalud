@@ -40,6 +40,8 @@ type Vacuna = {
     esSemilla: boolean;
     /** Lo que no es de esta cuenta: una semilla o lo de una ficha compartida. */
     soloLectura: boolean;
+    /** De esta cuenta: lo único que se puede eliminar. */
+    propio: boolean;
 };
 
 defineProps<{
@@ -118,7 +120,7 @@ const vacunaABorrar = ref<Vacuna | null>(null);
 
                     <div class="flex shrink-0 flex-wrap justify-end gap-1">
                         <Form
-                            v-if="vacuna.soloLectura"
+                            v-if="!vacuna.propio"
                             v-bind="
                                 VacunaController.duplicar.form({
                                     vacuna: vacuna.id,
@@ -138,7 +140,7 @@ const vacunaABorrar = ref<Vacuna | null>(null);
                             </Button>
                         </Form>
 
-                        <template v-else>
+                        <template v-if="!vacuna.soloLectura">
                             <Button
                                 variant="ghost"
                                 size="sm"
@@ -151,6 +153,7 @@ const vacunaABorrar = ref<Vacuna | null>(null);
                                 size="icon-sm"
                                 class="text-destructive hover:bg-destructive/10 hover:text-destructive"
                                 :aria-label="`Eliminar ${vacuna.nombre}`"
+                                v-if="vacuna.propio"
                                 @click="vacunaABorrar = vacuna"
                             >
                                 <Trash2 class="size-4" />

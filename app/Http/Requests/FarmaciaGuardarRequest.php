@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Concerns\AutorizaSobreLaRuta;
+use App\Concerns\CatalogoDeLaRuta;
 use App\Concerns\ValidaDatosDeContacto;
 use App\Models\Farmacia;
 use App\Rules\IndiceCiegoUnico;
@@ -13,6 +14,7 @@ use Illuminate\Foundation\Http\FormRequest;
 class FarmaciaGuardarRequest extends FormRequest
 {
     use AutorizaSobreLaRuta;
+    use CatalogoDeLaRuta;
     use ValidaDatosDeContacto;
 
     /**
@@ -47,7 +49,7 @@ class FarmaciaGuardarRequest extends FormRequest
                 new IndiceCiegoUnico(
                     Farmacia::class,
                     'nombre',
-                    ['usuario_id' => auth()->id()],
+                    ['usuario_id' => $this->duenioDelCatalogo('farmacia')],
                     $farmacia instanceof Farmacia ? $farmacia->id : null,
                 ),
             ],

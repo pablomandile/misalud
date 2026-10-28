@@ -59,7 +59,7 @@ it('ofrece una solapa por cada ficha compartida, no por las propias', function (
         ->assertInertia(fn ($p) => $p->where('fichasCompartidas', []));
 });
 
-it('la solapa de la ficha muestra la lista COMPLETA de médicos del dueño, en solo lectura', function (): void {
+it('la solapa de la ficha muestra la lista COMPLETA de médicos del dueño: el cuidador la edita, no la borra', function (): void {
     [, $cuidador, $mama] = fichaCompartidaConCatalogo();
 
     $this->actingAs($cuidador)
@@ -68,8 +68,9 @@ it('la solapa de la ficha muestra la lista COMPLETA de médicos del dueño, en s
         ->assertInertia(fn ($p) => $p
             ->where('ficha.id', $mama->id)
             ->has('registros', 2)
-            ->where('registros.0.soloLectura', true)
-            ->where('registros.1.soloLectura', true));
+            ->where('registros.0.soloLectura', false)
+            ->where('registros.0.propio', false)
+            ->where('registros.1.soloLectura', false));
 
     $this->actingAs($cuidador)
         ->get(route('centros.index', ['ficha' => $mama->id]))
@@ -102,7 +103,7 @@ it('medicamentos, vacunas y variables también muestran la lista completa del du
 
     $this->actingAs($cuidador)
         ->get(route('medicamentos.index', ['ficha' => $mama->id]))
-        ->assertInertia(fn ($p) => $p->has('registros', 2)->where('registros.0.soloLectura', true));
+        ->assertInertia(fn ($p) => $p->has('registros', 2)->where('registros.0.soloLectura', false));
 
     $this->actingAs($cuidador)
         ->get(route('vacunas.index', ['ficha' => $mama->id]))
@@ -141,11 +142,89 @@ it('copia a su lista un médico del dueño, pero no el de un extraño', function
     $this->actingAs($cuidador)->post(route('medicos.duplicar', $extranio))->assertForbidden();
 });
 
-it('no deja editar ni borrar el médico del dueño', function (): void {
-    [, $cuidador, , $usado] = fichaCompartidaConCatalogo();
+it('a un lector la lista del dueño le queda en solo lectura', function (): void {
+    [$duenio, , $mama] = fichaCompartidaConCatalogo();
+    $lector = User::factory()->create();
+    $mama->cuidadores()->attach($lector->id, ['rol' => RolPaciente::Lector->value]);
 
-    $this->actingAs($cuidador)->put(route('medicos.update', $usado), ['nombre' => 'X'])->assertForbidden();
-    $this->actingAs($cuidador)->delete(route('medicos.destroy', $usado))->assertForbidden();
+    $this->actingAs($lector)
+        ->get(route('medicos.index', ['ficha' => $mama->id]))
+        ->assertInertia(fn ($p) => $p->has('registros', 2)->where('registros.0.soloLectura', true));
+});
+
+it('el cuidador edita el médico del dueño, pero no lo borra', function (): void {
+    [, $cuidador, , $usado, $otro] = fichaCompartidaConCatalogo();
+
+    $this->actingAs($cuidador)
+        ->put(route('medicos.update', $usado), ['nombre' => 'Dra. Usada Corregida'])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    expect($usado->fresh()->nombre)->toBe('Dra. Usada Corregida');
+
+    // Sin uso, para que lo que frene sea la Policy y no los usos.
+    $this->actingAs($cuidador)->delete(route('medicos.destroy', $otro))->assertForbidden();
+    expect($otro->fresh())->not->toBeNull();
+});
+
+it('un lector o un extraño no editan el médico del dueño', function (): void {
+    [, , $mama, $usado] = fichaCompartidaConCatalogo();
+    $lector = User::factory()->create();
+    $mama->cuidadores()->attach($lector->id, ['rol' => RolPaciente::Lector->value]);
+
+    $this->actingAs($lector)->put(route('medicos.update', $usado), ['nombre' => 'X'])->assertForbidden();
+    $this->actingAs(User::factory()->create())->put(route('medicos.update', $usado), ['nombre' => 'X'])->assertForbidden();
+});
+
+it('al editar lo del dueño, «ya existe uno así» mira la lista del dueño', function (): void {
+    [, $cuidador, , $usado] = fichaCompartidaConCatalogo();
+    Medico::factory()->for($cuidador, 'usuario')->create(['nombre' => 'Dr. Del Cuidador']);
+
+    // El dueño ya tiene a "Dr. De Otro Familiar": el UNIQUE de la base lo
+    // frenaría con un 500 si la validación mirara la lista del cuidador.
+    $this->actingAs($cuidador)
+        ->put(route('medicos.update', $usado), ['nombre' => 'Dr. De Otro Familiar'])
+        ->assertSessionHasErrors('nombre');
+
+    // Un nombre que solo tiene el cuidador no choca con nada del dueño.
+    $this->actingAs($cuidador)
+        ->put(route('medicos.update', $usado), ['nombre' => 'Dr. Del Cuidador'])
+        ->assertSessionHasNoErrors();
+});
+
+it('al editar el centro del dueño, solo se le vinculan médicos del dueño', function (): void {
+    [, $cuidador, , $usado, , $centro] = fichaCompartidaConCatalogo();
+    $delCuidador = Medico::factory()->for($cuidador, 'usuario')->create();
+
+    $datos = ['nombre' => 'Clínica de Mamá', 'tipo' => $centro->tipo->value];
+
+    $this->actingAs($cuidador)
+        ->put(route('centros.update', $centro), [...$datos, 'medicos' => [$delCuidador->id]])
+        ->assertSessionHasErrors('medicos.0');
+
+    $this->actingAs($cuidador)
+        ->put(route('centros.update', $centro), [...$datos, 'medicos' => [$usado->id]])
+        ->assertSessionHasNoErrors();
+
+    expect($centro->medicos()->pluck('medicos.id')->all())->toBe([$usado->id]);
+});
+
+it('la pantalla de centros ofrece los médicos de cada catálogo con su dueño', function (): void {
+    [$duenio, $cuidador, , $usado] = fichaCompartidaConCatalogo();
+    $delCuidador = Medico::factory()->for($cuidador, 'usuario')->create();
+    $extranio = Medico::factory()->create();
+
+    $this->actingAs($cuidador)
+        ->get(route('centros.index'))
+        ->assertInertia(function ($p) use ($usado, $delCuidador, $extranio, $duenio, $cuidador) {
+            $medicos = collect($p->toArray()['props']['medicosDisponibles'])->keyBy('id');
+
+            expect($medicos->get($usado->id)['usuarioId'])->toBe($duenio->id)
+                ->and($medicos->get($delCuidador->id)['usuarioId'])->toBe($cuidador->id)
+                ->and($medicos->has($extranio->id))->toBeFalse();
+
+            return $p;
+        });
 });
 
 it('Contactos muestra lo que usa la ficha compartida, sin enlace para editar', function (): void {

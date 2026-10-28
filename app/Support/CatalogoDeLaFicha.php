@@ -131,6 +131,36 @@ final class CatalogoDeLaFicha
     }
 
     /**
+     * Las cuentas cuyo catálogo esta persona puede EDITAR: las de los dueños de
+     * las fichas donde es **cuidadora** (decisión del usuario). Un lector mira y
+     * copia; el cuidador corrige el teléfono de un centro sin pedírselo al dueño.
+     * Borrar sigue siendo solo del dueño.
+     *
+     * Por las fichas que ve con `pacientes()`, como `idsEnFichasDe()`: una en
+     * la papelera no cuenta.
+     *
+     * @return list<int>
+     */
+    public static function dueniosQueCuida(User $usuario): array
+    {
+        $fichas = $usuario->pacientes()
+            ->wherePivot('rol', RolPaciente::Cuidador->value)
+            ->pluck('pacientes.id')
+            ->all();
+
+        if ($fichas === []) {
+            return [];
+        }
+
+        return array_values(array_map('intval', DB::table('paciente_usuario')
+            ->whereIn('paciente_id', $fichas)
+            ->where('rol', RolPaciente::Propietario->value)
+            ->distinct()
+            ->pluck('usuario_id')
+            ->all()));
+    }
+
+    /**
      * Lo propio, las semillas y lo de los dueños de las fichas que esta persona
      * ve, para un solo `where()`. Agrupado: un OR suelto se mezclaría con
      * cualquier otro filtro (ver `CatalogoVisible`).

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Concerns\AutorizaSobreLaRuta;
+use App\Concerns\CatalogoDeLaRuta;
 use App\Concerns\ValidaDatosDeContacto;
 use App\Enums\TipoCentro;
 use App\Models\Centro;
@@ -15,6 +16,7 @@ use Illuminate\Validation\Rule;
 class CentroGuardarRequest extends FormRequest
 {
     use AutorizaSobreLaRuta;
+    use CatalogoDeLaRuta;
     use ValidaDatosDeContacto;
 
     /**
@@ -49,7 +51,7 @@ class CentroGuardarRequest extends FormRequest
                 new IndiceCiegoUnico(
                     Centro::class,
                     'nombre',
-                    ['usuario_id' => auth()->id()],
+                    ['usuario_id' => $this->duenioDelCatalogo('centro')],
                     $this->centroDeLaRuta()?->id,
                 ),
             ],
@@ -59,9 +61,11 @@ class CentroGuardarRequest extends FormRequest
 
             'medicos' => ['nullable', 'array'],
             /*
-             * `exists` con una acotación por cierre: solo médicos VISIBLES
-             * para este usuario -los propios más las semillas-, nunca los de
-             * otro. El paréntesis del `where` no es cosmético: sin agrupar el
+             * `exists` con una acotación por cierre: solo médicos del MISMO
+             * catálogo que el centro -los de su dueño más las semillas-, nunca
+             * los de otro. Al editar el centro del dueño de una ficha que se
+             * cuida, son los médicos del dueño: vincularle uno del cuidador
+             * dejaría en su lista un médico que él no ve. El paréntesis del `where` no es cosmético: sin agrupar el
              * `orWhereNull`, se mezcla con la condición de `id` que ya agrega
              * `exists` y la regla deja pasar cualquier médico que exista, sin
              * importar de quién sea. Es el mismo error que ya se documentó en
@@ -71,7 +75,7 @@ class CentroGuardarRequest extends FormRequest
                 'integer',
                 Rule::exists('medicos', 'id')->where(
                     fn ($consulta) => $consulta->where(function ($acotada): void {
-                        $acotada->where('usuario_id', auth()->id())->orWhereNull('usuario_id');
+                        $acotada->where('usuario_id', $this->duenioDelCatalogo('centro'))->orWhereNull('usuario_id');
                     }),
                 ),
             ],

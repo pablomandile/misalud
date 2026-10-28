@@ -54,6 +54,8 @@ type Medico = {
     esSemilla: boolean;
     /** Lo que no es de esta cuenta: una semilla o lo de una ficha compartida. */
     soloLectura: boolean;
+    /** De esta cuenta: lo único que se puede eliminar. */
+    propio: boolean;
 };
 
 defineProps<{
@@ -151,11 +153,12 @@ const medicoABorrar = ref<Medico | null>(null);
 
                     <div class="flex shrink-0 flex-wrap justify-end gap-1">
                         <!--
-                            Una semilla no se edita: la única acción posible es
-                            copiarla al catálogo propio.
+                            Lo que no es propio se puede copiar a la lista propia.
+                            Editar: lo propio y lo del dueño de una ficha que
+                            cuido. Eliminar: solo lo propio.
                         -->
                         <Form
-                            v-if="medico.soloLectura"
+                            v-if="!medico.propio"
                             v-bind="
                                 MedicoController.duplicar.form({
                                     medico: medico.id,
@@ -175,7 +178,7 @@ const medicoABorrar = ref<Medico | null>(null);
                             </Button>
                         </Form>
 
-                        <template v-else>
+                        <template v-if="!medico.soloLectura">
                             <Button
                                 variant="ghost"
                                 size="sm"
@@ -188,6 +191,7 @@ const medicoABorrar = ref<Medico | null>(null);
                                 size="icon-sm"
                                 class="text-destructive hover:bg-destructive/10 hover:text-destructive"
                                 :aria-label="`Eliminar ${medico.nombre}`"
+                                v-if="medico.propio"
                                 @click="medicoABorrar = medico"
                             >
                                 <Trash2 class="size-4" />

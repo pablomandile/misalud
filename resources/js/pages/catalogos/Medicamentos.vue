@@ -58,6 +58,8 @@ type Medicamento = {
     esSemilla: boolean;
     /** Lo que no es de esta cuenta: una semilla o lo de una ficha compartida. */
     soloLectura: boolean;
+    /** De esta cuenta: lo único que se puede eliminar. */
+    propio: boolean;
     prospecto: Prospecto | null;
 };
 
@@ -163,7 +165,7 @@ const documentoAbierto = ref<DocumentoVisible | null>(null);
 
                         <div class="flex shrink-0 flex-wrap justify-end gap-1">
                             <Form
-                                v-if="medicamento.soloLectura"
+                                v-if="!medicamento.propio"
                                 v-bind="
                                     MedicamentoController.duplicar.form({
                                         medicamento: medicamento.id,
@@ -183,7 +185,7 @@ const documentoAbierto = ref<DocumentoVisible | null>(null);
                                 </Button>
                             </Form>
 
-                            <template v-else>
+                            <template v-if="!medicamento.soloLectura">
                                 <Button
                                     variant="ghost"
                                     size="sm"
@@ -196,6 +198,7 @@ const documentoAbierto = ref<DocumentoVisible | null>(null);
                                     size="icon-sm"
                                     class="text-destructive hover:bg-destructive/10 hover:text-destructive"
                                     :aria-label="`Eliminar ${medicamento.nombre_comercial}`"
+                                    v-if="medicamento.propio"
                                     @click="medicamentoABorrar = medicamento"
                                 >
                                     <Trash2 class="size-4" />

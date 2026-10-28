@@ -945,9 +945,9 @@ red, pero la app no llega a usarla.
 Los catálogos son de la cuenta, así que a quien le comparten una ficha la historia le muestra
 "Dra. López" en los estudios pero Médicos le aparece vacía. Cada catálogo tiene solapas: **«Míos»**
 —la primera y la elegida por defecto— y una **«De Marta»** por cada ficha compartida
-(`SolapasDeCatalogo`, `?ficha=`). La de una ficha muestra, en solo lectura y con «Copiar» a la lista
-propia, **la lista COMPLETA de quien comparte esa ficha**, en los seis catálogos (médicos, centros,
-farmacias, medicamentos, vacunas y variables).
+(`SolapasDeCatalogo`, `?ficha=`). La de una ficha muestra, con «Copiar» a la lista propia, **la lista
+COMPLETA de quien comparte esa ficha**, en los seis catálogos (médicos, centros, farmacias,
+medicamentos, vacunas y variables). **Un cuidador la edita; un lector solo la mira** (ver abajo).
 
 - Se probó primero "solo lo que usa la ficha" (sacado de los `usos()`), y dejaba afuera al médico o al
   medicamento cargado y todavía sin usar: el usuario eligió compartir las listas enteras.
@@ -957,9 +957,18 @@ farmacias, medicamentos, vacunas y variables).
   dueño. El panel de invitar lo avisa. Para una ficha que ya estaba compartida pasa desde el deploy,
   sin que el dueño vuelva a aprobar nada.
 - `CatalogoPolicy::view()` suma "es del dueño de una ficha que ve": es lo que habilita «Copiar».
-  Editar y borrar siguen siendo solo del dueño.
-- `soloLectura` lo agrega `CatalogoBaseController::index()` a cada fila (`usuario_id` ajeno: una
-  semilla o lo del dueño), así ninguna pantalla lo calcula por su cuenta.
+- **El cuidador edita la lista del dueño, pero no borra nada de ella** (decisión del usuario):
+  `CatalogoPolicy::update()` suma `CatalogoDeLaFicha::dueniosQueCuida()`, y `delete()` sigue siendo
+  solo lo propio. Corregir un teléfono se deshace; sacar algo de la lista de otro no. Subir o borrar
+  el prospecto de un medicamento es editarlo, así que también lo puede hacer.
+- ⚠️ **Al editar lo del dueño, la validación mira la lista del dueño**, no la de quien edita
+  (`CatalogoDeLaRuta::duenioDelCatalogo()` en los seis FormRequest). Con `auth()->id()` fijo,
+  renombrar un médico del dueño a un nombre que el dueño ya tenía pasaba la validación y lo frenaba
+  el UNIQUE con un 500. Lo mismo los médicos de un centro: se le vinculan los de **su** catálogo, y
+  la pantalla filtra `medicosDisponibles` por `usuarioId` con ese criterio.
+- `soloLectura` y `propio` los agrega `CatalogoBaseController::index()` a cada fila, así ninguna
+  pantalla los calcula por su cuenta: «Editar» si no es de solo lectura, «Eliminar» si es propio,
+  «Copiar» si no es propio.
 - Contactos y los destinatarios de un envío suman lo mismo (`visiblesConFichas()`) para médicos,
   centros y farmacias; en Contactos sin enlace para editar.
 - ⚠️ **Los formularios de la ficha también** (`CatalogoDeLaFicha::elegibles()` y
@@ -2532,6 +2541,14 @@ van como **botones con texto** (WhatsApp, Correo, Web), no como datos para copia
   ningún formulario pedía), con la misma limpieza y los mismos botones.
 - La tarjeta de un médico dice **«Atiende en …»** con los nombres de sus centros (pivote
   `centro_medico`), solo los que la persona ve.
+- **Imágenes del centro** (pedido del usuario): el frente del edificio, el QR de WhatsApp. `Centro`
+  es el segundo catálogo dueño de archivos, después del prospecto, con `TipoAdjunto::ImagenCentro`
+  y `centros.adjuntos.store`. No tocó la autorización: subir, girar o borrar una imagen es editar el
+  centro, así que puede el dueño y el cuidador de una ficha suya, y una semilla no admite imágenes.
+  En la tarjeta van como miniaturas con su nombre (`titulo`, opcional) y **`object-contain`**: un
+  QR recortado no se escanea. Se suben desde un panel y no con un formulario en cada tarjeta.
+  Borrar el centro se las lleva del disco; copiarlo no las copia (`replicate()` no copia
+  relaciones). Van en «Descargar mis datos», en `catalogo/centros/<id>`.
 
 ## El paciente principal: lo que el menú abre directo
 
@@ -3024,12 +3041,12 @@ La copia de pablomandile es la demo del portfolio. **Todo actúa solo con `APP_D
 mismo código va a la productiva, apagado, y `DemoModeTest` cuida las dos puntas. Es el patrón de
 mibilletera (skill `migrar-a-bambudev`).
 
-| Pieza              | Qué hace                                                                 |
-| ------------------ | ------------------------------------------------------------------------ |
-| `config/demo.php`  | El flag y los datos de acceso (`demo@pablomandile.com.ar` / `demo1234`)  |
-| `ProtegerDemo`     | Sin registro, Google ni recuperar clave; la cuenta no se toca; sin mails |
-| `DemoSeeder`       | La familia inventada, con sus archivos de ejemplo                        |
-| `demo:reset`       | Base de cero, disco privado vacío, semillas. A las 04:00 de Argentina    |
+| Pieza             | Qué hace                                                                 |
+| ----------------- | ------------------------------------------------------------------------ |
+| `config/demo.php` | El flag y los datos de acceso (`demo@pablomandile.com.ar` / `demo1234`)  |
+| `ProtegerDemo`    | Sin registro, Google ni recuperar clave; la cuenta no se toca; sin mails |
+| `DemoSeeder`      | La familia inventada, con sus archivos de ejemplo                        |
+| `demo:reset`      | Base de cero, disco privado vacío, semillas. A las 04:00 de Argentina    |
 
 - ⚠️ **2FA y passkeys se rechazan** (también por fetch, con un 403): la cuenta la comparten todos
   los visitantes, y uno que los active deja afuera a los demás hasta el reset.

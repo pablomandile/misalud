@@ -6,8 +6,10 @@ namespace App\Models;
 
 use App\Concerns\CifraCampos;
 use App\Concerns\DeCatalogo;
+use App\Concerns\TieneAdjuntos;
 use App\Contracts\CifraDatos;
 use App\Contracts\EsCatalogo;
+use App\Contracts\TieneArchivos;
 use App\Database\Eloquent\ConsultaVigilada;
 use App\Enums\TipoCentro;
 use App\Policies\CatalogoPolicy;
@@ -22,8 +24,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 /**
  * Un centro del catálogo del usuario: consultorio, clínica, laboratorio.
  *
- * Copiado del patrón de `Medico` (ver ese modelo). Lo único que suma es la
- * relación `medicos()`: dónde atiende cada uno.
+ * Copiado del patrón de `Medico` (ver ese modelo). Lo que suma es la
+ * relación `medicos()` —dónde atiende cada uno— y sus imágenes (el edificio, el
+ * QR de WhatsApp): es el segundo catálogo con archivos, después del prospecto
+ * de un medicamento, y como aquel no necesitó tocar la autorización —subir una
+ * imagen es editar el centro (`AdjuntoPolicy`)—.
  *
  * @property int $id
  * @property int|null $usuario_id
@@ -38,7 +43,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $notas
  */
 #[UsePolicy(CatalogoPolicy::class)]
-class Centro extends Model implements CifraDatos, EsCatalogo
+class Centro extends Model implements CifraDatos, EsCatalogo, TieneArchivos
 {
     use CifraCampos;
     use DeCatalogo;
@@ -47,6 +52,7 @@ class Centro extends Model implements CifraDatos, EsCatalogo
     use HasFactory;
 
     use SoftDeletes;
+    use TieneAdjuntos;
 
     /** @var class-string<\Illuminate\Database\Eloquent\Builder<*>> */
     protected static string $builder = ConsultaVigilada::class;

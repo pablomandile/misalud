@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Concerns\AutorizaSobreLaRuta;
+use App\Concerns\CatalogoDeLaRuta;
 use App\Models\Medico;
 use App\Rules\IndiceCiegoUnico;
 use Illuminate\Foundation\Http\FormRequest;
@@ -12,6 +13,7 @@ use Illuminate\Foundation\Http\FormRequest;
 class MedicoGuardarRequest extends FormRequest
 {
     use AutorizaSobreLaRuta;
+    use CatalogoDeLaRuta;
 
     /**
      * Autorizar ANTES de validar: sin esto, a un extraño le contestaba la
@@ -42,7 +44,7 @@ class MedicoGuardarRequest extends FormRequest
                 new IndiceCiegoUnico(
                     Medico::class,
                     'nombre',
-                    ['usuario_id' => auth()->id()],
+                    ['usuario_id' => $this->duenioDelCatalogo('medico')],
                     $this->medicoDeLaRuta()?->id,
                 ),
             ],

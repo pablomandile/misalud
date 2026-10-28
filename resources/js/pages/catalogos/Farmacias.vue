@@ -58,6 +58,8 @@ type Farmacia = {
     esSemilla: boolean;
     /** Lo que no es de esta cuenta: una semilla o lo de una ficha compartida. */
     soloLectura: boolean;
+    /** De esta cuenta: lo único que se puede eliminar. */
+    propio: boolean;
 };
 
 defineProps<{
@@ -178,7 +180,7 @@ function enlaceTelefono(telefono: string): string {
 
                         <div class="flex shrink-0 flex-wrap justify-end gap-1">
                             <Form
-                                v-if="farmacia.soloLectura"
+                                v-if="!farmacia.propio"
                                 v-bind="
                                     FarmaciaController.duplicar.form({
                                         farmacia: farmacia.id,
@@ -198,7 +200,7 @@ function enlaceTelefono(telefono: string): string {
                                 </Button>
                             </Form>
 
-                            <template v-else>
+                            <template v-if="!farmacia.soloLectura">
                                 <Button
                                     variant="ghost"
                                     size="sm"
@@ -211,6 +213,7 @@ function enlaceTelefono(telefono: string): string {
                                     size="icon-sm"
                                     class="text-destructive hover:bg-destructive/10 hover:text-destructive"
                                     :aria-label="`Eliminar ${farmacia.nombre}`"
+                                    v-if="farmacia.propio"
                                     @click="farmaciaABorrar = farmacia"
                                 >
                                     <Trash2 class="size-4" />

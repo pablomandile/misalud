@@ -104,7 +104,7 @@ final class ExportadorDeDatos
                     ->all(),
                 'catalogo' => [
                     'medicos' => $this->filas(Medico::where('usuario_id', $usuario->id)->get()),
-                    'centros' => $this->filas(Centro::where('usuario_id', $usuario->id)->get()),
+                    'centros' => $this->conArchivos(Centro::where('usuario_id', $usuario->id)->get(), 'catalogo/centros'),
                     'farmacias' => $this->filas(Farmacia::where('usuario_id', $usuario->id)->get()),
                     'medicamentos' => $this->conArchivos(Medicamento::where('usuario_id', $usuario->id)->get(), 'catalogo/medicamentos'),
                     'vacunas' => $this->filas(Vacuna::where('usuario_id', $usuario->id)->get()),
@@ -185,7 +185,7 @@ final class ExportadorDeDatos
 
     /**
      * Las filas con sus archivos, para los dueños de archivos sueltos (recetas,
-     * prospectos).
+     * prospectos, las imágenes de un centro).
      *
      * @param  Collection<int, covariant Model>  $registros
      * @return list<array<string, mixed>>
