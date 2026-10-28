@@ -132,13 +132,16 @@ const enlace = (id: number) =>
                             Cobertura.
                         </p>
 
-                        <div v-else class="grid gap-3 sm:grid-cols-2">
+                        <div
+                            v-else
+                            class="grid grid-cols-1 gap-3 sm:grid-cols-2"
+                        >
                             <button
                                 v-for="credencial in cobertura.credenciales"
                                 :key="credencial.id"
                                 type="button"
                                 class="overflow-hidden rounded-lg border bg-muted/40 text-left focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
-                                :aria-label="`Ver ${credencial.nombre} a pantalla completa`"
+                                :aria-label="`Ver la credencial de ${cobertura.entidad} a pantalla completa`"
                                 @click="abierta = credencial"
                             >
                                 <img
@@ -154,7 +157,7 @@ const enlace = (id: number) =>
                                     <FileText
                                         class="size-6 text-muted-foreground"
                                     />
-                                    {{ credencial.nombre }}
+                                    Credencial en PDF
                                 </span>
                             </button>
                         </div>

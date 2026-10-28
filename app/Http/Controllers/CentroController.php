@@ -37,7 +37,7 @@ class CentroController extends CatalogoBaseController
      * en silencio al editar (o al revés). `medicos` va aparte, por el pivote.
      */
     private const CAMPOS = [
-        'nombre', 'tipo', 'direccion', 'telefono', 'whatsapp', 'email', 'web', 'horarios', 'notas',
+        'nombre', 'tipo', 'direccion', 'telefono', 'whatsapp', 'email', 'email_recetas', 'web', 'horarios', 'notas',
     ];
 
     protected function modelo(): string
@@ -108,6 +108,7 @@ class CentroController extends CatalogoBaseController
             'whatsapp' => $registro->whatsapp,
             'whatsappEnlace' => $registro->enlaceWhatsapp(),
             'email' => $registro->email,
+            'email_recetas' => $registro->email_recetas,
             'web' => $registro->web,
             'horarios' => $registro->horarios,
             'notas' => $registro->notas,

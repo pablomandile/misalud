@@ -135,12 +135,14 @@ const documentoAbierto = ref<DocumentoVisible | null>(null);
             </p>
         </div>
 
-        <div v-else class="grid gap-3 sm:grid-cols-2">
+        <div v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Card v-for="medicamento in registros" :key="medicamento.id">
                 <CardContent class="space-y-3">
-                    <div class="flex items-start justify-between gap-3">
-                        <div class="min-w-0 space-y-1">
-                            <p class="truncate font-medium">
+                    <div
+                        class="flex flex-wrap items-start justify-between gap-3"
+                    >
+                        <div class="min-w-0 grow basis-48 space-y-1">
+                            <p class="font-medium break-words">
                                 {{ medicamento.nombre_comercial }}
                             </p>
                             <p

@@ -136,11 +136,13 @@ function enlaceTelefono(telefono: string): string {
         </div>
 
         <!-- Tarjetas apiladas y no una tabla: a 320px una tabla desborda. -->
-        <div v-else class="grid gap-3 sm:grid-cols-2">
+        <div v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Card v-for="farmacia in registros" :key="farmacia.id">
                 <CardContent class="space-y-3">
-                    <div class="flex items-start justify-between gap-3">
-                        <div class="min-w-0 space-y-1">
+                    <div
+                        class="flex flex-wrap items-start justify-between gap-3"
+                    >
+                        <div class="min-w-0 grow basis-48 space-y-1">
                             <p class="font-medium wrap-break-word">
                                 {{ farmacia.nombre }}
                             </p>

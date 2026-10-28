@@ -79,6 +79,8 @@ type Centro = {
     /** Armado por el servidor (`Centro::enlaceWhatsapp()`), con el 549 delante. */
     whatsappEnlace: string | null;
     email: string | null;
+    /** Opcional: a dónde se mandan recetas, órdenes y estudios. */
+    email_recetas: string | null;
     web: string | null;
     horarios: string | null;
     notas: string | null;
@@ -198,12 +200,14 @@ function estaVinculado(centro: Centro, medicoId: number): boolean {
         </div>
 
         <!-- Tarjetas apiladas y no una tabla: a 320px una tabla desborda. -->
-        <div v-else class="grid gap-3 sm:grid-cols-2">
+        <div v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Card v-for="centro in registros" :key="centro.id">
                 <CardContent class="space-y-3">
-                    <div class="flex items-start justify-between gap-3">
-                        <div class="min-w-0 space-y-1">
-                            <p class="truncate font-medium">
+                    <div
+                        class="flex flex-wrap items-start justify-between gap-3"
+                    >
+                        <div class="min-w-0 grow basis-48 space-y-1">
+                            <p class="font-medium break-words">
                                 {{ centro.nombre }}
                             </p>
                             <p class="text-sm text-muted-foreground">
@@ -226,6 +230,13 @@ function estaVinculado(centro: Centro, medicoId: number): boolean {
                                 class="text-sm text-muted-foreground"
                             >
                                 WhatsApp {{ centro.whatsapp }}
+                            </p>
+                            <p
+                                v-if="centro.email_recetas"
+                                class="text-sm [overflow-wrap:anywhere] text-muted-foreground"
+                            >
+                                Recetas, órdenes y estudios a
+                                {{ centro.email_recetas }}
                             </p>
                             <p
                                 v-if="centro.horarios"
@@ -376,15 +387,21 @@ function estaVinculado(centro: Centro, medicoId: number): boolean {
                         v-if="centro.imagenes.length > 0 || !centro.soloLectura"
                         class="space-y-2 border-t pt-3"
                     >
+                        <!--
+                            Miniaturas, una por fila: el cuadradito a la
+                            izquierda y el nombre al lado, que así tiene lugar
+                            aunque la letra sea muy grande. Tocarla abre la
+                            imagen entera en el visor.
+                        -->
                         <ul
                             v-if="centro.imagenes.length > 0"
-                            class="grid grid-cols-2 gap-2"
+                            class="space-y-2"
                             :aria-label="`Imágenes de ${centro.nombre}`"
                         >
                             <li
                                 v-for="imagen in centro.imagenes"
                                 :key="imagen.id"
-                                class="min-w-0 space-y-1"
+                                class="flex items-start gap-3"
                             >
                                 <!--
                                     object-contain y no cover: un QR recortado
@@ -392,7 +409,7 @@ function estaVinculado(centro: Centro, medicoId: number): boolean {
                                 -->
                                 <button
                                     type="button"
-                                    class="block w-full overflow-hidden rounded-md border bg-muted/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                                    class="size-16 shrink-0 overflow-hidden rounded-md border bg-muted/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
                                     :aria-label="`Ver ${imagen.nombre}`"
                                     @click="verImagen(centro, imagen)"
                                 >
@@ -400,12 +417,17 @@ function estaVinculado(centro: Centro, medicoId: number): boolean {
                                         :src="imagen.url"
                                         alt=""
                                         loading="lazy"
-                                        class="aspect-square w-full object-contain"
+                                        class="size-full object-contain"
                                     />
                                 </button>
-                                <div class="flex items-center gap-1">
+                                <!--
+                                    El nombre y el tacho en una columna: con el
+                                    tacho al costado, a 320 px y letra muy
+                                    grande al nombre le quedaban 50 px.
+                                -->
+                                <div class="min-w-0 flex-1">
                                     <p
-                                        class="min-w-0 flex-1 truncate text-sm text-muted-foreground"
+                                        class="text-sm break-words text-muted-foreground"
                                     >
                                         {{ imagen.titulo ?? 'Imagen' }}
                                     </p>
@@ -628,6 +650,30 @@ function estaVinculado(centro: Centro, medicoId: number): boolean {
                         </div>
 
                         <div class="grid gap-2">
+                            <Label for="email_recetas-crear">
+                                Correo electrónico de recetas
+                            </Label>
+                            <input
+                                id="email_recetas-crear"
+                                name="email_recetas"
+                                type="email"
+                                inputmode="email"
+                                autocomplete="off"
+                                aria-describedby="email_recetas-ayuda-crear"
+                                :class="campoUnaLinea"
+                            />
+                            <p
+                                id="email_recetas-ayuda-crear"
+                                class="text-sm text-muted-foreground"
+                            >
+                                Si el centro recibe recetas, órdenes y estudios
+                                en otro correo. Si lo dejás vacío, se mandan al
+                                de arriba.
+                            </p>
+                            <InputError :message="errors.email_recetas" />
+                        </div>
+
+                        <div class="grid gap-2">
                             <Label for="web-crear">Página web</Label>
                             <input
                                 id="web-crear"
@@ -823,6 +869,31 @@ function estaVinculado(centro: Centro, medicoId: number): boolean {
                                 :class="campoUnaLinea"
                             />
                             <InputError :message="errors.email" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="email_recetas-editar">
+                                Correo electrónico de recetas
+                            </Label>
+                            <input
+                                id="email_recetas-editar"
+                                name="email_recetas"
+                                type="email"
+                                inputmode="email"
+                                autocomplete="off"
+                                aria-describedby="email_recetas-ayuda-editar"
+                                :value="centroAEditar.email_recetas"
+                                :class="campoUnaLinea"
+                            />
+                            <p
+                                id="email_recetas-ayuda-editar"
+                                class="text-sm text-muted-foreground"
+                            >
+                                Si el centro recibe recetas, órdenes y estudios
+                                en otro correo. Si lo dejás vacío, se mandan al
+                                de arriba.
+                            </p>
+                            <InputError :message="errors.email_recetas" />
                         </div>
 
                         <div class="grid gap-2">

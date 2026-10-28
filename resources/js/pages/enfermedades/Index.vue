@@ -213,7 +213,7 @@ function valorDe(punto: Punto, serie: Serie): string {
                 No hay alergias cargadas.
             </p>
 
-            <div v-else class="grid gap-3 sm:grid-cols-2">
+            <div v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Card v-for="alergia in alergias" :key="alergia.id">
                     <CardContent class="flex items-start justify-between gap-3">
                         <div class="min-w-0 space-y-1">

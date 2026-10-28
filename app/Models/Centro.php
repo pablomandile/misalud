@@ -38,6 +38,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $telefono
  * @property string|null $whatsapp
  * @property string|null $email
+ * @property string|null $email_recetas
  * @property string|null $web
  * @property string|null $horarios
  * @property string|null $notas
@@ -69,6 +70,7 @@ class Centro extends Model implements CifraDatos, EsCatalogo, TieneArchivos
         'telefono',
         'whatsapp',
         'email',
+        'email_recetas',
         'web',
         'horarios',
         'notas',
@@ -86,6 +88,7 @@ class Centro extends Model implements CifraDatos, EsCatalogo, TieneArchivos
             'telefono' => 'encrypted',
             'whatsapp' => 'encrypted',
             'email' => 'encrypted',
+            'email_recetas' => 'encrypted',
             'web' => 'encrypted',
             'horarios' => 'encrypted',
             'notas' => 'encrypted',
@@ -105,6 +108,15 @@ class Centro extends Model implements CifraDatos, EsCatalogo, TieneArchivos
     public function medicos(): BelongsToMany
     {
         return $this->belongsToMany(Medico::class, 'centro_medico')->withTimestamps();
+    }
+
+    /**
+     * A dónde se le mandan recetas, órdenes y estudios: el correo de recetas si
+     * lo cargaron, y si no el general. `null` si no tiene ninguno.
+     */
+    public function emailParaEnvios(): ?string
+    {
+        return filled($this->email_recetas) ? $this->email_recetas : (filled($this->email) ? $this->email : null);
     }
 
     /**

@@ -44,7 +44,7 @@ type Credencial = DocumentoVisible & {
 
 type Tarjeta<T> = { total: number; filas: T[] };
 
-defineProps<{
+const props = defineProps<{
     pacientes: Array<{ id: number; nombre: string }>;
     pacienteActivo: { id: number; nombre: string } | null;
     credenciales: Credencial[];
@@ -104,6 +104,21 @@ const nombre = computed(
  * toda la pantalla, y un solo <VisorDocumento> al final del template.
  */
 const documentoAbierto = ref<DocumentoVisible | null>(null);
+
+/*
+ * El botón de una credencial dice de qué cobertura es, no el nombre del archivo
+ * ("IMG_20261023.jpg" no le dice nada a nadie; pedido del usuario). Con frente y
+ * dorso de la misma cobertura, van numeradas para distinguirlas.
+ */
+function rotuloCredencial(credencial: Credencial): string | null {
+    const misma = props.credenciales.filter(
+        (otra) => otra.entidad === credencial.entidad,
+    );
+
+    return misma.length > 1
+        ? `Imagen ${misma.indexOf(credencial) + 1} de ${misma.length}`
+        : null;
+}
 
 function masDe(total: number, mostradas: number): string | null {
     return total > mostradas ? `y ${total - mostradas} más` : null;
@@ -240,9 +255,10 @@ function masDe(total: number, mostradas: number): string | null {
                                 {{ credencial.entidad }}
                             </span>
                             <span
+                                v-if="rotuloCredencial(credencial)"
                                 class="block truncate text-sm text-muted-foreground"
                             >
-                                {{ credencial.nombre }}
+                                {{ rotuloCredencial(credencial) }}
                             </span>
                         </span>
                     </button>

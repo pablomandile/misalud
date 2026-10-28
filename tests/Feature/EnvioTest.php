@@ -9,6 +9,7 @@ use App\Enums\TipoAdjunto;
 use App\Mail\EnvioDeDocumentos;
 use App\Models\Adjunto;
 use App\Models\AplicacionVacuna;
+use App\Models\Centro;
 use App\Models\Cobertura;
 use App\Models\Contacto;
 use App\Models\Envio;
@@ -505,4 +506,58 @@ it('una clave inventada no resuelve a nadie', function (): void {
         ->assertSessionHasErrors('destinatario');
 
     Mail::assertNothingSent();
+});
+
+it('a un centro con correo de recetas se le manda ahí, no al general', function (): void {
+    [, $papel] = ordenConPapel($this->paciente);
+    $centro = Centro::factory()->for($this->usuario, 'usuario')->create([
+        'nombre' => 'Clínica del Sol',
+        'email' => 'info@sol.test',
+        'email_recetas' => 'recetas@sol.test',
+    ]);
+
+    $this->actingAs($this->usuario)
+        ->post(route('envios.store'), [
+            'destinatario' => "centro:{$centro->id}",
+            'adjuntos' => [$papel->id],
+            'asunto' => 'Orden',
+        ])
+        ->assertRedirect(route('contactos.index'));
+
+    Mail::assertSent(EnvioDeDocumentos::class, fn (EnvioDeDocumentos $mail): bool => $mail->hasTo('recetas@sol.test')
+        && ! $mail->hasTo('info@sol.test'));
+    expect(Envio::sole()->destinatario)->toBe('recetas@sol.test');
+});
+
+it('sin correo de recetas, al centro se le manda al general', function (): void {
+    [, $papel] = ordenConPapel($this->paciente);
+    $centro = Centro::factory()->for($this->usuario, 'usuario')->create(['email' => 'info@sol.test', 'email_recetas' => null]);
+
+    $this->actingAs($this->usuario)
+        ->post(route('envios.store'), [
+            'destinatario' => "centro:{$centro->id}",
+            'adjuntos' => [$papel->id],
+            'asunto' => 'Orden',
+        ]);
+
+    Mail::assertSent(EnvioDeDocumentos::class, fn (EnvioDeDocumentos $mail): bool => $mail->hasTo('info@sol.test'));
+});
+
+it('un centro con solo el correo de recetas también es un destinatario', function (): void {
+    [, $papel] = ordenConPapel($this->paciente);
+    Centro::factory()->for($this->usuario, 'usuario')->create([
+        'nombre' => 'Laboratorio Sin General',
+        'email' => null,
+        'email_recetas' => 'recetas@lab.test',
+    ]);
+
+    $this->actingAs($this->usuario)
+        ->get(route('envios.create', ['adjuntos' => [$papel->id]]))
+        ->assertInertia(function ($p) {
+            $centro = collect($p->toArray()['props']['destinatarios'])->firstWhere('nombre', 'Laboratorio Sin General');
+
+            expect($centro['email'])->toBe('recetas@lab.test');
+
+            return $p;
+        });
 });

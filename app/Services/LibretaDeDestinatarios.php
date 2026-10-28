@@ -44,10 +44,12 @@ final class LibretaDeDestinatarios
                 'medico', $m->id, $m->nombre, (string) $m->email, $m->especialidad ? "Médico · {$m->especialidad}" : 'Médico',
             ));
 
+        // Un centro recibe en su correo de recetas si lo tiene, y si no en el
+        // general (`Centro::emailParaEnvios()`).
         $centros = Centro::query()->where(CatalogoDeLaFicha::visiblesConFichas(Centro::class, $usuario))->get()
-            ->filter(fn (Centro $c): bool => filled($c->email))
+            ->filter(fn (Centro $c): bool => $c->emailParaEnvios() !== null)
             ->map(fn (Centro $c): Destinatario => new Destinatario(
-                'centro', $c->id, $c->nombre, (string) $c->email, $c->tipo->etiqueta(),
+                'centro', $c->id, $c->nombre, (string) $c->emailParaEnvios(), $c->tipo->etiqueta(),
             ));
 
         $farmacias = Farmacia::query()->where(CatalogoDeLaFicha::visiblesConFichas(Farmacia::class, $usuario))->get()

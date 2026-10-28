@@ -402,6 +402,16 @@ fuerte (`text-menta-fuerte`), invertidos en modo oscuro.
 - ⚠️ **El margen de todas las pantallas está en `AppSidebarLayout`.** Lo daba el contenedor del
   panel del starter kit y se fue con él en la Etapa 4: desde ahí todo quedaba pegado al borde,
   en el celular con el texto contra el canto. Ninguna página pone su propio margen exterior.
+- ⚠️ **Una grilla de tarjetas lleva `grid-cols-1` en el celular, no `grid` a secas.** Sin columnas
+  declaradas, la columna implícita crece hasta el ancho mínimo de su contenido, y un título con
+  `truncate` (una sola línea) tiene de mínimo **el título entero**: a 320 px la tarjeta de un centro
+  medía más que la pantalla y se perdían «Editar» y «Eliminar». El contenedor de la página lo
+  recortaba sin dar scroll, así que `revisar:mobile` daba verde. `grid-cols-1` es
+  `minmax(0, 1fr)` y fija la columna al ancho disponible. Lo reportó el usuario en producción.
+- **En las tarjetas de catálogo el nombre se lee entero y los botones bajan** cuando no hay lugar:
+  el encabezado es `flex-wrap` y el texto `grow basis-48` (12rem, crece con la letra). Con
+  `truncate` y los botones siempre al costado, a letra muy grande el nombre quedaba en 80 px y se
+  partía en cualquier letra.
 
 Pendiente: llevar los tonos y los encabezados con ícono a cada pantalla de la ficha.
 
@@ -2541,12 +2551,19 @@ van como **botones con texto** (WhatsApp, Correo, Web), no como datos para copia
   ningún formulario pedía), con la misma limpieza y los mismos botones.
 - La tarjeta de un médico dice **«Atiende en …»** con los nombres de sus centros (pivote
   `centro_medico`), solo los que la persona ve.
+- **Correo de recetas** (`centros.email_recetas`, cifrado, opcional; pedido del usuario): a dónde
+  quiere el centro que le manden recetas, órdenes y estudios. Si está vacío, los envíos van al
+  correo general. La regla vive en un solo lugar, `Centro::emailParaEnvios()`, y la usa
+  `LibretaDeDestinatarios`, así que vale para todo lo que sale hacia un centro: el envío de
+  documentos y también el pedido de medicamentos. Un centro con solo el correo de recetas también
+  es un destinatario. El botón «Correo» de la tarjeta sigue abriendo el general.
 - **Imágenes del centro** (pedido del usuario): el frente del edificio, el QR de WhatsApp. `Centro`
   es el segundo catálogo dueño de archivos, después del prospecto, con `TipoAdjunto::ImagenCentro`
   y `centros.adjuntos.store`. No tocó la autorización: subir, girar o borrar una imagen es editar el
   centro, así que puede el dueño y el cuidador de una ficha suya, y una semilla no admite imágenes.
-  En la tarjeta van como miniaturas con su nombre (`titulo`, opcional) y **`object-contain`**: un
-  QR recortado no se escanea. Se suben desde un panel y no con un formulario en cada tarjeta.
+  En la tarjeta van como **miniaturas chicas (4rem), una por fila**, con el nombre (`titulo`,
+  opcional) y el tacho en una columna al lado (pedido del usuario: antes ocupaban media tarjeta), y
+  **`object-contain`**: un QR recortado no se escanea. La imagen entera se ve en el visor. Se suben desde un panel y no con un formulario en cada tarjeta.
   Borrar el centro se las lleva del disco; copiarlo no las copia (`replicate()` no copia
   relaciones). Van en «Descargar mis datos», en `catalogo/centros/<id>`.
 

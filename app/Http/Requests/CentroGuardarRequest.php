@@ -36,6 +36,12 @@ class CentroGuardarRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->normalizarDatosDeContacto();
+
+        // Como el general: sin espacios y en minúsculas.
+        $emailRecetas = $this->input('email_recetas');
+        $this->merge([
+            'email_recetas' => is_string($emailRecetas) ? (mb_strtolower(trim($emailRecetas)) ?: null) : $emailRecetas,
+        ]);
     }
 
     /**
@@ -57,6 +63,7 @@ class CentroGuardarRequest extends FormRequest
             ],
             'tipo' => ['required', Rule::enum(TipoCentro::class)],
             ...$this->reglasDeContacto(),
+            'email_recetas' => ['nullable', 'string', 'email', 'max:255'],
             'notas' => ['nullable', 'string', 'max:2000'],
 
             'medicos' => ['nullable', 'array'],
@@ -91,6 +98,7 @@ class CentroGuardarRequest extends FormRequest
             'nombre' => 'nombre',
             'tipo' => 'tipo de centro',
             ...$this->atributosDeContacto(),
+            'email_recetas' => 'correo de recetas',
             'notas' => 'notas',
             'medicos' => 'médicos',
         ];

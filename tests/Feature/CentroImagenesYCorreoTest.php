@@ -9,6 +9,7 @@ use App\Models\Paciente;
 use App\Models\User;
 use App\Services\ArchivoService;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 /*
@@ -130,4 +131,27 @@ it('copiar un centro no se lleva sus imágenes', function (): void {
 
     $copia = Centro::where('usuario_id', $cuidador->id)->sole();
     expect($copia->adjuntos()->count())->toBe(0);
+});
+
+it('guarda el correo de recetas cifrado y en minúsculas, y acepta dejarlo vacío', function (): void {
+    $usuario = User::factory()->create();
+    $centro = Centro::factory()->for($usuario, 'usuario')->create();
+    $datos = ['nombre' => $centro->nombre, 'tipo' => $centro->tipo->value];
+
+    $this->actingAs($usuario)
+        ->put(route('centros.update', $centro), [...$datos, 'email_recetas' => '  Recetas@Clinica.TEST '])
+        ->assertSessionHasNoErrors();
+
+    expect($centro->fresh()->email_recetas)->toBe('recetas@clinica.test')
+        ->and(DB::table('centros')->where('id', $centro->id)->value('email_recetas'))->not->toContain('recetas@');
+
+    $this->actingAs($usuario)
+        ->put(route('centros.update', $centro), [...$datos, 'email_recetas' => 'no es un correo'])
+        ->assertSessionHasErrors('email_recetas');
+
+    $this->actingAs($usuario)
+        ->put(route('centros.update', $centro), [...$datos, 'email_recetas' => ''])
+        ->assertSessionHasNoErrors();
+
+    expect($centro->fresh()->email_recetas)->toBeNull();
 });

@@ -90,7 +90,7 @@ function pesoLegible(bytes: number): string {
             </p>
         </div>
 
-        <ul v-else class="grid gap-3 sm:grid-cols-2">
+        <ul v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <li v-for="documento in documentos" :key="documento.id">
                 <Card class="h-full py-0">
                     <CardContent class="flex h-full flex-col gap-2 p-3">

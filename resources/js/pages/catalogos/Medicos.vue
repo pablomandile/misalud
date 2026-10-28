@@ -120,11 +120,15 @@ const medicoABorrar = ref<Medico | null>(null);
         </div>
 
         <!-- Tarjetas apiladas y no una tabla: a 320px una tabla desborda. -->
-        <div v-else class="grid gap-3 sm:grid-cols-2">
+        <div v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Card v-for="medico in registros" :key="medico.id">
-                <CardContent class="flex items-start justify-between gap-3">
-                    <div class="min-w-0 space-y-1">
-                        <p class="truncate font-medium">{{ medico.nombre }}</p>
+                <CardContent
+                    class="flex flex-wrap items-start justify-between gap-3"
+                >
+                    <div class="min-w-0 grow basis-48 space-y-1">
+                        <p class="font-medium break-words">
+                            {{ medico.nombre }}
+                        </p>
                         <p
                             v-if="medico.especialidad"
                             class="text-sm text-muted-foreground"

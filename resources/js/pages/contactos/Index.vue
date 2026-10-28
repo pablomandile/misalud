@@ -150,7 +150,7 @@ function enlaceTelefono(telefono: string): string {
             </p>
         </div>
 
-        <div v-else class="grid gap-3 sm:grid-cols-2">
+        <div v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Card v-for="contacto in contactos" :key="contacto.id">
                 <CardContent class="space-y-3">
                     <div class="min-w-0 space-y-1">
@@ -199,7 +199,7 @@ function enlaceTelefono(telefono: string): string {
             <div v-for="grupo in grupos" :key="grupo.titulo" class="space-y-3">
                 <p class="text-sm text-muted-foreground">{{ grupo.titulo }}</p>
 
-                <div class="grid gap-3 sm:grid-cols-2">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <Card v-for="fila in grupo.filas" :key="fila.clave">
                         <CardContent class="space-y-3">
                             <div class="min-w-0 space-y-1">
