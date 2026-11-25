@@ -17,10 +17,10 @@ import type {
 /*
  * Pedido de medicamentos, en dos solapas que no se tocan entre sí:
  *
+ * - «Procedimiento», la primera y la de por defecto: las etapas que hay que
+ *   cumplir cada vez que se pide un medicamento, y el seguimiento de cada pedido.
  * - «Mensajes»: el mail que le pide los medicamentos al médico, un centro o la
  *   farmacia, con un mensaje por medicamento.
- * - «Procedimiento»: las etapas que hay que cumplir cada vez que se pide un
- *   medicamento, y el seguimiento de cada pedido.
  *
  * La solapa viaja en la URL (`?solapa=`), así una recarga vuelve a la misma.
  * «Mensajes» se oculta con `v-show` y no se desmonta: el pedido a medio armar
@@ -55,8 +55,8 @@ const enlaceSolapa = (solapa: 'mensajes' | 'procedimiento') =>
     });
 
 const solapas = [
-    { valor: 'mensajes', titulo: 'Mensajes', icono: Mail },
     { valor: 'procedimiento', titulo: 'Procedimiento', icono: ListChecks },
+    { valor: 'mensajes', titulo: 'Mensajes', icono: Mail },
 ] as const;
 
 const clase = (activa: boolean) =>

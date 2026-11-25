@@ -372,11 +372,22 @@ it('la solapa procedimiento elige por defecto el primer medicamento activo y man
             ->where('procedimiento.etapas.0.nombre', 'Pedir la receta'));
 });
 
+it('sin elegir solapa abre Procedimiento', function (): void {
+    [$usuario, $paciente, $tratamiento] = fichaConProcedimiento();
+
+    $this->actingAs($usuario)
+        ->get(route('pedidos.index', ['paciente' => $paciente->id]))
+        ->assertInertia(fn (Assert $pagina) => $pagina
+            ->where('solapa', 'procedimiento')
+            ->where('medicamentoElegido', $tratamiento->id)
+            ->has('procedimiento.etapas', 3));
+});
+
 it('la solapa de mensajes no arma el procedimiento', function (): void {
     [$usuario, $paciente] = fichaConProcedimiento();
 
     $this->actingAs($usuario)
-        ->get(route('pedidos.index', ['paciente' => $paciente->id]))
+        ->get(route('pedidos.index', ['paciente' => $paciente->id, 'solapa' => 'mensajes']))
         ->assertInertia(fn (Assert $pagina) => $pagina
             ->where('solapa', 'mensajes')
             ->where('procedimiento', null));

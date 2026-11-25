@@ -77,7 +77,7 @@ const RUTAS = [
     '/contactos',
     '/claves',
     '/pedido-de-medicamentos',
-    '/pedido-de-medicamentos?solapa=procedimiento',
+    '/pedido-de-medicamentos?solapa=mensajes',
     '/settings/appearance',
 ];
 

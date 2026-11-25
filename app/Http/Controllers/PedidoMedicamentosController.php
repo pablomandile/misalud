@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\EstadoEnvio;
 use App\Http\Requests\PedidoMedicamentosGuardarRequest;
+use App\Http\Requests\PlantillaPedidoGuardarRequest;
 use App\Models\Paciente;
 use App\Models\Tratamiento;
 use App\Models\User;
@@ -28,8 +29,8 @@ use Inertia\Response;
  */
 class PedidoMedicamentosController extends Controller
 {
-    /** Las dos solapas de la pantalla: el mail y el seguimiento de cada pedido. */
-    public const SOLAPAS = ['mensajes', 'procedimiento'];
+    /** Las dos solapas, en orden: el seguimiento de cada pedido (la de por defecto) y el mail. */
+    public const SOLAPAS = ['procedimiento', 'mensajes'];
 
     public function index(Request $peticion, LibretaDeDestinatarios $libreta, SeguimientoDePedido $seguimiento): Response
     {
@@ -37,7 +38,7 @@ class PedidoMedicamentosController extends Controller
         assert($usuario instanceof User);
 
         $paciente = $this->pacienteElegido($peticion, $usuario);
-        $solapa = in_array($peticion->query('solapa'), self::SOLAPAS, true) ? (string) $peticion->query('solapa') : 'mensajes';
+        $solapa = in_array($peticion->query('solapa'), self::SOLAPAS, true) ? (string) $peticion->query('solapa') : self::SOLAPAS[0];
 
         $tratamientos = $paciente === null ? collect() : $paciente->tratamientos()
             ->with('medicamento')
@@ -129,6 +130,21 @@ class PedidoMedicamentosController extends Controller
         return $envio->estado === EstadoEnvio::Enviado
             ? back()->with('exito', "Se mandó el pedido a {$destinatario->nombre}.")
             : back()->with('error', 'No se pudo mandar el pedido. Quedó anotado en el historial de Contactos: probá de nuevo en un rato.');
+    }
+
+    /**
+     * Guarda el mensaje como plantilla de ese medicamento, sin mandar nada: vuelve
+     * precargado la próxima vez que se lo suma a un pedido.
+     */
+    public function guardarPlantilla(PlantillaPedidoGuardarRequest $peticion, Tratamiento $tratamiento): RedirectResponse
+    {
+        Gate::authorize('update', $tratamiento);
+
+        // No es fillable: lo escriben solo el pedido y esta acción.
+        $tratamiento->setAttribute('plantilla_pedido', trim((string) $peticion->validated('mensaje')));
+        $tratamiento->save();
+
+        return back()->with('exito', "Se guardó el mensaje de {$tratamiento->medicamento->nombre_comercial}.");
     }
 
     private function plantillaDe(Tratamiento $tratamiento, Paciente $paciente): string

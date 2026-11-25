@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Form, Link, usePage } from '@inertiajs/vue3';
-import { ClipboardPen, Send, X } from '@lucide/vue';
+import { Form, Link, router, usePage } from '@inertiajs/vue3';
+import { ClipboardPen, Save, Send, X } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
 import CentroController from '@/actions/App/Http/Controllers/CentroController';
 import FarmaciaController from '@/actions/App/Http/Controllers/FarmaciaController';
@@ -70,6 +70,39 @@ watch(aSumar, (valor) => {
 
 function sacar(id: number): void {
     renglones.value = renglones.value.filter((r) => r.id !== id);
+}
+
+/*
+ * «Guardar plantilla»: el mensaje queda como el de por defecto de ese
+ * medicamento, sin mandar nada. Va por su propia ruta y no por el formulario del
+ * pedido (un formulario no puede ir dentro de otro). `preserveState` deja la
+ * lista armada como estaba; el error, si lo hay, va al lado del campo.
+ */
+const guardando = ref<number | null>(null);
+const erroresPlantilla = ref<Record<number, string>>({});
+
+function guardarPlantilla(renglon: Renglon): void {
+    guardando.value = renglon.id;
+    erroresPlantilla.value = { ...erroresPlantilla.value, [renglon.id]: '' };
+
+    router.put(
+        PedidoMedicamentosController.guardarPlantilla.url(renglon.id),
+        { mensaje: renglon.mensaje },
+        {
+            preserveScroll: true,
+            preserveState: true,
+            onError: (errores) => {
+                erroresPlantilla.value = {
+                    ...erroresPlantilla.value,
+                    [renglon.id]:
+                        errores.mensaje ?? 'No se pudo guardar el mensaje.',
+                };
+            },
+            onFinish: () => {
+                guardando.value = null;
+            },
+        },
+    );
 }
 
 const remitente = computed(
@@ -190,10 +223,26 @@ function alMandar(): void {
                         />
                         <InputError
                             :message="
-                                errors[`pedidos.${i}.mensaje`] ??
+                                erroresPlantilla[renglon.id] ||
+                                errors[`pedidos.${i}.mensaje`] ||
                                 errors[`pedidos.${i}.tratamiento_id`]
                             "
                         />
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            class="justify-self-start"
+                            :disabled="guardando === renglon.id"
+                            @click="guardarPlantilla(renglon)"
+                        >
+                            <Save />
+                            {{
+                                guardando === renglon.id
+                                    ? 'Guardando…'
+                                    : 'Guardar plantilla'
+                            }}
+                        </Button>
                     </div>
                 </li>
             </ul>
@@ -201,7 +250,8 @@ function alMandar(): void {
                 v-if="renglones.length > 0"
                 class="text-sm text-muted-foreground"
             >
-                El mensaje de cada medicamento se guarda para el próximo pedido.
+                «Guardar plantilla» deja ese mensaje como el de siempre para ese
+                medicamento. Al mandar el pedido también se guarda.
             </p>
         </section>
 

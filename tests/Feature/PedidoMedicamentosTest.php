@@ -188,3 +188,47 @@ it('si el mail falla, lo anota como fallido y avisa', function (): void {
 
     expect(Envio::sole()->estado)->toBe(EstadoEnvio::Fallido);
 });
+
+it('«Guardar plantilla» deja el mensaje cifrado como el de por defecto, sin mandar nada', function (): void {
+    Mail::fake();
+    [$usuario, $paciente, $tratamiento] = fichaParaPedido();
+
+    $this->actingAs($usuario)
+        ->put(route('pedidos.plantilla', $tratamiento), ['mensaje' => '  Dos cajas de 30, como siempre.  '])
+        ->assertSessionHasNoErrors()
+        ->assertSessionHas('exito', 'Se guardó el mensaje de Losartán.');
+
+    expect($tratamiento->fresh()?->plantilla_pedido)->toBe('Dos cajas de 30, como siempre.')
+        ->and(DB::table('tratamientos')->where('id', $tratamiento->id)->value('plantilla_pedido'))->not->toContain('cajas')
+        ->and(Envio::count())->toBe(0);
+    Mail::assertNothingSent();
+
+    $this->actingAs($usuario)
+        ->get(route('pedidos.index', ['paciente' => $paciente->id]))
+        ->assertInertia(fn (Assert $pagina) => $pagina
+            ->where('medicamentos.0.plantilla', 'Dos cajas de 30, como siempre.'));
+});
+
+it('«Guardar plantilla» pide el mensaje', function (): void {
+    [$usuario, , $tratamiento] = fichaParaPedido();
+
+    $this->actingAs($usuario)
+        ->put(route('pedidos.plantilla', $tratamiento), ['mensaje' => '   '])
+        ->assertSessionHasErrors(['mensaje' => 'Escribí el mensaje que querés guardar.']);
+
+    expect($tratamiento->fresh()?->plantilla_pedido)->toBeNull();
+});
+
+it('un lector y un extraño no guardan la plantilla de un medicamento', function (): void {
+    [, $paciente, $tratamiento] = fichaParaPedido();
+    $lector = User::factory()->create();
+    $paciente->cuidadores()->attach($lector, ['rol' => RolPaciente::Lector->value]);
+
+    foreach ([$lector, User::factory()->create()] as $quien) {
+        $this->actingAs($quien)
+            ->put(route('pedidos.plantilla', $tratamiento), ['mensaje' => 'Otra cosa'])
+            ->assertForbidden();
+    }
+
+    expect($tratamiento->fresh()?->plantilla_pedido)->toBeNull();
+});

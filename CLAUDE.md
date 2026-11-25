@@ -2399,15 +2399,21 @@ y se manda **por mail**. Abre la ficha principal y tiene `SelectorDeFicha`.
   el mail va renglón por renglón: «- Losartán · 50 mg» y abajo su mensaje. La pantalla muestra la
   vista previa. La plantilla general que tuvo la ficha un día (`pacientes.plantilla_pedido`) se
   borró sin copiarla: decía «estos medicamentos» y no servía para uno solo.
+- **«Guardar plantilla»** (pedido del usuario) guarda ese mensaje sin mandar nada, por su propia ruta
+  (`PUT tratamientos/{tratamiento}/plantilla-pedido`, `pedidos.plantilla`, pide `update` del
+  medicamento) y no por el formulario del pedido: un formulario no va dentro de otro. Va con
+  `router.put` y `preserveState`, así la lista armada sigue igual, y su error se muestra al lado del
+  campo. No pasa por `ProtegerDemo`: no sale ningún mail.
 - **Pide `update` sobre la ficha**, no `view` como un envío de documentos: mandar escribe la
   plantilla. Un lector ve el aviso. Los medicamentos tienen que ser de esa ficha.
 
 #### Las dos solapas: Mensajes y Procedimiento
 
-La pantalla tiene dos solapas (`?solapa=`, pedido del usuario): **Mensajes** es el mail de arriba, y
-**Procedimiento** son las etapas que hay que cumplir cada vez que se pide un medicamento (la receta,
-la autorización de la obra social, la farmacia), con el seguimiento de cada pedido. **No se tocan**:
-mandar el mail no avanza ninguna etapa (decisión del usuario).
+La pantalla tiene dos solapas (`?solapa=`, pedido del usuario). **Procedimiento** va primera y es la
+que abre sin elegir nada (`SOLAPAS[0]`, decisión del usuario): las etapas que hay que cumplir cada
+vez que se pide un medicamento (la receta, la autorización de la obra social, la farmacia), con el
+seguimiento de cada pedido. **Mensajes** es el mail de arriba. **No se tocan**: mandar el mail no
+avanza ninguna etapa (decisión del usuario).
 
 | Tabla                   | Qué es                                                                       |
 | ----------------------- | ---------------------------------------------------------------------------- |

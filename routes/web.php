@@ -473,6 +473,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('throttle:10,1')
         ->name('pedidos.store');
 
+    // El mensaje por defecto de un medicamento, guardado sin mandar el pedido.
+    Route::put('tratamientos/{tratamiento}/plantilla-pedido', [PedidoMedicamentosController::class, 'guardarPlantilla'])
+        ->name('pedidos.plantilla');
+
     // El procedimiento de pedido de cada medicamento de la ficha: sus etapas y el seguimiento.
     Route::put('tratamientos/{tratamiento}/procedimiento', [ProcedimientoController::class, 'update'])
         ->name('procedimiento.update');
