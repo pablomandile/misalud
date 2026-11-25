@@ -186,6 +186,26 @@ class Tratamiento extends Model implements CifraDatos, PerteneceAPaciente, Tiene
     }
 
     /**
+     * Las etapas del procedimiento para pedirlo, en orden.
+     *
+     * @return HasMany<EtapaProcedimiento, $this>
+     */
+    public function etapasProcedimiento(): HasMany
+    {
+        return $this->hasMany(EtapaProcedimiento::class)->orderBy('orden')->orderBy('id');
+    }
+
+    /**
+     * Cada vuelta del procedimiento: la que está en curso y el historial.
+     *
+     * @return HasMany<PedidoProcedimiento, $this>
+     */
+    public function pedidosProcedimiento(): HasMany
+    {
+        return $this->hasMany(PedidoProcedimiento::class);
+    }
+
+    /**
      * Cómo se lee la toma: la etiqueta de la periodicidad, o los días cuando
      * es "algunos días de la semana".
      */

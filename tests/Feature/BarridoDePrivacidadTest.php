@@ -21,6 +21,7 @@ use App\Models\Medicion;
 use App\Models\Medico;
 use App\Models\OrdenEstudio;
 use App\Models\Paciente;
+use App\Models\PedidoProcedimiento;
 use App\Models\PrescripcionOcular;
 use App\Models\Receta;
 use App\Models\RecetaMedica;
@@ -122,6 +123,7 @@ function fichaParaBarrer(User $duenio, User $cuidador): array
             'vacuna_id' => Vacuna::factory()->for($duenio, 'usuario')->create()->id,
         ]),
         'aplicacionMedicamento' => AplicacionMedicamento::factory()->for($paciente)->create(),
+        'pedidoProcedimiento' => PedidoProcedimiento::factory()->for(Tratamiento::factory()->for($paciente))->completado()->create(),
         'turno' => $turno,
         'recordatorio' => $turno->recordatorios()->sole(),
         'adjunto' => $credencial,
@@ -145,7 +147,7 @@ function parametrosDeLaFicha(): array
 {
     return [
         'paciente', 'cobertura', 'enfermedad', 'registro', 'alergia', 'clave', 'medicion',
-        'tratamiento', 'orden', 'recetaMedica', 'documento', 'estudio', 'resultado', 'prescripcion', 'aplicacion', 'aplicacionMedicamento', 'consulta', 'turno',
+        'tratamiento', 'orden', 'recetaMedica', 'documento', 'estudio', 'resultado', 'prescripcion', 'aplicacion', 'aplicacionMedicamento', 'pedidoProcedimiento', 'consulta', 'turno',
         'recordatorio', 'adjunto', 'usuario',
     ];
 }

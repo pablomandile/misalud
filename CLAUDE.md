@@ -2402,6 +2402,43 @@ y se manda **por mail**. Abre la ficha principal y tiene `SelectorDeFicha`.
 - **Pide `update` sobre la ficha**, no `view` como un envío de documentos: mandar escribe la
   plantilla. Un lector ve el aviso. Los medicamentos tienen que ser de esa ficha.
 
+#### Las dos solapas: Mensajes y Procedimiento
+
+La pantalla tiene dos solapas (`?solapa=`, pedido del usuario): **Mensajes** es el mail de arriba, y
+**Procedimiento** son las etapas que hay que cumplir cada vez que se pide un medicamento (la receta,
+la autorización de la obra social, la farmacia), con el seguimiento de cada pedido. **No se tocan**:
+mandar el mail no avanza ninguna etapa (decisión del usuario).
+
+| Tabla                   | Qué es                                                                       |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| `etapas_procedimiento`  | La definición: nombre (cifrado) y orden. Sin papelera                        |
+| `pedidos_procedimiento` | Cada vuelta: `iniciado_el` y `completado_el` (NULL = en curso), en claro     |
+| `pasos_pedido`          | El avance de cada etapa: completada, fecha de fin y observaciones (cifradas) |
+
+- **Cuelga del medicamento de la ficha** (`tratamientos`), no del catálogo: el Losartán de dos
+  familiares tiene obra social y farmacia distintas. Las tres tablas van en cascada desde
+  `tratamientos`, así vaciar la papelera y eliminar la cuenta no se traban.
+- **`SeguimientoDePedido` es el único que crea pedidos**, y por eso hay como mucho uno en curso por
+  medicamento. El pedido en curso sigue a las etapas de hoy: una etapa sumada a mitad aparece sin
+  tildar, una que se sacó deja de figurar.
+- **Con todas las etapas tildadas, el pedido se cierra solo** al guardar y pasa al historial con la
+  fecha de fin más tardía. El formulario vuelve en blanco para el próximo (decisión del usuario).
+  «Volver a abrir» es la red para un tilde de más: solo el último y solo si no hay otro en curso.
+- **Cada paso lleva una foto del nombre de su etapa**, como un envío la de su dirección: renombrar o
+  sacar una etapa no reescribe el historial (`etapa_procedimiento_id` es `nullOnDelete`).
+- **Al tildar aparece «Terminó el»**, con la fecha de hoy que manda el servidor (`hoy`). Es un campo
+  propio y no texto adentro de las observaciones: así se valida (no futura, no antes del inicio) y
+  ordena el historial. Sin tildar, el request la descarta aunque llegue.
+- Las observaciones van en el **seguimiento**, no en la definición: son lo que pasó esa vez.
+- ⚠️ **`AvanceDelPedido` copia las props a su estado UNA vez**, y quien lo usa le pone un `:key` con
+  el medicamento, el pedido en curso y los ids de las etapas. Sin eso, al cerrarse el pedido el
+  formulario seguiría mostrando todo tildado (la lección del `const` de la Etapa 8). Todo con
+  `v-model` (regla de la Etapa 10).
+- La solapa Mensajes va con `v-show`: el pedido a medio armar sobrevive a pasar por la otra solapa.
+- El medicamento elegido viaja en `?medicamento=`, y el servidor manda solo el procedimiento de ese;
+  uno de otra ficha da 404. Las etapas se editan en un sheet, con «Subir» y «Bajar» en vez de
+  arrastrar.
+
 ## Compartir la ficha
 
 Un propietario invita a otra persona a ver (`Lector`) o a cargar datos (`Cuidador`) en una
@@ -3202,6 +3239,11 @@ tres tamaños de letra, y lo cuida `npm run revisar:mobile`. El chequeo mide el 
 con el área expandida por un pseudo-elemento se toca bien y su caja igual mide 16,
 así que medir cajas daría por malo lo que está bien y —peor— por bueno lo que un
 `class` de más dejó tapado.
+
+⚠️ **`elementFromPoint` no ve nada fuera de la ventana**, y el script medía sin hacer scroll: un
+control debajo del borde se medía solo por su caja. Un botón pasaba igual (su caja ya mide 44); un
+checkbox daba falla sin estar mal. Apareció con las casillas de las etapas del pedido, que son las
+primeras en quedar debajo del borde. Ahora cada control se centra antes de medirlo.
 
 Nota pendiente: `ProfileController::update` usa `Inertia::flash('toast', ...)`, un
 mecanismo de Inertia que no está conectado a nuestro sistema de toasts (que mira

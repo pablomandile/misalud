@@ -76,6 +76,8 @@ const RUTAS = [
     '/casilla',
     '/contactos',
     '/claves',
+    '/pedido-de-medicamentos',
+    '/pedido-de-medicamentos?solapa=procedimiento',
     '/settings/appearance',
 ];
 
@@ -415,10 +417,31 @@ async function revisarAreasTactiles(rutas, etiqueta, conSesion) {
                     ),
                 ]
                     .map((el) => {
-                        const caja = el.getBoundingClientRect();
+                        let caja = el.getBoundingClientRect();
 
                         if (!visible(el, caja)) {
                             return null;
+                        }
+
+                        /*
+                         * ⚠️ `elementFromPoint` no ve nada fuera de la ventana:
+                         * un control debajo del borde se medía solo por su caja.
+                         * Un botón pasaba igual (su caja ya mide 44), pero un
+                         * checkbox, con 18 px de caja y el área en un
+                         * pseudo-elemento, daba falla sin estar mal. Se lo centra
+                         * antes de medir, también si apenas asoma: lo que cuenta
+                         * es que entren los 44 px alrededor de su centro.
+                         */
+                        const centro = caja.top + caja.height / 2;
+                        if (
+                            centro - MINIMO / 2 - 4 < 0 ||
+                            centro + MINIMO / 2 + 4 > innerHeight
+                        ) {
+                            el.scrollIntoView({
+                                block: 'center',
+                                behavior: 'instant',
+                            });
+                            caja = el.getBoundingClientRect();
                         }
 
                         // Enlace en línea dentro de un texto: exento.

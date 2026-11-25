@@ -27,6 +27,7 @@ use App\Models\Medicamento;
 use App\Models\Medico;
 use App\Models\Paciente;
 use App\Models\TipoMedicion;
+use App\Models\Tratamiento;
 use App\Models\User;
 use App\Models\Vacuna;
 use App\Services\ArchivoService;
@@ -381,6 +382,7 @@ class DemoSeeder extends Seeder
         $losartan->forceFill([
             'plantilla_pedido' => 'Hola, ¿me podrías hacer la receta de Losartán 50 mg para Roberto? Son dos cajas por mes. Gracias.',
         ])->save();
+        $this->procedimientoDePedido($losartan);
 
         $roberto->tratamientos()->create([
             'medicamento_id' => $this->semilla(Medicamento::class, 'Atorvastatina')->id,
@@ -805,6 +807,42 @@ class DemoSeeder extends Seeder
                 'valor' => $v[0],
                 'valor_secundario' => $v[1] ?? null,
             ]);
+        }
+    }
+
+    /**
+     * El procedimiento para pedir el Losartán: tres etapas, un pedido del mes
+     * pasado ya en el historial y el de este mes a medio hacer.
+     */
+    private function procedimientoDePedido(Tratamiento $tratamiento): void
+    {
+        $etapas = collect(['Pedir la receta a la cardióloga', 'Autorizar en la obra social', 'Retirar en la farmacia'])
+            ->map(fn (string $nombre, int $orden) => $tratamiento->etapasProcedimiento()->create(['orden' => $orden, 'nombre' => $nombre]));
+
+        $pedidos = [
+            // [inicio, fin de cada etapa (null = sin terminar), observaciones]
+            [34, [33, 30, 29], ['La pidió por el portal.', 'Tardaron tres días en autorizar.', null]],
+            [4, [3, null, null], ['Llegó por mail al día siguiente.', 'Llamé al 0800: dicen que en 48 horas.', null]],
+        ];
+
+        foreach ($pedidos as [$inicio, $fines, $observaciones]) {
+            $completo = ! in_array(null, $fines, true);
+            $pedido = $tratamiento->pedidosProcedimiento()->create([
+                'iniciado_el' => $this->dia($inicio),
+                'completado_el' => $completo ? $this->dia(min($fines)) : null,
+            ]);
+
+            foreach ($etapas as $orden => $etapa) {
+                $paso = $pedido->pasos()->make([
+                    'orden' => $orden,
+                    'nombre' => $etapa->nombre,
+                    'completada' => $fines[$orden] !== null,
+                    'completada_el' => $fines[$orden] === null ? null : $this->dia($fines[$orden]),
+                    'observaciones' => $observaciones[$orden],
+                ]);
+                $paso->setAttribute('etapa_procedimiento_id', $etapa->id);
+                $paso->save();
+            }
         }
     }
 

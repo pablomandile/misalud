@@ -5,6 +5,7 @@ use App\Http\Controllers\AlergiaController;
 use App\Http\Controllers\AplicacionMedicamentoController;
 use App\Http\Controllers\AplicacionVacunaController;
 use App\Http\Controllers\Auth\GoogleController;
+use App\Http\Controllers\AvanceDePedidoController;
 use App\Http\Controllers\CasillaController;
 use App\Http\Controllers\CentroController;
 use App\Http\Controllers\ClaveController;
@@ -30,6 +31,7 @@ use App\Http\Controllers\PacienteActivoController;
 use App\Http\Controllers\PacienteController;
 use App\Http\Controllers\PedidoMedicamentosController;
 use App\Http\Controllers\PrescripcionOcularController;
+use App\Http\Controllers\ProcedimientoController;
 use App\Http\Controllers\RecetaController;
 use App\Http\Controllers\RecetaMedicaController;
 use App\Http\Controllers\RecordatorioController;
@@ -470,6 +472,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('pedido-de-medicamentos', [PedidoMedicamentosController::class, 'store'])
         ->middleware('throttle:10,1')
         ->name('pedidos.store');
+
+    // El procedimiento de pedido de cada medicamento de la ficha: sus etapas y el seguimiento.
+    Route::put('tratamientos/{tratamiento}/procedimiento', [ProcedimientoController::class, 'update'])
+        ->name('procedimiento.update');
+    Route::put('tratamientos/{tratamiento}/pedido-en-curso', [AvanceDePedidoController::class, 'update'])
+        ->name('pedido-en-curso.update');
+    Route::put('pedidos-procedimiento/{pedidoProcedimiento}/reabrir', [AvanceDePedidoController::class, 'reabrir'])
+        ->name('pedidos-procedimiento.reabrir');
 
     Route::get('pacientes', [PacienteController::class, 'index'])->name('pacientes.index');
     Route::post('pacientes', [PacienteController::class, 'store'])->name('pacientes.store');

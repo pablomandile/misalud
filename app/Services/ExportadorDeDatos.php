@@ -52,7 +52,8 @@ final class ExportadorDeDatos
         'alergias' => [],
         'enfermedades' => ['registros'],
         'mediciones' => [],
-        'tratamientos' => [],
+        // El procedimiento de pedido de cada medicamento, y cada pedido con sus pasos.
+        'tratamientos' => ['etapasProcedimiento', 'pedidosProcedimiento.pasos'],
         'aplicacionesVacuna' => [],
         'aplicacionesMedicamento' => [],
         'ordenesEstudio' => [],
@@ -157,9 +158,15 @@ final class ExportadorDeDatos
                 $fila = $this->fila($registro);
 
                 foreach ($hijas as $hija) {
+                    [$relacionHija, $nieta] = array_pad(explode('.', $hija, 2), 2, null);
                     /** @var Collection<int, Model> $hijos */
-                    $hijos = $registro->load($hija)->getRelation($hija);
-                    $fila[$hija] = $this->filas($hijos);
+                    $hijos = $registro->load($hija)->getRelation($relacionHija);
+                    $fila[$relacionHija] = $nieta === null
+                        ? $this->filas($hijos)
+                        : array_values($hijos->map(fn (Model $hijo): array => [
+                            ...$this->fila($hijo),
+                            $nieta => $this->filas($hijo->getRelation($nieta)),
+                        ])->all());
                 }
 
                 if ($registro instanceof TieneArchivos) {

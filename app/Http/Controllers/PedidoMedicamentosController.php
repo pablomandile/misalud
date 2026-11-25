@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\EnviadorDeDocumentos;
 use App\Services\LibretaDeDestinatarios;
 use App\Services\PacientePrincipal;
+use App\Services\SeguimientoDePedido;
 use App\Support\Destinatario;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,26 +28,48 @@ use Inertia\Response;
  */
 class PedidoMedicamentosController extends Controller
 {
-    public function index(Request $peticion, LibretaDeDestinatarios $libreta): Response
+    /** Las dos solapas de la pantalla: el mail y el seguimiento de cada pedido. */
+    public const SOLAPAS = ['mensajes', 'procedimiento'];
+
+    public function index(Request $peticion, LibretaDeDestinatarios $libreta, SeguimientoDePedido $seguimiento): Response
     {
         $usuario = $peticion->user();
         assert($usuario instanceof User);
 
         $paciente = $this->pacienteElegido($peticion, $usuario);
+        $solapa = in_array($peticion->query('solapa'), self::SOLAPAS, true) ? (string) $peticion->query('solapa') : 'mensajes';
+
+        $tratamientos = $paciente === null ? collect() : $paciente->tratamientos()
+            ->with('medicamento')
+            ->get()
+            // Los que toma ahora primero; en PHP, el nombre está cifrado.
+            ->sortBy(fn (Tratamiento $t): string => ($t->activo ? '0' : '1').mb_strtolower($t->medicamento->nombre_comercial))
+            ->values();
+
+        /*
+         * El medicamento del procedimiento: el pedido, o el primero de la lista.
+         * Uno que no es de esta ficha da 404, sin contar de quién es.
+         */
+        $elegido = null;
+        if ($solapa === 'procedimiento' && $paciente !== null) {
+            $id = $peticion->integer('medicamento');
+            $elegido = $id > 0 ? $tratamientos->firstWhere('id', $id) : $tratamientos->first();
+            abort_if($id > 0 && $elegido === null, 404);
+        }
+        assert($elegido === null || $elegido instanceof Tratamiento);
 
         return Inertia::render('pedidos/Index', [
+            'solapa' => $solapa,
+            'medicamentoElegido' => $elegido?->id,
+            'procedimiento' => $elegido === null ? null : $seguimiento->vista($elegido),
+            'hoy' => $usuario->hoyCalendario()->format('Y-m-d'),
             'paciente' => $paciente === null ? null : [
                 'id' => $paciente->id,
                 'nombre' => $paciente->nombre,
                 'puedeEditar' => $paciente->rolDe($usuario)?->puedeEditar() ?? false,
             ],
             'fichas' => PacientePrincipal::opciones($usuario),
-            'medicamentos' => $paciente === null ? [] : $paciente->tratamientos()
-                ->with('medicamento')
-                ->get()
-                // Los que toma ahora primero; en PHP, el nombre está cifrado.
-                ->sortBy(fn (Tratamiento $t): string => ($t->activo ? '0' : '1').mb_strtolower($t->medicamento->nombre_comercial))
-                ->values()
+            'medicamentos' => $paciente === null ? [] : $tratamientos
                 ->map(fn (Tratamiento $t): array => [
                     'id' => $t->id,
                     'nombre' => $t->medicamento->nombre_comercial,
