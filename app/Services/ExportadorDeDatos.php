@@ -97,6 +97,8 @@ final class ExportadorDeDatos
                     'ingreso_con_google' => $usuario->google_id !== null,
                     'creada' => $usuario->created_at?->toIso8601String(),
                     'terminos_aceptados' => $usuario->terminos_version,
+                    // El mensaje genérico del pedido de medicamentos, con sus variables.
+                    'mensaje_generico_de_pedido' => $usuario->plantilla_pedido,
                 ],
                 'fichas' => Paciente::where('usuario_id', $usuario->id)
                     ->orderBy('id')

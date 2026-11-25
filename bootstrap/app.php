@@ -11,12 +11,14 @@ use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\HandleTamanioTexto;
 use App\Http\Middleware\ProtegerDemo;
+use Illuminate\Console\Command;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -40,25 +42,43 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withSchedule(function (Schedule $schedule): void {
         /*
+         * ⚠️ Cada tarea corre ADENTRO del proceso de `schedule:run`, con
+         * `call()` + `Artisan::call()`, y no con `command()`. `command()` lanza
+         * otro PHP con `proc_open`, y en el hosting compartido ese lanzamiento
+         * a veces lo rechaza el límite de procesos de la cuenta
+         * (`posix_spawn() failed: Operation not permitted`): medido en
+         * producción, unas diez veces por día solo el buzón, y también los
+         * avisos. Una tarea diaria que caía en ese rechazo se salteaba el día
+         * entero. En el mismo proceso no hay nada que lanzar. Lo fija
+         * `ProgramacionDeTareasTest`.
+         *
+         * Devuelve si terminó bien: un `false` es lo que el scheduler toma
+         * como falla de una tarea de este tipo.
+         *
+         * @param  class-string  $comando
+         */
+        $enProceso = static fn (string $comando): Closure => static fn (): bool => Artisan::call($comando) === Command::SUCCESS;
+
+        /*
          * Una vez al día alcanza: `activo` es informativo, no algo que
          * alguien necesite ver corregido al segundo. En producción lo
          * dispara `schedule:run` cada minuto por el cron de hPanel (ver
          * `deploy-hostinger`); acá solo se declara QUÉ correr y cuándo.
          */
-        $schedule->command(CerrarTratamientosVencidos::class)->daily();
+        $schedule->call($enProceso(CerrarTratamientosVencidos::class))->name('misalud:cerrar-tratamientos-vencidos')->daily();
 
         /*
          * Una vez al día: pasada la aplicación de un medicamento de "una vez
          * por año", sus dos avisos se mueven al año siguiente.
          */
-        $schedule->command(RenovarAplicacionesAnuales::class)->daily();
+        $schedule->call($enProceso(RenovarAplicacionesAnuales::class))->name('misalud:renovar-aplicaciones-anuales')->daily();
 
         /*
          * Una vez al día: lo que lleva más de 30 días en la papelera se borra
          * de verdad, con sus archivos. Es lo que promete la política de
          * privacidad (ver VaciarPapelera::DIAS).
          */
-        $schedule->command(VaciarPapelera::class)->daily();
+        $schedule->call($enProceso(VaciarPapelera::class))->name('misalud:vaciar-papelera')->daily();
 
         /*
          * Cada HORA, no una vez al día: un recordatorio vence a cualquier
@@ -72,7 +92,7 @@ return Application::configure(basePath: dirname(__DIR__))
          * ninguna la marque. Usa el lock de caché, y la tabla `cache_locks`
          * existe.
          */
-        $schedule->command(EnviarRecordatorios::class)->hourly()->withoutOverlapping()
+        $schedule->call($enProceso(EnviarRecordatorios::class))->name('misalud:enviar-recordatorios')->hourly()->withoutOverlapping()
             ->when(fn (): bool => ! config('demo.enabled'));
 
         /*
@@ -82,7 +102,7 @@ return Application::configure(basePath: dirname(__DIR__))
          * tardar; dos solapadas leerían los mismos mails (los frenaría
          * `mails_recibidos`, pero recién después de bajarlos dos veces).
          */
-        $schedule->command(ProcesarBuzon::class)->everyFiveMinutes()->withoutOverlapping()
+        $schedule->call($enProceso(ProcesarBuzon::class))->name('misalud:procesar-buzon')->everyFiveMinutes()->withoutOverlapping()
             ->when(fn (): bool => ! config('demo.enabled'));
 
         /*
@@ -90,7 +110,7 @@ return Application::configure(basePath: dirname(__DIR__))
          * las noches, a las 04:00 de Argentina (la app corre en UTC). La demo
          * tampoco lee ningún buzón ni manda avisos (los dos `unless` de arriba).
          */
-        $schedule->command(DemoReset::class)->dailyAt('07:00')
+        $schedule->call($enProceso(DemoReset::class))->name('demo:reset')->dailyAt('07:00')
             ->when(fn (): bool => (bool) config('demo.enabled'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {

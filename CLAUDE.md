@@ -1402,6 +1402,15 @@ otro día. `activo` es informativo, no una condición de autorización ni un dat
   índice ciego -`activo` y `fin` no están cifrados- y son potencialmente muchas filas.
 - En producción lo dispara el cron de hPanel con `schedule:run` cada minuto (ver
   `deploy-hostinger`); acá solo se declara qué correr y cuándo.
+- ⚠️ **Todas las tareas van con `call()` + `Artisan::call()`, no con `command()`.** `command()`
+  lanza otro PHP con `proc_open`, y el hosting compartido rechaza ese lanzamiento cada tanto
+  (`posix_spawn() failed: Operation not permitted`, el límite de procesos de la cuenta). Medido en
+  el log de producción: unas diez veces por día el buzón y varias los avisos, desde siempre. El
+  síntoma engaña: el log dice que **el comando** falló, pero no llegó a arrancar. El buzón nunca
+  había dado un error propio. Una tarea diaria que caía ahí se salteaba el día entero (cerrar
+  vencidos, vaciar la papelera). En el mismo proceso no hay nada que lanzar. Lo fija
+  `ProgramacionDeTareasTest`, que también exige un `name()` por tarea: sin él,
+  `withoutOverlapping()` no tiene con qué armar el lock.
 
 ### Un bug de reactividad que ningún test de Pest podía ver
 
@@ -2384,6 +2393,11 @@ usuario): se suman **medicamentos de la ficha** de a uno con un **select arriba 
 casillas), cada uno **con su propio mensaje**, se elige **un médico, centro o farmacia con correo**
 y se manda **por mail**. Abre la ficha principal y tiene `SelectorDeFicha`.
 
+- **El select muestra el último elegido** (lo reportó el usuario: antes volvía a «Elegí un
+  medicamento» y no se veía qué se había elegido). Los que ya están en el pedido siguen en la lista,
+  deshabilitados y con «ya está en el pedido» (menos el que está a la vista, para que se lea
+  limpio). Sacar el que se ve vuelve el select a «Elegí…»: si no, elegirlo de nuevo no cambiaría su
+  valor y no se volvería a sumar.
 - **Es un envío más**: `EnviadorDeDocumentos::pedir()` comparte con `enviar()` el intento, el log
   sin datos y el registro **después** de intentar, así que queda en el historial de Contactos aunque
   falle. Mailable propio (`PedidoDeMedicamentos`, texto plano), asunto fijo «Pedido de medicamentos»
@@ -2392,13 +2406,34 @@ y se manda **por mail**. Abre la ficha principal y tiene `SelectorDeFicha`.
   (`PedidoMedicamentosGuardarRequest::ORIGENES`); los contactos de la libreta no entran (decisión
   del usuario). Nunca una dirección tipeada, como en todo envío.
 - **El mensaje es por medicamento y queda como SU plantilla** (`tratamientos.plantilla_pedido`,
-  cifrada, no fillable; decisión del usuario: no hay un mensaje general). Se guarda al mandar
-  —aunque el mail falle— y vuelve precargado al sumar ese medicamento la próxima vez; sin
-  plantilla, «Hola, ¿me podrías hacer la receta de Losartán para Marta?». El formulario manda
+  cifrada, no fillable). Se guarda al mandar —aunque el mail falle— y vuelve precargado al sumar
+  ese medicamento la próxima vez; sin plantilla propia, arranca con el **mensaje genérico de la
+  cuenta** (ver abajo). El formulario manda
   `pedidos[i][tratamiento_id]` y `pedidos[i][mensaje]` (`distinct`: un medicamento una sola vez), y
   el mail va renglón por renglón: «- Losartán · 50 mg» y abajo su mensaje. La pantalla muestra la
   vista previa. La plantilla general que tuvo la ficha un día (`pacientes.plantilla_pedido`) se
   borró sin copiarla: decía «estos medicamentos» y no servía para uno solo.
+- **El mensaje genérico es de la CUENTA** (`users.plantilla_pedido`, cifrado, oculto con `#[Hidden]`
+  para que no viaje en `auth.user` de cada página; decisión del usuario): el que arranca todo
+  medicamento **sin plantilla propia**, en cualquier ficha. Se edita en un recuadro arriba de la
+  solapa Mensajes (`pedidos.plantilla-generica`), con «Volver al original». NULL es el original
+  (`PlantillaDePedido::ORIGINAL`), y guardar el original vuelve a NULL. De la cuenta y no de la
+  ficha porque el mail sale a nombre de quien lo manda.
+- **Variables: `{nombre}`, `{apellido}` y `{medicamento}`** (pedido del usuario), sin importar
+  mayúsculas, con botones que las insertan donde está el cursor (`VariablesDelMensaje.vue`).
+    - **Las plantillas se guardan con las variables adentro** (la genérica y la de cada
+      medicamento) y se reemplazan **recién al mandar**: el campo muestra la plantilla, la vista
+      previa y el mail, el texto final. Lo reemplaza `App\Support\PlantillaDePedido::completar()`;
+      la vista previa copia ese reemplazo en `lib/plantillaDePedido.ts`, y si se suma una variable
+      va en los dos.
+    - ⚠️ **La ficha guarda el nombre completo en un solo campo**: `{nombre}` es la primera palabra y
+      `{apellido}` el resto (`partesDelNombre()`, el servidor manda las partes ya cortadas para la
+      vista previa). Con un nombre compuesto («María José Pérez») el corte no es el esperado; la
+      salida de verdad sería un campo de apellido en la ficha.
+    - Una variable vacía (una ficha sin apellido) no deja espacios dobles ni un espacio antes del
+      signo de pregunta.
+    - ⚠️ **Mandar el genérico tal cual no lo guarda como plantilla propia** del medicamento: si lo
+      hiciera, cambiar el genérico después ya no le llegaría a ese medicamento.
 - **«Guardar plantilla»** (pedido del usuario) guarda ese mensaje sin mandar nada, por su propia ruta
   (`PUT tratamientos/{tratamiento}/plantilla-pedido`, `pedidos.plantilla`, pide `update` del
   medicamento) y no por el formulario del pedido: un formulario no va dentro de otro. Va con

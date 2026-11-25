@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\EstadoEnvio;
 use App\Http\Requests\PedidoMedicamentosGuardarRequest;
+use App\Http\Requests\PlantillaGenericaGuardarRequest;
 use App\Http\Requests\PlantillaPedidoGuardarRequest;
 use App\Models\Paciente;
 use App\Models\Tratamiento;
@@ -15,6 +16,7 @@ use App\Services\LibretaDeDestinatarios;
 use App\Services\PacientePrincipal;
 use App\Services\SeguimientoDePedido;
 use App\Support\Destinatario;
+use App\Support\PlantillaDePedido;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -68,7 +70,12 @@ class PedidoMedicamentosController extends Controller
                 'id' => $paciente->id,
                 'nombre' => $paciente->nombre,
                 'puedeEditar' => $paciente->rolDe($usuario)?->puedeEditar() ?? false,
+                // Para la vista previa, con el mismo corte que el mail (PlantillaDePedido).
+                'variables' => PlantillaDePedido::partesDelNombre($paciente->nombre),
             ],
+            // El de la cuenta, con sus variables sin reemplazar: es lo que se edita.
+            'plantillaGenerica' => PlantillaDePedido::generica($usuario->plantilla_pedido),
+            'plantillaOriginal' => PlantillaDePedido::ORIGINAL,
             'fichas' => PacientePrincipal::opciones($usuario),
             'medicamentos' => $paciente === null ? [] : $tratamientos
                 ->map(fn (Tratamiento $t): array => [
@@ -76,7 +83,9 @@ class PedidoMedicamentosController extends Controller
                     'nombre' => $t->medicamento->nombre_comercial,
                     'dosis' => $t->dosis,
                     'activo' => $t->activo,
-                    'plantilla' => $this->plantillaDe($t, $paciente),
+                    // Con sus variables: se reemplazan en la vista previa y al mandar.
+                    'plantilla' => $t->plantilla_pedido ?? PlantillaDePedido::generica($usuario->plantilla_pedido),
+                    'plantillaPropia' => $t->plantilla_pedido !== null,
                 ])
                 ->all(),
             'destinatarios' => $libreta->para($usuario)
@@ -108,20 +117,25 @@ class PedidoMedicamentosController extends Controller
             ->get()
             ->keyBy('id');
 
-        // En el orden del formulario. Cada plantilla se guarda aunque el mail
-        // falle: es lo que la persona escribió.
+        /*
+         * En el orden del formulario. Cada plantilla se guarda aunque el mail
+         * falle: es lo que la persona escribió, con sus variables. Si es el
+         * genérico tal cual, el medicamento queda sin plantilla propia: si no,
+         * cambiar el genérico después ya no le llegaría.
+         */
+        $generica = PlantillaDePedido::generica($usuario->plantilla_pedido);
         $renglones = [];
         foreach ($pedidos as $pedido) {
             $tratamiento = $tratamientos->get((int) $pedido['tratamiento_id']);
             assert($tratamiento instanceof Tratamiento);
 
             $mensaje = trim($pedido['mensaje']);
-            $tratamiento->setAttribute('plantilla_pedido', $mensaje);
+            $tratamiento->setAttribute('plantilla_pedido', $mensaje === $generica ? null : $mensaje);
             $tratamiento->save();
 
             $renglones[] = [
                 'medicamento' => $tratamiento->medicamento->nombre_comercial.' · '.$tratamiento->dosis,
-                'mensaje' => $mensaje,
+                'mensaje' => PlantillaDePedido::completar($mensaje, $tratamiento->medicamento->nombre_comercial, $paciente->nombre),
             ];
         }
 
@@ -147,10 +161,22 @@ class PedidoMedicamentosController extends Controller
         return back()->with('exito', "Se guardó el mensaje de {$tratamiento->medicamento->nombre_comercial}.");
     }
 
-    private function plantillaDe(Tratamiento $tratamiento, Paciente $paciente): string
+    /**
+     * El mensaje genérico de la cuenta: el que usa todo medicamento sin plantilla
+     * propia, en cualquier ficha. Se guarda con sus variables.
+     */
+    public function guardarPlantillaGenerica(PlantillaGenericaGuardarRequest $peticion): RedirectResponse
     {
-        return $tratamiento->plantilla_pedido
-            ?? "Hola, ¿me podrías hacer la receta de {$tratamiento->medicamento->nombre_comercial} para {$paciente->nombre}? Gracias.";
+        $usuario = $peticion->user();
+        assert($usuario instanceof User);
+
+        $mensaje = trim((string) $peticion->validated('mensaje'));
+
+        // No es fillable. Guardar el original es volver a no tener uno propio.
+        $usuario->setAttribute('plantilla_pedido', $mensaje === PlantillaDePedido::ORIGINAL ? null : $mensaje);
+        $usuario->save();
+
+        return back()->with('exito', 'Se guardó el mensaje genérico.');
     }
 
     private function pacienteElegido(Request $peticion, User $usuario): ?Paciente

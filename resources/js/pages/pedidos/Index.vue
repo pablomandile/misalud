@@ -6,6 +6,7 @@ import TratamientoController from '@/actions/App/Http/Controllers/TratamientoCon
 import Heading from '@/components/Heading.vue';
 import SelectorDeFicha from '@/components/SelectorDeFicha.vue';
 import { Button } from '@/components/ui/button';
+import type { VariablesDelPaciente } from '@/lib/plantillaDePedido';
 import SolapaMensajes from './SolapaMensajes.vue';
 import SolapaProcedimiento from './SolapaProcedimiento.vue';
 import type {
@@ -29,7 +30,14 @@ import type {
 
 const props = defineProps<{
     solapa: 'mensajes' | 'procedimiento';
-    paciente: { id: number; nombre: string; puedeEditar: boolean } | null;
+    paciente: {
+        id: number;
+        nombre: string;
+        puedeEditar: boolean;
+        variables: VariablesDelPaciente;
+    } | null;
+    plantillaGenerica: string;
+    plantillaOriginal: string;
     fichas: { id: number; nombre: string }[];
     medicamentos: MedicamentoDelPedido[];
     destinatarios: DestinatarioOpcion[];
@@ -142,6 +150,8 @@ const clase = (activa: boolean) =>
                     :paciente="paciente"
                     :medicamentos="medicamentos"
                     :destinatarios="destinatarios"
+                    :plantilla-generica="plantillaGenerica"
+                    :plantilla-original="plantillaOriginal"
                 />
             </div>
 

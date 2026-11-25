@@ -8,7 +8,9 @@ export type MedicamentoDelPedido = {
     nombre: string;
     dosis: string;
     activo: boolean;
+    // Con sus variables sin reemplazar: la propia, o el genérico de la cuenta.
     plantilla: string;
+    plantillaPropia: boolean;
 };
 
 export type DestinatarioOpcion = {

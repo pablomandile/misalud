@@ -12,6 +12,7 @@ use App\Models\Medico;
 use App\Models\Paciente;
 use App\Models\Tratamiento;
 use App\Models\User;
+use App\Support\PlantillaDePedido;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -82,8 +83,10 @@ it('guarda el mensaje de cada medicamento como su plantilla cifrada y lo precarg
         ->assertInertia(fn (Assert $pagina) => $pagina
             ->component('pedidos/Index')
             ->has('medicamentos', 2)
-            ->where('medicamentos.0.plantilla', 'Hola, ¿me podrías hacer la receta de Atorvastatina para Marta? Gracias.')
-            ->where('medicamentos.1.plantilla', 'Hola, ¿me podrías hacer la receta de Losartán para Marta? Gracias.')
+            // Sin plantilla propia, los dos arrancan con el genérico, con sus variables.
+            ->where('medicamentos.0.plantilla', PlantillaDePedido::ORIGINAL)
+            ->where('medicamentos.0.plantillaPropia', false)
+            ->where('medicamentos.1.plantilla', PlantillaDePedido::ORIGINAL)
             ->has('destinatarios', 1));
 
     $this->actingAs($usuario)
@@ -232,3 +235,117 @@ it('un lector y un extraño no guardan la plantilla de un medicamento', function
 
     expect($tratamiento->fresh()?->plantilla_pedido)->toBeNull();
 });
+
+// ---------------------------------------------------------------------------
+// El mensaje genérico de la cuenta y las variables
+// ---------------------------------------------------------------------------
+
+it('el mensaje genérico es de la cuenta, cifrado, y lo usan los medicamentos sin plantilla propia', function (): void {
+    [$usuario, $paciente, $losartan] = fichaParaPedido();
+    $otro = Tratamiento::factory()->create([
+        'paciente_id' => $paciente->id,
+        'medicamento_id' => Medicamento::factory()->for($usuario, 'usuario')->create(['nombre_comercial' => 'Atorvastatina'])->id,
+    ]);
+    $losartan->forceFill(['plantilla_pedido' => 'El mío para Losartán'])->save();
+
+    $this->actingAs($usuario)
+        ->put(route('pedidos.plantilla-generica'), ['mensaje' => '  Buen día, necesito {medicamento} para {nombre}.  '])
+        ->assertSessionHasNoErrors()
+        ->assertSessionHas('exito', 'Se guardó el mensaje genérico.');
+
+    expect($usuario->fresh()?->plantilla_pedido)->toBe('Buen día, necesito {medicamento} para {nombre}.')
+        ->and(DB::table('users')->where('id', $usuario->id)->value('plantilla_pedido'))->not->toContain('necesito');
+
+    $this->actingAs($usuario)
+        ->get(route('pedidos.index', ['paciente' => $paciente->id, 'solapa' => 'mensajes']))
+        ->assertInertia(fn (Assert $pagina) => $pagina
+            ->where('plantillaGenerica', 'Buen día, necesito {medicamento} para {nombre}.')
+            ->where('plantillaOriginal', PlantillaDePedido::ORIGINAL)
+            ->where('paciente.variables', ['nombre' => 'Marta', 'apellido' => ''])
+            ->where('medicamentos.0.nombre', 'Atorvastatina')
+            ->where('medicamentos.0.plantilla', 'Buen día, necesito {medicamento} para {nombre}.')
+            ->where('medicamentos.0.plantillaPropia', false)
+            ->where('medicamentos.1.plantilla', 'El mío para Losartán')
+            ->where('medicamentos.1.plantillaPropia', true));
+
+    expect($otro->fresh()?->plantilla_pedido)->toBeNull();
+});
+
+it('guardar el original es volver a no tener un genérico propio', function (): void {
+    [$usuario] = fichaParaPedido();
+    $usuario->forceFill(['plantilla_pedido' => 'Otro'])->save();
+
+    $this->actingAs($usuario)
+        ->put(route('pedidos.plantilla-generica'), ['mensaje' => PlantillaDePedido::ORIGINAL])
+        ->assertSessionHasNoErrors();
+
+    expect($usuario->fresh()?->plantilla_pedido)->toBeNull();
+});
+
+it('el mensaje genérico no puede quedar vacío', function (): void {
+    [$usuario] = fichaParaPedido();
+
+    $this->actingAs($usuario)
+        ->put(route('pedidos.plantilla-generica'), ['mensaje' => ''])
+        ->assertSessionHasErrors(['mensaje' => 'Escribí el mensaje genérico, o tocá «Volver al original».']);
+});
+
+it('el mensaje genérico no viaja en los props de cada página', function (): void {
+    [$usuario] = fichaParaPedido();
+    $usuario->forceFill(['plantilla_pedido' => 'Mensaje que no tiene que salir'])->save();
+
+    $this->actingAs($usuario)
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $pagina) => $pagina->missing('auth.user.plantilla_pedido'));
+});
+
+it('al mandar reemplaza las variables, sin importar mayúsculas, y guarda la plantilla con ellas', function (): void {
+    Mail::fake();
+    [$usuario, $paciente, $tratamiento, $medico] = fichaParaPedido();
+    $paciente->update(['nombre' => 'Marta  Gómez Ruiz']);
+
+    $this->actingAs($usuario)
+        ->post(route('pedidos.store'), [
+            'paciente_id' => $paciente->id,
+            'pedidos' => [['tratamiento_id' => $tratamiento->id, 'mensaje' => 'Receta de {Medicamento} para {nombre} {APELLIDO}, por favor.']],
+            'destinatario' => "medico:{$medico->id}",
+        ])
+        ->assertSessionHasNoErrors();
+
+    Mail::assertSent(PedidoDeMedicamentos::class, fn (PedidoDeMedicamentos $mail): bool => str_contains(
+        $mail->render(),
+        "- Losartán · 50 mg\nReceta de Losartán para Marta Gómez Ruiz, por favor.",
+    ));
+
+    // La plantilla queda con las variables: sirve aunque cambie el medicamento.
+    expect($tratamiento->fresh()?->plantilla_pedido)->toBe('Receta de {Medicamento} para {nombre} {APELLIDO}, por favor.');
+});
+
+it('mandar el genérico tal cual no lo congela como plantilla propia', function (): void {
+    Mail::fake();
+    [$usuario, $paciente, $tratamiento, $medico] = fichaParaPedido();
+
+    $this->actingAs($usuario)
+        ->post(route('pedidos.store'), [
+            'paciente_id' => $paciente->id,
+            'pedidos' => [['tratamiento_id' => $tratamiento->id, 'mensaje' => PlantillaDePedido::ORIGINAL]],
+            'destinatario' => "medico:{$medico->id}",
+        ])
+        ->assertSessionHasNoErrors();
+
+    // Sin apellido no queda un espacio de más antes del signo.
+    Mail::assertSent(PedidoDeMedicamentos::class, fn (PedidoDeMedicamentos $mail): bool => str_contains(
+        $mail->render(),
+        'Hola, ¿me podrías hacer la receta de Losartán para Marta? Gracias.',
+    ));
+    expect($tratamiento->fresh()?->plantilla_pedido)->toBeNull();
+});
+
+it('parte el nombre de la ficha en nombre y apellido', function (string $completo, string $nombre, string $apellido): void {
+    expect(PlantillaDePedido::partesDelNombre($completo))->toBe(['nombre' => $nombre, 'apellido' => $apellido]);
+})->with([
+    'nombre y apellido' => ['Marta Gómez', 'Marta', 'Gómez'],
+    'dos apellidos' => ['Roberto Pérez Díaz', 'Roberto', 'Pérez Díaz'],
+    'solo nombre' => ['Tomás', 'Tomás', ''],
+    'espacios de más' => ['  Ana   López ', 'Ana', 'López'],
+]);

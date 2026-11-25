@@ -473,6 +473,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('throttle:10,1')
         ->name('pedidos.store');
 
+    // El mensaje genérico de la cuenta: el de todo medicamento sin plantilla propia.
+    Route::put('pedido-de-medicamentos/mensaje-generico', [PedidoMedicamentosController::class, 'guardarPlantillaGenerica'])
+        ->name('pedidos.plantilla-generica');
+
     // El mensaje por defecto de un medicamento, guardado sin mandar el pedido.
     Route::put('tratamientos/{tratamiento}/plantilla-pedido', [PedidoMedicamentosController::class, 'guardarPlantilla'])
         ->name('pedidos.plantilla');

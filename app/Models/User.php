@@ -25,6 +25,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string|null $google_id
  * @property TamanioTexto $tamanio_texto
  * @property string $zona_horaria
+ * @property string|null $plantilla_pedido El mensaje genérico del pedido de medicamentos
  * @property Carbon|null $email_verified_at
  * @property string|null $password Null en las cuentas que entran con Google
  * @property string|null $two_factor_secret
@@ -35,7 +36,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $updated_at
  */
 #[Fillable(['name', 'email', 'password'])]
-#[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
+#[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token', 'plantilla_pedido'])]
 class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
 {
     /**
@@ -74,6 +75,8 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
             'terminos_aceptados_en' => 'datetime',
+            // No es fillable: lo escribe solo «Guardar mensaje genérico» del pedido.
+            'plantilla_pedido' => 'encrypted',
         ];
     }
 
